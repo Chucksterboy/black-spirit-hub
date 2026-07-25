@@ -2,6 +2,6 @@
     "version":  "v0.9.18",
     "releaseUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/latest",
     "downloadUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/download/v0.9.18/BDO-Multi-Tool-Installer.exe",
-    "sha256":  "AC7A1040FDF16704CDB3B031AD1739FDC98E27462F27928E38793CF3F82F6682",
+    "sha256":  "46484B2E7C779490EE281513B3A870A14950F1C40D6FAE9914AEC9B28E7F6446",
     "notes":  "Corrects official event date boundaries, streamlines the Font Changer and Coupons layouts, and restores the manual Refresh Coupons action alongside the coupon status tabs."
 }
