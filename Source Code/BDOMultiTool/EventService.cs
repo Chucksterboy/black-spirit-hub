@@ -17,6 +17,16 @@ internal sealed class EventService : IDisposable
 	internal const string OfficialEventsUrl = "https://www.naeu.playblackdesert.com/en-US/News/Notice?boardType=3&progressType=1";
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
 	private static readonly Uri SiteRoot = new("https://www.naeu.playblackdesert.com");
+	private const string EventMonthPattern = @"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+	private const string EventDatePattern = EventMonthPattern + @"\.?\s+\d{1,2},\s+20\d{2}(?:\s+\([^)]+\))?(?:\s+(?:(?:\d{1,2}:\d{2}\s*(?:\(\s*)?UTC(?:\s*\))?)|(?:(?:after|before)\s+maintenance)))?";
+	private static readonly Regex EventRangeRegex = new(
+		$@"(?<start>{EventDatePattern})\s*(?:-|\u2013|\u2014)\s*(?<end>{EventDatePattern})",
+		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+		TimeSpan.FromSeconds(2));
+	private static readonly Regex EventDateRegex = new(
+		$@"^(?<month>{EventMonthPattern})\.?\s+(?<day>\d{{1,2}}),\s+(?<year>20\d{{2}})(?:\s+\([^)]+\))?(?:\s+(?:(?<hour>\d{{1,2}}):(?<minute>\d{{2}})\s*(?:\(\s*)?UTC(?:\s*\))?|(?<maintenance>after|before)\s+maintenance))?$",
+		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+		TimeSpan.FromSeconds(2));
 	private readonly AppPaths paths;
 	private readonly AppLogger logger;
 	private readonly HttpClient http;
@@ -188,8 +198,9 @@ internal sealed class EventService : IDisposable
 			entry.Summary);
 		string image = FirstNonBlank(ReadMeta(detailHtml, "og:image"), entry.ImageUrl);
 		DateTimeOffset? published = ParsePublishedDate(detailHtml) ?? entry.PublishedUtc;
-		DateTimeOffset? end = entry.EndUtc;
-		DateTimeOffset? start = FindLikelyStartDate(detailHtml) ?? published ?? entry.StartUtc;
+		EventDateRange? exactRange = FindLikelyEventRange(summary, entry.EndUtc);
+		DateTimeOffset? end = exactRange?.EndUtc ?? entry.EndUtc;
+		DateTimeOffset? start = exactRange?.StartUtc ?? FindLikelyStartDate(summary) ?? published ?? entry.StartUtc;
 
 		if (end == null && entry.RemainingHours.HasValue)
 			end = DateTimeOffset.UtcNow.AddHours(Math.Max(1, entry.RemainingHours.Value));
@@ -357,6 +368,85 @@ internal sealed class EventService : IDisposable
 			: null;
 	}
 
+	internal static EventDateRange? FindLikelyEventRange(string value, DateTimeOffset? expectedEnd = null)
+	{
+		string text = Clean(value);
+		List<EventDateRange> ranges = [];
+		foreach (Match match in EventRangeRegex.Matches(text))
+		{
+			if (!TryParseEventDate(match.Groups["start"].Value, isEnd: false, out DateTimeOffset start)
+				|| !TryParseEventDate(match.Groups["end"].Value, isEnd: true, out DateTimeOffset end)
+				|| end < start)
+			{
+				continue;
+			}
+			ranges.Add(new EventDateRange(start, end));
+		}
+
+		if (ranges.Count == 0)
+			return null;
+		if (!expectedEnd.HasValue)
+			return ranges[0];
+
+		return ranges
+			.OrderBy(range => Math.Abs((range.EndUtc - expectedEnd.Value).TotalMinutes))
+			.ThenBy(range => range.EndUtc)
+			.First();
+	}
+
+	private static bool TryParseEventDate(string value, bool isEnd, out DateTimeOffset parsed)
+	{
+		parsed = default;
+		Match match = EventDateRegex.Match(Clean(value));
+		if (!match.Success
+			|| !int.TryParse(match.Groups["day"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int day)
+			|| !int.TryParse(match.Groups["year"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int year))
+		{
+			return false;
+		}
+
+		string monthKey = match.Groups["month"].Value.Trim().TrimEnd('.').ToLowerInvariant();
+		int month = monthKey.Length >= 3
+			? monthKey[..3] switch
+			{
+				"jan" => 1,
+				"feb" => 2,
+				"mar" => 3,
+				"apr" => 4,
+				"may" => 5,
+				"jun" => 6,
+				"jul" => 7,
+				"aug" => 8,
+				"sep" => 9,
+				"oct" => 10,
+				"nov" => 11,
+				"dec" => 12,
+				_ => 0
+			}
+			: 0;
+		if (month == 0)
+			return false;
+
+		int hour = isEnd ? 23 : 0;
+		int minute = isEnd ? 59 : 0;
+		if (match.Groups["hour"].Success
+			&& (!int.TryParse(match.Groups["hour"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out hour)
+				|| !int.TryParse(match.Groups["minute"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out minute)))
+		{
+			return false;
+		}
+
+		try
+		{
+			parsed = new DateTimeOffset(year, month, day, hour, minute, 0, TimeSpan.Zero);
+			return true;
+		}
+		catch (ArgumentOutOfRangeException)
+		{
+			return false;
+		}
+	}
+
 	private static string ReadMeta(string html, string name)
 	{
 		Match match = Regex.Match(
@@ -370,7 +460,7 @@ internal sealed class EventService : IDisposable
 	{
 		bool isStale = DateTimeOffset.UtcNow - cache.LastRefreshed > TimeSpan.FromHours(3);
 		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((DateTimeOffset.UtcNow - cache.LastRefreshed).TotalMinutes));
-		var events = cache.Events.Select(x => new
+		var events = cache.Events.Select(ApplyExactEventRange).Select(x => new
 		{
 			x.Id,
 			x.Title,
@@ -402,6 +492,20 @@ internal sealed class EventService : IDisposable
 			activeCount = events.Count(x => x.Status == "active"),
 			endingSoonCount = events.Count(x => x.Status == "endingSoon"),
 			totalCount = events.Length
+		};
+	}
+
+	private static EventEntry ApplyExactEventRange(EventEntry entry)
+	{
+		EventDateRange? range = FindLikelyEventRange(entry.Summary, entry.EndUtc);
+		if (range == null)
+			return entry;
+		return entry with
+		{
+			StartUtc = range.StartUtc,
+			EndUtc = range.EndUtc,
+			Progress = EstimateProgress(range.StartUtc, range.EndUtc, entry.RemainingHours),
+			DateRangeText = FormatDateRange(range.StartUtc, range.EndUtc, entry.TimeLeftText)
 		};
 	}
 
@@ -522,6 +626,8 @@ internal sealed class EventService : IDisposable
 	public void Dispose() => http.Dispose();
 
 	private sealed record EventCache(DateTimeOffset LastRefreshed, string SourceUrl, IReadOnlyList<EventEntry> Events, string? Error);
+
+	internal sealed record EventDateRange(DateTimeOffset StartUtc, DateTimeOffset EndUtc);
 
 	private sealed record EventEntry(
 		string Id,

@@ -494,6 +494,24 @@ internal static class Program
 			}
 			JsonElement persistedRecovery = JsonSerializer.Deserialize<JsonElement>(
 				await File.ReadAllTextAsync(statePaths.GrindSessionsPath, CancellationToken.None));
+			EventService.EventDateRange? twitchRange = EventService.FindLikelyEventRange(
+				"Twitch Drops July 26, 2026 (Sun) 00:30 UTC - July 29, 2026 (Wed) 12:00 UTC",
+				new DateTimeOffset(2026, 7, 30, 8, 0, 0, TimeSpan.Zero));
+			if (twitchRange?.StartUtc != new DateTimeOffset(2026, 7, 26, 0, 30, 0, TimeSpan.Zero)
+				|| twitchRange.EndUtc != new DateTimeOffset(2026, 7, 29, 12, 0, 0, TimeSpan.Zero))
+			{
+				return 56;
+			}
+
+			EventService.EventDateRange? revisedRange = EventService.FindLikelyEventRange(
+				"Mar 5, 2026 (Thu) after maintenance - November 19, 2026 (Thu) before maintenance "
+					+ "Mar 5, 2026 (Thu) after maintenance - July 26, 2026 (Sun) 01:00 (UTC)",
+				new DateTimeOffset(2026, 7, 27, 8, 0, 0, TimeSpan.Zero));
+			if (revisedRange?.EndUtc != new DateTimeOffset(2026, 7, 26, 1, 0, 0, TimeSpan.Zero))
+			{
+				return 57;
+			}
+
 			return persistedRecovery.GetArrayLength() == 1
 				&& persistedRecovery[0].GetProperty("id").GetString() == "session-backup" ? 0 : 55;
 		}

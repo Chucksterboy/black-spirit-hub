@@ -6,7 +6,7 @@
 <title>BDO Multi-Tool</title>
 
 
-<link rel="stylesheet" href="BDOMultiTool.Resources.BDO_Multi_Tool.css?v=v0.9.17">
+<link rel="stylesheet" href="BDOMultiTool.Resources.BDO_Multi_Tool.css?v=v0.9.18">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -478,15 +478,6 @@
     </div>
 
     <div class="fontCatalogLayout">
-      <aside class="fontSidebar" aria-label="Font preset filters">
-        <h3>Browse presets</h3>
-        <input id="fontPresetSearch" class="fontSearch" type="search" placeholder="Search fonts..." aria-label="Search font presets" autocomplete="off">
-        <button class="fontCategoryButton active" data-font-category="all" type="button">All fonts</button>
-        <button class="fontCategoryButton" data-font-category="favorites" type="button">Favorites</button>
-        <button class="fontCategoryButton" data-font-category="serif" type="button">Serif</button>
-        <button class="fontCategoryButton" data-font-category="sans" type="button">Sans serif</button>
-        <button class="fontCategoryButton" data-font-category="display" type="button">Display</button>
-      </aside>
       <div>
         <div class="fontSectionHead"><div><h2>Font presets</h2></div></div>
         <div id="fontPresetGallery" class="fontGallery"><div class="fontPresetCard">Loading bundled fonts...</div></div>
@@ -546,14 +537,13 @@
       <div class="couponLiveCard"><div class="couponLiveTop"><span id="couponSourceBadge">CACHED DATA</span><span class="couponLiveSignal"></span></div><div class="couponLiveSync"><span id="couponSyncText">Stored locally</span><i class="couponPulse"></i></div><small id="couponLastUpdated">Last Attempt: &mdash;</small></div>
     </header>
     <section class="couponWorkspace">
-      <div class="couponFilters">
+      <div class="couponFilters" hidden aria-hidden="true">
         <input id="couponSearch" type="search" value="" placeholder="Search code or reward..." aria-label="Search coupons" autocomplete="off" />
         <select id="couponStatusFilter" aria-label="Filter coupon status"><option value="all" selected>All statuses</option><option value="available">Available</option><option value="expired">Expired</option></select>
         <select id="couponSort" aria-label="Sort coupons"><option value="newest" selected>Newest first</option><option value="oldest">Oldest first</option><option value="code">Code A-Z</option></select>
-        <button id="couponRefresh" class="couponRefreshV2">Refresh Coupons</button>
       </div>
       <div id="couponMessage" class="couponMessageV2"></div>
-       <div class="couponContent"><div><div class="couponTabsV2" role="tablist"><button class="active" data-coupon-tab="available" type="button">Available Coupons (<span id="couponAvailableTabCount">0</span>)</button><button data-coupon-tab="redeemed" type="button">Redeemed Coupons (<span id="couponRedeemedCount">0</span>)</button><button data-coupon-tab="expired" type="button">Expired (<span id="couponExpiredTabCount">0</span>)</button></div><div id="couponRows" class="couponRowsV2"><div class="couponDetailEmpty">Loading coupons...</div></div><div class="couponPagination"><button id="couponPagePrevious" class="couponPageButton" type="button" aria-label="Previous coupon page">&lsaquo;</button><span id="couponPageStatus" aria-live="polite">Page 1 of 1</span><button id="couponPageNext" class="couponPageButton" type="button" aria-label="Next coupon page">&rsaquo;</button></div></div><aside id="couponDetail" class="couponDetail"><div class="couponDetailEmpty">Select a coupon to see its details.</div></aside></div>
+       <div class="couponContent"><div><div class="couponTabsV2" role="tablist"><button class="active" data-coupon-tab="available" type="button">Available Coupons (<span id="couponAvailableTabCount">0</span>)</button><button data-coupon-tab="redeemed" type="button">Redeemed Coupons (<span id="couponRedeemedCount">0</span>)</button><button data-coupon-tab="expired" type="button">Expired (<span id="couponExpiredTabCount">0</span>)</button><button id="couponRefresh" class="couponRefreshV2 couponTabsRefresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8"></path><path d="M5.5 15A7 7 0 0 0 17.8 17.8L20 16"></path></svg><span>Refresh Coupons</span></button></div><div id="couponRows" class="couponRowsV2"><div class="couponDetailEmpty">Loading coupons...</div></div><div class="couponPagination"><button id="couponPagePrevious" class="couponPageButton" type="button" aria-label="Previous coupon page">&lsaquo;</button><span id="couponPageStatus" aria-live="polite">Page 1 of 1</span><button id="couponPageNext" class="couponPageButton" type="button" aria-label="Next coupon page">&rsaquo;</button></div></div><aside id="couponDetail" class="couponDetail"><div class="couponDetailEmpty">Select a coupon to see its details.</div></aside></div>
       <footer class="couponBottom"><span class="couponTip">i &nbsp; Tip: New coupons are added automatically when available.</span></footer>
     </section>
     <input id="couponShowExpired" type="checkbox" hidden><span id="couponExpiredCount" hidden>0</span>
@@ -944,11 +934,14 @@
   <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.17"></script>
-<script src="BDOMultiTool.Resources.BDO_Multi_Tool.js?v=v0.9.17"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.18"></script>
+<script src="BDOMultiTool.Resources.BDO_Multi_Tool.js?v=v0.9.18"></script>
 
 </body>
 </html>
+
+
+
 
 
 

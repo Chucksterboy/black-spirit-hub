@@ -1,7 +1,7 @@
 ﻿{
-    "version":  "v0.9.17",
+    "version":  "v0.9.18",
     "releaseUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/download/v0.9.17/BDO-Multi-Tool-Installer.exe",
-    "sha256":  "F28D67B646CD29641CE83C8C134CF0A659D184E796327CA63FBC4052F7B4EC9C",
-    "notes":  "Comprehensive reliability and performance update: hardened Grind Tracker session storage and EU market caching, improved OCR handling and UI responsiveness, strengthened coupon/event caches, safer automatic updates and installer shutdown behavior, and broader accessibility and regression checks."
+    "downloadUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/download/v0.9.18/BDO-Multi-Tool-Installer.exe",
+    "sha256":  "AC7A1040FDF16704CDB3B031AD1739FDC98E27462F27928E38793CF3F82F6682",
+    "notes":  "Corrects official event date boundaries, streamlines the Font Changer and Coupons layouts, and restores the manual Refresh Coupons action alongside the coupon status tabs."
 }
