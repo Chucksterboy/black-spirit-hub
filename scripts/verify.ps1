@@ -22,6 +22,7 @@ $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
 $appIconPath = Join-Path $sourceRoot "app.ico"
 $runtimeIconPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.ico"
 $runtimeIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.png"
+$runtimeUiIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon-ui.png"
 $installerIconPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
 $iconMasterPath = Join-Path $repoRoot "Branding\AppIcon\midnight-sigil-source.png"
 
@@ -35,7 +36,7 @@ foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath)) {
 }
 
 $iconPaths = @($appIconPath, $runtimeIconPath, $installerIconPath)
-foreach ($path in $iconPaths + @($runtimeIconPngPath, $iconMasterPath)) {
+foreach ($path in $iconPaths + @($runtimeIconPngPath, $runtimeUiIconPngPath, $iconMasterPath)) {
 	if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
 		throw "Required application icon asset is missing: $path"
 	}
@@ -335,11 +336,58 @@ finally {
 	$runtimeIconBitmap.Dispose()
 }
 
+$runtimeUiIconBitmap = [System.Drawing.Bitmap]::new($runtimeUiIconPngPath)
+try {
+	if ($runtimeUiIconBitmap.Width -ne 256 -or $runtimeUiIconBitmap.Height -ne 256) {
+		throw "The transparent in-app icon PNG must be 256x256."
+	}
+	$uiMinX = $runtimeUiIconBitmap.Width
+	$uiMinY = $runtimeUiIconBitmap.Height
+	$uiMaxX = -1
+	$uiMaxY = -1
+	for ($y = 0; $y -lt $runtimeUiIconBitmap.Height; $y++) {
+		for ($x = 0; $x -lt $runtimeUiIconBitmap.Width; $x++) {
+			if ($runtimeUiIconBitmap.GetPixel($x, $y).A -eq 0) { continue }
+			if ($x -lt $uiMinX) { $uiMinX = $x }
+			if ($x -gt $uiMaxX) { $uiMaxX = $x }
+			if ($y -lt $uiMinY) { $uiMinY = $y }
+			if ($y -gt $uiMaxY) { $uiMaxY = $y }
+		}
+	}
+	$uiVisibleWidth = $uiMaxX - $uiMinX + 1
+	$uiVisibleHeight = $uiMaxY - $uiMinY + 1
+	$uiAspectError = [Math]::Abs($uiVisibleWidth - ($sourceLuminousAspect * $uiVisibleHeight))
+	$uiCornerPixels = @(
+		$runtimeUiIconBitmap.GetPixel(0, 0),
+		$runtimeUiIconBitmap.GetPixel($runtimeUiIconBitmap.Width - 1, 0),
+		$runtimeUiIconBitmap.GetPixel(0, $runtimeUiIconBitmap.Height - 1),
+		$runtimeUiIconBitmap.GetPixel($runtimeUiIconBitmap.Width - 1, $runtimeUiIconBitmap.Height - 1)
+	)
+	if ($uiCornerPixels | Where-Object { $_.A -ne 0 }) {
+		throw "The in-app title-bar icon must have fully transparent corners."
+	}
+	if ($uiMaxX -lt $uiMinX -or
+		$uiVisibleHeight -lt 244 -or
+		$uiAspectError -gt 3.0 -or
+		$uiMinX -lt 2 -or
+		$uiMinY -lt 2 -or
+		$uiMaxX -gt $runtimeUiIconBitmap.Width - 3 -or
+		$uiMaxY -gt $runtimeUiIconBitmap.Height - 3) {
+		throw "The transparent in-app sigil is padded too heavily, distorted, or clipped: bounds ${uiVisibleWidth}x${uiVisibleHeight} at ${uiMinX},${uiMinY}."
+	}
+}
+finally {
+	$runtimeUiIconBitmap.Dispose()
+}
+
 $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
 if ($html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css' -or $html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js') {
 	throw "The HTML shell does not reference the external UI assets."
+}
+if ($html -notmatch 'Assets/AppIcon/app-icon-ui\.png' -or $html -match '<img\s+src="Assets/AppIcon/app-icon\.png"') {
+	throw "The title bar must use the transparent in-app icon asset."
 }
 if ($css -notmatch '(?s)html,\s*body\s*\{\s*scrollbar-width:\s*none;.*?-ms-overflow-style:\s*none;' -or
 	$css -notmatch '(?s)html::\-webkit-scrollbar,\s*body::\-webkit-scrollbar\s*\{.*?display:\s*none;' -or

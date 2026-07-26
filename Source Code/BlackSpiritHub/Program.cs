@@ -543,6 +543,9 @@ internal static class Program
 		CopyFileIfChanged(htmlSource, paths.HtmlPath);
 		CopyFileIfChanged(cssSource, cssTarget);
 		CopyFileIfChanged(scriptSource, scriptTarget);
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "Assets", "AppIcon"),
+			Path.Combine(paths.Root, "Assets", "AppIcon"));
 
 		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
 			&& Directory.Exists(paths.ThemeAssetsPath)
@@ -634,6 +637,46 @@ internal static class Program
 			if (revisedRange?.EndUtc != new DateTimeOffset(2026, 7, 26, 1, 0, 0, TimeSpan.Zero))
 			{
 				return 57;
+			}
+
+			object cachedEvents = new { status = "CACHED", totalCount = 24 };
+			object liveEvents = new { status = "LIVE", totalCount = 24 };
+			object emptyEvents = new { status = "CACHED", totalCount = 0 };
+			if (!CalculatorForm.ShouldUseEventsBrowserFallback(cachedEvents, forceRefresh: true)
+				|| CalculatorForm.ShouldUseEventsBrowserFallback(cachedEvents, forceRefresh: false)
+				|| CalculatorForm.ShouldUseEventsBrowserFallback(liveEvents, forceRefresh: true)
+				|| !CalculatorForm.ShouldUseEventsBrowserFallback(emptyEvents, forceRefresh: false))
+			{
+				return 58;
+			}
+
+			const string featuredOnlyHtml =
+				"<a href=\"/en-US/News/Detail?groupContentNo=1\">Featured</a>"
+				+ "<div class=\"event_list\"><ul></ul>";
+			const string renderedEventHtml =
+				"<a href=\"/en-US/News/Detail?groupContentNo=1\">Featured</a>"
+				+ "<div class=\"event_list\"><ul><li>"
+				+ "<a href=\"/en-US/News/Detail?groupContentNo=2\">Event</a>"
+				+ "</li></ul></div>";
+			if (CalculatorForm.LooksLikeOfficialEventsPage(featuredOnlyHtml)
+				|| !CalculatorForm.LooksLikeOfficialEventsPage(renderedEventHtml))
+			{
+				return 59;
+			}
+
+			const string ongoingEventHtml =
+				"<div class=\"event_list\"><ul><li>"
+				+ "<a href=\"/en-US/News/Detail?groupContentNo=42\">"
+				+ "<strong class=\"title\"><em>Always-On Test Event</em></strong>"
+				+ "<span class=\"count\">Ongoing</span>"
+				+ "</a></li></ul></div>";
+			List<EventService.EventEntry> ongoingEntries = EventService.ParseList(ongoingEventHtml);
+			if (ongoingEntries.Count != 1
+				|| ongoingEntries[0].TimeLeftText != "Ongoing"
+				|| ongoingEntries[0].RemainingHours != null
+				|| ongoingEntries[0].Status != "active")
+			{
+				return 60;
 			}
 
 			return persistedRecovery.GetArrayLength() == 1

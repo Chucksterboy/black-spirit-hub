@@ -2,6 +2,6 @@
     "version":  "v0.9.22",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
     "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.22/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "61865EC042DF16FF1B10A71FF4BB7282328EA8C8612281D1127B047C5527B67C",
-    "notes":  "Replaces the application identity with the new Midnight Sigil artwork across the app window, Windows taskbar, system tray, shortcuts, and installer. Adds purpose-built high-contrast native icon frames, enlarges the in-app title-bar mark, and hides the outer scrollbar while preserving scrolling."
+    "sha256":  "C297D79B20C164B5F8FB2AD2510D31B50BD52C414CF4D5AA48F61F0F543CD0C5",
+    "notes":  "New Midnight Sigil branding across the app, taskbar, tray, shortcut, and installer; a transparent in-app title icon; a hidden outer scrollbar with scrolling retained; and a resilient official Events refresh with browser fallback, cached-detail preservation, retry and timeout hardening, and correct Ongoing event handling."
 }

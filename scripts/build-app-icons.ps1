@@ -20,6 +20,7 @@ $appIconPath = Join-Path $resolvedSourceRoot "app.ico"
 $runtimeIconDirectory = Join-Path $resolvedSourceRoot "Assets\AppIcon"
 $runtimeIcoPath = Join-Path $runtimeIconDirectory "app-icon.ico"
 $runtimePngPath = Join-Path $runtimeIconDirectory "app-icon.png"
+$runtimeUiPngPath = Join-Path $runtimeIconDirectory "app-icon-ui.png"
 $installerIconPath = Join-Path $resolvedSourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
 $iconSizes = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
 
@@ -346,6 +347,69 @@ function New-IconFrame {
 	return $frame
 }
 
+function New-TransparentUiFrame {
+	param(
+		[System.Drawing.Bitmap]$SmallMaster,
+		[System.Drawing.Rectangle]$SmallMasterBounds,
+		[int]$Size
+	)
+
+	$frame = [System.Drawing.Bitmap]::new(
+		$Size,
+		$Size,
+		[System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+	)
+	$graphics = [System.Drawing.Graphics]::FromImage($frame)
+	try {
+		$graphics.Clear([System.Drawing.Color]::Transparent)
+		$graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
+		$graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::GammaCorrected
+		$graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+		$graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+		$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+
+		$edgeInset = [Math]::Max(2, [int][Math]::Round($Size * 0.015))
+		$availableWidth = $Size - (2 * $edgeInset)
+		$availableHeight = $Size - (2 * $edgeInset)
+		$scale = [Math]::Min(
+			$availableWidth / [double]$SmallMasterBounds.Width,
+			$availableHeight / [double]$SmallMasterBounds.Height
+		)
+		$targetWidth = [Math]::Max(
+			1,
+			[int][Math]::Round(
+				$SmallMasterBounds.Width * $scale,
+				[System.MidpointRounding]::AwayFromZero
+			)
+		)
+		$targetHeight = [Math]::Max(
+			1,
+			[int][Math]::Round(
+				$SmallMasterBounds.Height * $scale,
+				[System.MidpointRounding]::AwayFromZero
+			)
+		)
+		$targetX = [int][Math]::Floor(($Size - $targetWidth) / 2.0)
+		$targetY = [int][Math]::Floor(($Size - $targetHeight) / 2.0)
+		$destination = [System.Drawing.Rectangle]::new($targetX, $targetY, $targetWidth, $targetHeight)
+		$graphics.DrawImage(
+			$SmallMaster,
+			$destination,
+			$SmallMasterBounds.X,
+			$SmallMasterBounds.Y,
+			$SmallMasterBounds.Width,
+			$SmallMasterBounds.Height,
+			[System.Drawing.GraphicsUnit]::Pixel
+		)
+	}
+	finally {
+		$graphics.Dispose()
+	}
+
+	[BlackSpiritHub.IconPixelTools]::BoostLuminousPixels($frame)
+	return $frame
+}
+
 function Write-Ico {
 	param(
 		[string]$Path,
@@ -393,6 +457,7 @@ function Write-Ico {
 $master = [System.Drawing.Bitmap]::new($resolvedMasterPath)
 $smallMaster = [System.Drawing.Bitmap]::new($smallMasterPath)
 $frames = [System.Collections.Generic.List[object]]::new()
+$uiFrame = $null
 try {
 	$luminousBounds = [BlackSpiritHub.IconPixelTools]::GetLuminousBounds($master)
 	if ($luminousBounds.IsEmpty) {
@@ -436,6 +501,11 @@ try {
 
 	$largeFrame = $frames | Where-Object Size -eq 256 | Select-Object -First 1
 	$largeFrame.Bitmap.Save($runtimePngPath, [System.Drawing.Imaging.ImageFormat]::Png)
+	$uiFrame = New-TransparentUiFrame `
+		-SmallMaster $smallMaster `
+		-SmallMasterBounds $smallMasterBounds `
+		-Size 256
+	$uiFrame.Save($runtimeUiPngPath, [System.Drawing.Imaging.ImageFormat]::Png)
 
 	foreach ($path in @($appIconPath, $runtimeIcoPath, $installerIconPath)) {
 		foreach ($size in $iconSizes) {
@@ -462,6 +532,9 @@ finally {
 	foreach ($frame in $frames) {
 		$frame.Bitmap.Dispose()
 	}
+	if ($null -ne $uiFrame) {
+		$uiFrame.Dispose()
+	}
 	$master.Dispose()
 	$smallMaster.Dispose()
 }
@@ -470,4 +543,5 @@ Write-Host "Generated:"
 Write-Host "  $appIconPath"
 Write-Host "  $runtimeIcoPath"
 Write-Host "  $runtimePngPath"
+Write-Host "  $runtimeUiPngPath"
 Write-Host "  $installerIconPath"

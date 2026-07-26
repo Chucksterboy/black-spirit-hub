@@ -93,16 +93,58 @@ internal sealed class EventService : IDisposable
 		}
 	}
 
-	public Task<object> RefreshFromRenderedHtmlAsync(string html, CancellationToken cancellationToken)
+	public async Task<object> RefreshFromRenderedHtmlAsync(string html, CancellationToken cancellationToken)
 	{
-		return BuildAndCacheDashboardAsync(html, DateTimeOffset.UtcNow, enrichDetails: false, cancellationToken);
+		EventCache? previousCache = await ReadJsonAsync<EventCache>(paths.EventsCachePath, cancellationToken);
+		if (!HasEvents(previousCache))
+		{
+			EventCache? backup = await ReadJsonAsync<EventCache>(paths.EventsBackupCachePath, cancellationToken);
+			if (HasEvents(backup))
+				previousCache = backup;
+		}
+
+		return await BuildAndCacheDashboardAsync(
+			html,
+			DateTimeOffset.UtcNow,
+			enrichDetails: false,
+			cancellationToken,
+			previousCache?.Events);
 	}
 
-	private async Task<object> BuildAndCacheDashboardAsync(string html, DateTimeOffset attemptTime, bool enrichDetails, CancellationToken cancellationToken)
+	private async Task<object> BuildAndCacheDashboardAsync(
+		string html,
+		DateTimeOffset attemptTime,
+		bool enrichDetails,
+		CancellationToken cancellationToken,
+		IReadOnlyList<EventEntry>? previousEvents = null)
 	{
 		List<EventEntry> events = ParseList(html);
 		if (events.Count == 0)
 			throw new InvalidDataException(GetEmptyEventsReason(html));
+
+		if (!enrichDetails && previousEvents is { Count: > 0 })
+		{
+			Dictionary<string, EventEntry> previousById = previousEvents
+				.GroupBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase)
+				.ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+			int preservedDetails = 0;
+			events = events.Select(entry =>
+			{
+				if (!previousById.TryGetValue(entry.Id, out EventEntry? previous))
+					return entry;
+
+				preservedDetails++;
+				return entry with
+				{
+					ImageUrl = FirstNonBlank(entry.ImageUrl, previous.ImageUrl),
+					Summary = FirstNonBlank(entry.Summary, previous.Summary),
+					PublishedUtc = entry.PublishedUtc ?? previous.PublishedUtc,
+					StartUtc = entry.StartUtc ?? previous.StartUtc
+				};
+			}).ToList();
+			if (preservedDetails > 0)
+				logger.Info($"Events browser refresh preserved cached details for {preservedDetails} event(s).");
+		}
 
 		if (enrichDetails)
 		{
@@ -218,7 +260,7 @@ internal sealed class EventService : IDisposable
 		};
 	}
 
-	private static List<EventEntry> ParseList(string html)
+	internal static List<EventEntry> ParseList(string html)
 	{
 		Match listMatch = Regex.Match(html, "<div\\s+class=\"event_list\">(?<list>[\\s\\S]*?)</ul>", RegexOptions.IgnoreCase);
 		string listHtml = listMatch.Success ? listMatch.Groups["list"].Value : html;
@@ -284,11 +326,16 @@ internal sealed class EventService : IDisposable
 				TimeSpan.FromSeconds(2));
 		}
 
+		bool ongoing = Regex.IsMatch(
+			Clean(itemHtml),
+			"\\bOngoing\\b",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+			TimeSpan.FromSeconds(2));
 		int remainingValue = countMatch.Success && int.TryParse(countMatch.Groups["count"].Value, out int parsed) ? parsed : 0;
 		string rawUnit = countMatch.Success ? Clean(countMatch.Groups["unit"].Value) : "";
 		int? remainingHours = countMatch.Success ? ToRemainingHours(remainingValue, rawUnit) : null;
-		string timeLeft = countMatch.Success ? $"{remainingValue} {rawUnit}".Trim() : "Official event";
-		string status = remainingHours.HasValue && remainingHours.Value <= 72 ? "endingSoon" : "active";
+		string timeLeft = ongoing ? "Ongoing" : countMatch.Success ? $"{remainingValue} {rawUnit}".Trim() : "Official event";
+		string status = !ongoing && remainingHours.HasValue && remainingHours.Value <= 72 ? "endingSoon" : "active";
 		DateTimeOffset? end = remainingHours.HasValue ? DateTimeOffset.UtcNow.AddHours(Math.Max(1, remainingHours.Value)) : null;
 
 		entries.Add(new EventEntry(
@@ -629,7 +676,7 @@ internal sealed class EventService : IDisposable
 
 	internal sealed record EventDateRange(DateTimeOffset StartUtc, DateTimeOffset EndUtc);
 
-	private sealed record EventEntry(
+	internal sealed record EventEntry(
 		string Id,
 		string Title,
 		string Category,

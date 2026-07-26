@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -906,7 +907,7 @@ internal sealed class CalculatorForm : Form
 		{
 			"selectGrindLootImage" or "scanGrindLootImage" => TimeSpan.FromMinutes(2),
 			"downloadAndInstallUpdate" => TimeSpan.FromMinutes(10),
-			"refreshEvents" or "initializeEvents" => TimeSpan.FromSeconds(75),
+			"refreshEvents" or "initializeEvents" => TimeSpan.FromSeconds(105),
 			_ => TimeSpan.FromSeconds(45)
 		};
 	}
@@ -1186,7 +1187,7 @@ internal sealed class CalculatorForm : Form
 			? await eventService.RefreshAsync(cancellationToken)
 			: await eventService.InitializeAsync(cancellationToken);
 
-		if (EventDashboardHasEvents(dashboard))
+		if (!ShouldUseEventsBrowserFallback(dashboard, forceRefresh))
 			return dashboard;
 
 		try
@@ -1208,6 +1209,32 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
+	internal static bool ShouldUseEventsBrowserFallback(object dashboard, bool forceRefresh)
+	{
+		if (EventDashboardIsLive(dashboard))
+			return false;
+
+		// Initialization should paint a usable cache immediately. A user-requested
+		// refresh must still try the rendered-browser path when the lightweight
+		// request was blocked, even when that failed request returned cached events.
+		return forceRefresh || !EventDashboardHasEvents(dashboard);
+	}
+
+	private static bool EventDashboardIsLive(object dashboard)
+	{
+		try
+		{
+			JsonElement json = JsonSerializer.SerializeToElement(dashboard, JsonOptions);
+			return json.TryGetProperty("status", out JsonElement status)
+				&& status.ValueKind == JsonValueKind.String
+				&& string.Equals(status.GetString(), "LIVE", StringComparison.OrdinalIgnoreCase);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
 	private static bool EventDashboardHasEvents(object dashboard)
 	{
 		try
@@ -1226,21 +1253,51 @@ internal sealed class CalculatorForm : Form
 	private async Task<string> ReadOfficialEventsHtmlWithBrowserAsync(CancellationToken cancellationToken)
 	{
 		using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-		timeout.CancelAfter(TimeSpan.FromSeconds(35));
+		timeout.CancelAfter(TimeSpan.FromSeconds(55));
 		WebView2 browser = await EnsureEventsBrowserAsync(timeout.Token);
-		await NavigateEventsBrowserAsync(browser, EventService.OfficialEventsUrl, timeout.Token);
+		await NavigateEventsBrowserWithRetryAsync(browser, EventService.OfficialEventsUrl, timeout.Token);
 
 		string latestHtml = "";
-		for (int attempt = 0; attempt < 18; attempt++)
+		for (int attempt = 0; attempt < 50; attempt++)
 		{
 			timeout.Token.ThrowIfCancellationRequested();
 			latestHtml = await ReadBrowserHtmlAsync(browser);
-			if (LooksLikeOfficialEventsPage(latestHtml))
+			if (await BrowserHasRenderedEventCardsAsync(browser)
+				&& LooksLikeOfficialEventsPage(latestHtml))
 				return latestHtml;
-			await Task.Delay(1000, timeout.Token);
+			if (attempt < 49)
+				await Task.Delay(1000, timeout.Token);
 		}
 
 		return latestHtml;
+	}
+
+	private async Task NavigateEventsBrowserWithRetryAsync(WebView2 browser, string url, CancellationToken cancellationToken)
+	{
+		Exception? lastError = null;
+		for (int attempt = 1; attempt <= 2; attempt++)
+		{
+			try
+			{
+				await NavigateEventsBrowserAsync(browser, url, cancellationToken);
+				return;
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				lastError = ex;
+				logger.Warn($"Events browser navigation attempt {attempt} failed: {ex.Message}");
+				if (attempt < 2)
+					await Task.Delay(750, cancellationToken);
+			}
+		}
+
+		throw new InvalidDataException(
+			"The official Events page did not finish loading after two browser attempts.",
+			lastError);
 	}
 
 	private async Task<WebView2> EnsureEventsBrowserAsync(CancellationToken cancellationToken)
@@ -1303,7 +1360,14 @@ internal sealed class CalculatorForm : Form
 		return JsonSerializer.Deserialize<string>(json, JsonOptions) ?? "";
 	}
 
-	private static bool LooksLikeOfficialEventsPage(string html)
+	private static async Task<bool> BrowserHasRenderedEventCardsAsync(WebView2 browser)
+	{
+		string json = await browser.CoreWebView2.ExecuteScriptAsync(
+			"Boolean(document.querySelector('.event_list a[href*=\"groupContentNo=\"]'))");
+		return JsonSerializer.Deserialize<bool>(json, JsonOptions);
+	}
+
+	internal static bool LooksLikeOfficialEventsPage(string html)
 	{
 		if (string.IsNullOrWhiteSpace(html))
 			return false;
@@ -1311,8 +1375,14 @@ internal sealed class CalculatorForm : Form
 			|| html.Contains("Incapsula incident", StringComparison.OrdinalIgnoreCase)
 			|| html.Contains("Request unsuccessful", StringComparison.OrdinalIgnoreCase))
 			return false;
-		return html.Contains("groupContentNo=", StringComparison.OrdinalIgnoreCase)
-			|| html.Contains("event_list", StringComparison.OrdinalIgnoreCase);
+
+		Match eventList = Regex.Match(
+			html,
+			"<div\\b[^>]*class=[\"'][^\"']*\\bevent_list\\b[^\"']*[\"'][^>]*>(?<list>[\\s\\S]*?)</ul>",
+			RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+			TimeSpan.FromSeconds(2));
+		return eventList.Success
+			&& eventList.Groups["list"].Value.Contains("groupContentNo=", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private async Task<object> DownloadAndLaunchUpdateInstallerAsync(CancellationToken cancellationToken)
