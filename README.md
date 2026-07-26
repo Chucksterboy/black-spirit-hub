@@ -17,7 +17,7 @@ https://raw.githubusercontent.com/Chucksterboy/black-spirit-hub/main/update.json
 Run this from the repository root:
 
 ```powershell
-.\scripts\release.ps1 -Version v0.9.19 -Notes "Short release notes here."
+.\scripts\release.ps1 -Version v0.9.20 -Notes "Short release notes here."
 ```
 
 The script:

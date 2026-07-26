@@ -182,24 +182,34 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		string previousCompactName = string.Concat("BDO", "Multi", "Tool");
 		string previousResourceStem = string.Concat(previousCompactName, ".Resources.", "BDO", "_Multi", "_Tool");
 		string previousHtmlName = string.Concat("BDO", "_Multi", "_Tool.html");
-		string previousLogName = string.Concat("bdo", "-multi", "-tool.log");
+		string previousLogStem = string.Concat("bdo", "-multi", "-tool");
+		string previousLogName = previousLogStem + ".log";
 		string logsRoot = Path.Combine(currentRoot, "logs");
 		string previousLogPath = Path.Combine(logsRoot, previousLogName);
 		string currentLogPath = Path.Combine(logsRoot, "black-spirit-hub.log");
 
 		if (File.Exists(previousLogPath))
 		{
+			string targetLogPath = File.Exists(currentLogPath)
+				? Path.Combine(logsRoot, "black-spirit-hub.previous.log")
+				: currentLogPath;
+			MoveMigratedFile(previousLogPath, targetLogPath);
+		}
+
+		if (Directory.Exists(logsRoot))
+		{
 			try
 			{
-				Directory.CreateDirectory(logsRoot);
-				if (!File.Exists(currentLogPath))
+				foreach (string sourceLogPath in Directory.GetFiles(logsRoot, previousLogStem + "*", SearchOption.TopDirectoryOnly))
 				{
-					File.Move(previousLogPath, currentLogPath);
-				}
-				else
-				{
-					string archivedLogPath = Path.Combine(logsRoot, "black-spirit-hub.previous.log");
-					File.Move(previousLogPath, archivedLogPath, overwrite: true);
+					string sourceName = Path.GetFileName(sourceLogPath);
+					if (!sourceName.StartsWith(previousLogStem, StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+
+					string suffix = sourceName[previousLogStem.Length..];
+					MoveMigratedFile(sourceLogPath, Path.Combine(logsRoot, "black-spirit-hub" + suffix));
 				}
 			}
 			catch (IOException)
@@ -214,6 +224,26 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		foreach (string extension in new[] { ".html", ".css", ".js" })
 		{
 			TryDeleteFile(Path.Combine(currentRoot, previousResourceStem + extension));
+		}
+	}
+
+	private static void MoveMigratedFile(string sourcePath, string targetPath)
+	{
+		try
+		{
+			string destinationPath = targetPath;
+			for (int index = 1; File.Exists(destinationPath); index++)
+			{
+				destinationPath = targetPath + $".migrated-{index}";
+			}
+
+			File.Move(sourcePath, destinationPath);
+		}
+		catch (IOException)
+		{
+		}
+		catch (UnauthorizedAccessException)
+		{
 		}
 	}
 

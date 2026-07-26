@@ -214,6 +214,10 @@ internal static class Program
 			File.WriteAllText(Path.Combine(previousRoot, "grind-sessions.json"), "[{\"spotId\":\"test\"}]");
 			string previousLogName = string.Concat("bdo", "-multi", "-tool.log");
 			File.WriteAllText(Path.Combine(previousRoot, "logs", previousLogName), "previous log");
+			string previousRotatedLogName = previousLogName + ".1";
+			File.WriteAllText(Path.Combine(previousRoot, "logs", previousRotatedLogName), "previous rotated log");
+			string previousNativeLogName = string.Concat("bdo", "-multi", "-tool-native.log");
+			File.WriteAllText(Path.Combine(previousRoot, "logs", previousNativeLogName), "previous native log");
 			string previousResourceStem = string.Concat("BDO", "Multi", "Tool.Resources.", "BDO", "_Multi", "_Tool");
 			File.WriteAllText(Path.Combine(previousRoot, previousResourceStem + ".css"), "retired");
 
@@ -221,6 +225,10 @@ internal static class Program
 			if (Directory.Exists(previousRoot)
 				|| !File.Exists(Path.Combine(currentRoot, "grind-sessions.json"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log"))
+				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log.1"))
+				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub-native.log"))
+				|| File.Exists(Path.Combine(currentRoot, "logs", previousRotatedLogName))
+				|| File.Exists(Path.Combine(currentRoot, "logs", previousNativeLogName))
 				|| File.Exists(Path.Combine(currentRoot, previousResourceStem + ".css")))
 			{
 				return 71;
