@@ -2,7 +2,7 @@ param(
 	[Parameter(Mandatory = $true)]
 	[string]$Version,
 
-	[string]$Repository = "Chucksterboy/BDOMultiTool",
+	[string]$Repository = "Chucksterboy/black-spirit-hub",
 
 	[string]$Notes = "",
 
@@ -86,31 +86,35 @@ function Replace-Text {
 		[string]$Replacement
 	)
 
-	$text = Get-Content -LiteralPath $Path -Raw
+	$text = [System.IO.File]::ReadAllText($Path)
 	if (![regex]::IsMatch($text, $Pattern)) {
 		throw "No replacement was made in $Path"
 	}
 
 	$newText = [regex]::Replace($text, $Pattern, $Replacement)
-	Set-Content -LiteralPath $Path -Value $newText -Encoding UTF8
+	[System.IO.File]::WriteAllText(
+		$Path,
+		$newText,
+		[System.Text.UTF8Encoding]::new($false)
+	)
 }
 
 $versionTag = Normalize-Version $Version
 $assemblyVersion = Get-Assembly-Version $versionTag
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $sourceRoot = Join-Path $repoRoot "Source Code"
-$projectFile = Join-Path $sourceRoot "BDO Multi-Tool.csproj"
-$installerProject = Join-Path $sourceRoot "InstallerSource\BDOMultiToolInstaller\BDOMultiToolInstaller.csproj"
-$installerPayload = Join-Path $sourceRoot "InstallerSource\BDOMultiToolInstaller\Payload.zip"
-$appVersionFile = Join-Path $sourceRoot "BDOMultiTool\AppVersion.cs"
-$htmlFile = Join-Path $sourceRoot "BDOMultiTool.Resources.BDO_Multi_Tool.html"
+$projectFile = Join-Path $sourceRoot "Black Spirit Hub.csproj"
+$installerProject = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\BlackSpiritHubInstaller.csproj"
+$installerPayload = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Payload.zip"
+$appVersionFile = Join-Path $sourceRoot "BlackSpiritHub\AppVersion.cs"
+$htmlFile = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.html"
 $assemblyInfoFile = Join-Path $sourceRoot "Properties\AssemblyInfo.cs"
 $updateManifestFile = Join-Path $repoRoot "update.json"
 $artifactRoot = Join-Path $repoRoot "artifacts"
 $appOut = Join-Path $artifactRoot "App Files"
 $installerOut = Join-Path $artifactRoot "Installer"
-$installerExe = Join-Path $installerOut "BDO Multi-Tool Installer.exe"
-$installerReleaseAsset = Join-Path $installerOut "BDO-Multi-Tool-Installer.exe"
+$installerExe = Join-Path $installerOut "Black Spirit Hub Installer.exe"
+$installerReleaseAsset = Join-Path $installerOut "Black-Spirit-Hub-Installer.exe"
 $installerAssetName = Split-Path $installerReleaseAsset -Leaf
 $verifyScript = Join-Path $repoRoot "scripts\verify.ps1"
 
@@ -120,24 +124,29 @@ $gh = Resolve-ToolPath "gh" @("$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GitHu
 
 Set-Location $repoRoot
 
-Write-Host "Preparing BDO Multi-Tool $versionTag"
+Write-Host "Preparing Black Spirit Hub $versionTag"
 
 Replace-Text $appVersionFile 'public const string Current = "v[^"]+";' ('public const string Current = "' + $versionTag + '";')
 Replace-Text $assemblyInfoFile 'AssemblyFileVersion\("[^"]+"\)' ('AssemblyFileVersion("' + $assemblyVersion + '")')
 Replace-Text $assemblyInfoFile 'AssemblyInformationalVersion\("[^"]+"\)' ('AssemblyInformationalVersion("' + $versionTag + '")')
 Replace-Text $assemblyInfoFile 'AssemblyVersion\("[^"]+"\)' ('AssemblyVersion("' + $assemblyVersion + '")')
-Replace-Text $htmlFile 'BDOMultiTool\.Resources\.BDO_Multi_Tool\.css(?:\?v=[^"]+)?' ('BDOMultiTool.Resources.BDO_Multi_Tool.css?v=' + $versionTag)
+Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=' + $versionTag)
 Replace-Text $htmlFile 'Assets/GrindTracker/grind-spots\.js(?:\?v=[^"]+)?' ('Assets/GrindTracker/grind-spots.js?v=' + $versionTag)
-Replace-Text $htmlFile 'BDOMultiTool\.Resources\.BDO_Multi_Tool\.js(?:\?v=[^"]+)?' ('BDOMultiTool.Resources.BDO_Multi_Tool.js?v=' + $versionTag)
+Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=' + $versionTag)
 
 $manifest = [ordered]@{
 	version = $versionTag
 	releaseUrl = "https://github.com/$Repository/releases/latest"
 	downloadUrl = "https://github.com/$Repository/releases/download/$versionTag/$installerAssetName"
 	sha256 = ""
-	notes = if ([string]::IsNullOrWhiteSpace($Notes)) { "BDO Multi-Tool $versionTag release." } else { $Notes }
+	notes = if ([string]::IsNullOrWhiteSpace($Notes)) { "Black Spirit Hub $versionTag release." } else { $Notes }
 }
-$manifest | ConvertTo-Json | Set-Content -LiteralPath $updateManifestFile -Encoding UTF8
+$manifestJson = $manifest | ConvertTo-Json
+[System.IO.File]::WriteAllText(
+	$updateManifestFile,
+	$manifestJson + [Environment]::NewLine,
+	[System.Text.UTF8Encoding]::new($false)
+)
 Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript
@@ -184,7 +193,12 @@ if ($installerSelfTest.ExitCode -ne 0) {
 }
 
 $manifest.sha256 = (Get-FileHash -LiteralPath $installerReleaseAsset -Algorithm SHA256).Hash.ToUpperInvariant()
-$manifest | ConvertTo-Json | Set-Content -LiteralPath $updateManifestFile -Encoding UTF8
+$manifestJson = $manifest | ConvertTo-Json
+[System.IO.File]::WriteAllText(
+	$updateManifestFile,
+	$manifestJson + [Environment]::NewLine,
+	[System.Text.UTF8Encoding]::new($false)
+)
 Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
 
 Remove-Item -LiteralPath $installerPayload -Force -ErrorAction SilentlyContinue
@@ -200,7 +214,7 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Git commit failed."
 }
 
-& $git tag -a $versionTag -m "BDO Multi-Tool $versionTag"
+& $git tag -a $versionTag -m "Black Spirit Hub $versionTag"
 if ($LASTEXITCODE -ne 0) {
 	throw "Git tag failed. The tag may already exist."
 }
@@ -210,9 +224,9 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Git tag push failed."
 }
 
-$releaseArgs = @("release", "create", $versionTag, $installerReleaseAsset, "--repo", $Repository, "--title", "BDO Multi-Tool $versionTag", "--notes")
+$releaseArgs = @("release", "create", $versionTag, $installerReleaseAsset, "--repo", $Repository, "--title", "Black Spirit Hub $versionTag", "--notes")
 $releaseNotes = if ([string]::IsNullOrWhiteSpace($Notes)) {
-	"BDO Multi-Tool $versionTag release."
+	"Black Spirit Hub $versionTag release."
 } else {
 	$Notes
 }

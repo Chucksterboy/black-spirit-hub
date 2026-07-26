@@ -1,4 +1,4 @@
-﻿# Build output
+# Build output
 bin/
 obj/
 .dotnet-sdk/
@@ -12,6 +12,6 @@ Payload.zip
 
 # Local app/package outputs
 Installer/
-BDO Multi-Tool/App Files/
+Black Spirit Hub/App Files/
 artifacts/
 preview-artifacts/

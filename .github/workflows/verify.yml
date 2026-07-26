@@ -14,7 +14,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Restore
-        run: dotnet restore "Source Code/BDO Multi-Tool.csproj"
+        run: dotnet restore "Source Code/Black Spirit Hub.csproj"
       - name: Verify
         shell: pwsh
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/verify.ps1

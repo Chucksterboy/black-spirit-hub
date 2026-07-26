@@ -13,11 +13,11 @@ if (!$dotnet) {
 }
 if (!$dotnet) { throw "A .NET 8 SDK is required." }
 
-$project = Join-Path $repoRoot "Source Code\BDO Multi-Tool.csproj"
+$project = Join-Path $repoRoot "Source Code\Black Spirit Hub.csproj"
 $sourceRoot = Join-Path $repoRoot "Source Code"
-$htmlPath = Join-Path $sourceRoot "BDOMultiTool.Resources.BDO_Multi_Tool.html"
-$cssPath = Join-Path $sourceRoot "BDOMultiTool.Resources.BDO_Multi_Tool.css"
-$scriptPath = Join-Path $sourceRoot "BDOMultiTool.Resources.BDO_Multi_Tool.js"
+$htmlPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.html"
+$cssPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.css"
+$scriptPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.js"
 $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
 
 if (!$SkipBuild) {
@@ -32,7 +32,7 @@ foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath)) {
 $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
-if ($html -notmatch 'BDOMultiTool\.Resources\.BDO_Multi_Tool\.css' -or $html -notmatch 'BDOMultiTool\.Resources\.BDO_Multi_Tool\.js') {
+if ($html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css' -or $html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js') {
 	throw "The HTML shell does not reference the external UI assets."
 }
 
@@ -50,11 +50,38 @@ if ($missingElementIds) {
 }
 
 $textExtensions = @(".cs", ".csproj", ".css", ".html", ".js", ".json", ".md", ".ps1")
-$textFiles = Get-ChildItem -LiteralPath $sourceRoot, (Join-Path $repoRoot "scripts") -Recurse -File |
+$textSearchRoots = @(
+	$sourceRoot,
+	(Join-Path $repoRoot "scripts"),
+	(Join-Path $repoRoot ".github")
+)
+$textFiles = Get-ChildItem -LiteralPath $textSearchRoots -Recurse -File |
 	Where-Object {
 		$_.Extension -in $textExtensions -and
 		$_.FullName -notmatch '\\(?:bin|obj)\\'
 	}
+$textFiles += Get-ChildItem -LiteralPath $repoRoot -File |
+	Where-Object { $_.Extension -in $textExtensions -or $_.Name -eq ".gitignore" }
+$textFiles = $textFiles | Sort-Object FullName -Unique
+$retiredBrandPattern = '(?i)' + 'BDO[ _-]?' + 'Multi[ _-]?Tool|BDO' + 'MultiTool|bdo[ _-]?' + 'multi[ _-]?tool'
+$retiredBrandPaths = Get-ChildItem -LiteralPath $textSearchRoots -Recurse -Force |
+	Where-Object {
+		$_.FullName -notmatch '\\(?:bin|obj)\\' -and
+		$_.Name -match $retiredBrandPattern
+	} |
+	ForEach-Object FullName
+if ($retiredBrandPaths) {
+	throw "Retired product branding remains in repository paths: $($retiredBrandPaths -join ', ')"
+}
+$retiredBrandFiles = foreach ($file in $textFiles) {
+	$content = [System.IO.File]::ReadAllText($file.FullName)
+	if ($content -match $retiredBrandPattern) {
+		$file.FullName
+	}
+}
+if ($retiredBrandFiles) {
+	throw "Retired product branding remains in: $($retiredBrandFiles -join ', ')"
+}
 $mojibakeFiles = foreach ($file in $textFiles) {
 	$content = [System.IO.File]::ReadAllText($file.FullName)
 	if ($content -match '[\u00C2\u00C3\uFFFD]|\u00E2\u20AC|\u00EF\u00BF\u00BD') {
@@ -173,7 +200,7 @@ if ($unusedFunctions) {
 	throw "Unreferenced JavaScript functions: $($unusedFunctions -join ', ')"
 }
 
-$calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BDOMultiTool\CalculatorForm.cs") -Raw
+$calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 if ($calculatorSource -match 'CancellationToken\.None') {
 	throw "CalculatorForm contains an uncancellable host operation."
 }
@@ -199,9 +226,13 @@ if ($missingHostCommands) {
 if ($unusedHostCommands) {
 	throw "Host bridge handlers without JavaScript callers: $($unusedHostCommands -join ', ')"
 }
-if ($script -notmatch 'bdoMultiTool\.grindTrackerSessionsRecovery' -or
+if ($script -notmatch 'blackSpiritHub\.grindTrackerSessionsRecovery' -or
 	$script -match 'localStorage\.setItem\("grindTrackerSessionsRecovery"') {
 	throw "Grind Tracker emergency recovery is not using the namespaced storage key."
+}
+if ($script -notmatch 'migratePreviousSettingNamespace\(\)' -or
+	$script -notmatch 'localStorage\.removeItem\(previousKey\)') {
+	throw "The one-time browser setting migration is missing."
 }
 
 $node = Get-Command node -ErrorAction SilentlyContinue
@@ -210,8 +241,10 @@ if ($node) {
 	if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax validation failed." }
 }
 
-$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows10.0.19041.0\BDO Multi-Tool.dll"
+$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows10.0.19041.0\Black Spirit Hub.dll"
 & $dotnet $appDll --offline-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "Offline application smoke test failed with exit code $LASTEXITCODE." }
+& $dotnet $appDll --product-migration-smoke-test
+if ($LASTEXITCODE -ne 0) { throw "Product data migration smoke test failed with exit code $LASTEXITCODE." }
 
 Write-Host "Verification passed: build, offline smoke test, DOM wiring, data integrity, UI assets, performance budgets, cancellation, and duplicate-function checks."

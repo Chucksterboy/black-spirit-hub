@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Black Spirit Hub</title>
+
+
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.19">
+</head>
+
+<body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
+<div id="animatedBackdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="windowFrame" aria-hidden="true">
+  <i class="frameCrest"></i>
+</div>
+<header class="windowTitleBar" id="windowTitleBar">
+  <div class="windowBrand"><span class="windowBrandMark"><img src="Assets/AppIcon/app-icon.png" alt=""></span><span>Black Spirit Hub</span></div>
+  <div class="headerCenterCrest" aria-hidden="true"></div>
+  <div class="windowControls">
+    <button class="windowControl" id="windowMinimize" aria-label="Minimize">&minus;</button>
+    <button class="windowControl" id="windowMaximize" aria-label="Maximize">&#9633;</button>
+    <button class="windowControl close" id="windowClose" aria-label="Close">&times;</button>
+  </div>
+</header>
+
+<div class="navFrame">
+  <i class="navCrest" aria-hidden="true"></i>
+  <nav class="appNav" aria-label="Application sections">
+    <button class="navButton active" data-app-view="homeView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Home</span></button>
+    <button class="navButton" data-app-view="calculatorView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Trade Distance</span></button>
+    <button class="navButton" data-app-view="marketView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Market Analytics</span></button>
+    <button class="navButton" data-app-view="portraitView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Portrait Replacer</span></button>
+    <button class="navButton" data-app-view="fontChangerView"><span class="navIcon" aria-hidden="true">T</span><span class="navLabel">Font Changer</span></button>
+    <button class="navButton" data-app-view="couponsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Coupons</span></button>
+    <button class="navButton" data-app-view="settingsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Settings</span></button>
+    <span class="navRowBreak" aria-hidden="true"></span>
+    <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Grind Tracker</span></button>
+    <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Reset Timers</span></button>
+    <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Events</span></button>
+    <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Brackets</span></button>
+    <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Mastery Brackets</span></button>
+    <button class="navButton betaNavButton" data-app-view="lightstoneSetsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Lightstone Sets</span></button>
+  </nav>
+</div>
+
+<div id="toastHost" class="toastHost" aria-live="polite" aria-atomic="true"></div>
+
+<div id="homeView" class="appView active">
+  <div class="homeShell">
+    <header class="homeHero">
+      <div>
+        <h1>Home Dashboard</h1>
+        <p>World bosses, reset timers, day/night cycle, and desktop notification controls.</p>
+      </div>
+      <div class="homeStatus"><i></i><span id="homeScheduleStatus">Schedule loading...</span></div>
+    </header>
+
+    <section class="homeTimerGrid" aria-label="Dashboard timers">
+      <article class="homeTimerCard"><div class="homeTimerTop"><span id="homeNextBossTitle" class="homeTimerTitle">Next Boss</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z"></path><path d="M5 20h14"></path></svg></span></div><strong id="homeNextBossTime" class="homeTimerValue">--:--:--</strong><div id="homeNextBossSub" class="homeTimerSub">Calculating next spawn...</div></article>
+      <article class="homeTimerCard"><div class="homeTimerTop"><span class="homeTimerTitle">Day / Night</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></span></div><strong id="homeDayNightValue" class="homeTimerValue">--</strong><div id="homeDayNightSub" class="homeTimerSub">Cycle loading...</div><div class="homeProgress"><span id="homeDayNightProgress"></span></div></article>
+      <article class="homeTimerCard"><div class="homeTimerTop"><span class="homeTimerTitle">Guild Boss Timer</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span></div><strong id="homeGuildBossValue" class="homeTimerValue">--:--:--</strong><div id="homeGuildBossSub" class="homeTimerSub">Set a guild boss time</div></article>
+      <article class="homeTimerCard"><div class="homeTimerTop"><span class="homeTimerTitle">Guild Bosses</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 22V4"></path><path d="M5 4h14l-2 4 2 4H5"></path></svg></span></div><div class="homeGuildInputWrap"><select id="homeGuildBossDay" class="homeGuildInput" aria-label="Guild boss weekday"><option value="">Choose day</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select><input id="homeGuildBossTime" class="homeGuildInput" type="time" aria-label="Guild boss time"><div id="homeGuildBossSetSub" class="homeTimerSub">Choose the weekly day and time</div></div></article>
+      <article class="homeTimerCard"><div class="homeTimerTop"><span class="homeTimerTitle">BDO Links</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 3h6v6"></path><path d="m10 14 11-11"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></span></div><div class="homeLinkStack"><button class="homeExternalLink" data-open-url="https://www.naeu.playblackdesert.com/en-US/News/Notice?boardType=2">Live Updates</button><button class="homeExternalLink" data-open-url="https://blackdesert.pearlabyss.com/GlobalLab/en-us/News/Notice?_categoryNo=2">Global Labs</button></div></article>
+    </section>
+
+    <section class="homeMainGrid">
+      <article class="homePanel">
+        <div class="homePanelHead">
+          <div class="homePanelTitle"><h2>Boss Schedule</h2><p id="homeBossNextLine">Next boss information will appear here.</p></div>
+          <div class="timeToggle" role="group" aria-label="Time format"><button id="homeTime12" type="button">12H</button><button id="homeTime24" type="button">24H</button><label class="homeLocalToggle" title="Show boss schedule in your local PC time"><input id="homeLocalTime" type="checkbox"><span>Local time</span></label></div>
+        </div>
+        <div class="bossScheduleWrap"><table class="bossScheduleTable"><thead id="bossScheduleHead"></thead><tbody id="bossScheduleBody"><tr><td>Loading schedule...</td></tr></tbody></table></div>
+      </article>
+      <aside class="bossNotifyPanel">
+        <h2>Boss Notifications</h2>
+        <p>Choose which bosses can send Windows desktop alerts before they spawn.</p>
+        <div class="bossSettingRow"><div><strong>Master notifications</strong><span>Enable or disable all boss alerts</span></div><label class="switch"><input id="bossMasterNotifications" type="checkbox" checked><span class="slider"></span></label></div>
+        <div class="bossSettingRow"><div><strong>Lead time</strong><span>Notify before spawn</span></div><select id="bossLeadTime" class="settingSelect bossLeadSelect"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></div>
+        <div class="bossSettingRow"><div><strong>Sound</strong><span>Play Alarm.mp3 with desktop alerts</span></div><label class="switch"><input id="bossSoundEnabled" type="checkbox" checked><span class="slider"></span></label></div>
+        <div class="bossSettingRow"><div><strong>TTS announcements</strong><span>Speak the full boss alert instead of the normal notification</span></div><label class="switch"><input id="bossTtsEnabled" type="checkbox"><span class="slider"></span></label></div>
+        <div class="bossSettingRow"><div><strong>Guild boss notifications</strong><span>Use the same lead time for your weekly guild boss timer</span></div><label class="switch"><input id="guildBossNotifications" type="checkbox"><span class="slider"></span></label></div>
+        <div id="bossToggleList" class="bossToggleList"></div>
+        <div class="bossTestActions"><button id="bossTestTts" type="button">Test TTS</button><button id="bossTestAlarm" type="button">Test Alarm</button></div>
+        <div class="bossNotifyFooter" id="bossNotifyFooter">Settings are saved automatically.</div>
+      </aside>
+    </section>
+  </div>
+</div>
+<div id="resetTimersView" class="appView">
+  <section class="resetTimersShell">
+    <header class="resetTimersHeader">
+      <div>
+        <h1>Reset Timers</h1>
+        <p>Server reset countdowns for daily content, Imperial, BSA, Agris, Barter, and Trading.</p>
+      </div>
+      <div class="resetTimersActions">
+        <label class="resetLocalToggle" title="Show the listed reset time in your local PC time instead of CET"><input id="resetLocalTime" type="checkbox"><span>Local time</span></label>
+        <div class="homeStatus"><i></i><span id="resetTimersStatus">Timers loading...</span></div>
+      </div>
+    </header>
+    <div id="resetTimersGrid" class="resetTimersGrid" aria-label="Black Desert reset timers"></div>
+  </section>
+</div>
+<div id="calculatorView" class="appView">
+<main>
+  <div class="container">
+    <h1 class="pageTitle">Trade Distance Calculator</h1>
+
+    <div class="pageLayout">
+      <section class="card">
+        <div class="cardHead">
+          <div class="title"><span class="spark"></span> Inputs</div>
+          </div>
+
+        <div class="content">
+          <div class="inputsGrid">
+            <!-- Origin -->
+            <div class="panel accent">
+              <div class="panelTitle">
+                <span>Where I'm fishing (origin)</span>
+              </div>
+              <label for="originSearch">Search</label>
+              <input id="originSearch" type="search" placeholder="Type a node/city name (e.g., Valencia City)..." autocomplete="off"/>
+              <div class="originList">
+                <label for="originSelect">Matches</label>
+                <select id="originSelect" size="10" aria-label="Origin matches"></select>
+              </div>
+            </div>
+
+            <!-- Bundled: fish price + trading mastery -->
+            <div class="panel">
+              <div class="panelTitle">
+                <span>Sell setup</span>
+              </div>
+
+              <div class="bundleGrid">
+                <div>
+                  <label for="fishPrice">Fish price (silver)</label>
+                  <input id="fishPrice" type="number" min="0" step="1" placeholder="e.g., 950000000" />
+                </div>
+
+                <div>
+                  <label>Trading Mastery Level</label>
+                  <div class="twoCols">
+                    <select id="tradeRank" aria-label="Trading rank">
+                      <option value="Beginner">Beginner</option>
+                      <option value="Apprentice">Apprentice</option>
+                      <option value="Skilled">Skilled</option>
+                      <option value="Professional">Professional</option>
+                      <option value="Artisan">Artisan</option>
+                      <option value="Master" selected>Master</option>
+                      <option value="Guru">Guru</option>
+                    </select>
+                    <input id="tradeLevel" type="number" min="1" step="1" value="14" aria-label="Rank level"/>
+                  </div>
+
+                  <div class="toggleRow">
+                    <div>
+                      <div class="tLabel">Apply bargain bonus</div>
+                    </div>
+                    <label class="switch" title="Apply bargain bonus">
+                      <input id="applyBargain" type="checkbox" checked />
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+
+                  <div class="bargainLine" id="bargainOut">Bargain bonus: &mdash;</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Outputs -->
+          <div class="kpis">
+            <div class="kpi">
+              <div class="label">Best sell location (max distance bonus)</div>
+              <div class="value" id="bestOut">&mdash;</div>
+              <div class="detail" id="bestDetails">Pick an origin.</div>
+            </div>
+            <div class="kpi">
+              <div class="label">Estimated sale at best location</div>
+              <div class="value mono" id="saleOut">&mdash;</div>
+              <div class="detail" id="saleDetails">Enter fish price to estimate.</div>
+              <img class="coinArtwork" src="gold-coins.png" alt="" aria-hidden="true" />
+            </div>
+          </div>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Destination</th>
+                  <th>NPC</th>
+                  <th class="right">Distance bonus %</th>
+                  <th class="right">Est. sale</th>
+                </tr>
+              </thead>
+              <tbody id="rowsBody">
+                <tr><td colspan="4" style="color: var(--muted); font-size:12px; padding:12px;">No results yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+</div>
+
+<section id="marketView" class="appView">
+  <div class="marketShell">
+    <header class="marketHeader">
+      <div>
+        <h1>Outfit Opportunities</h1>
+        <div id="marketProvider" hidden></div>
+      </div>
+      <div class="marketStatus" id="marketStatus">Ready</div>
+    </header>
+
+    <div class="marketToolbar">
+      <div class="marketSearchWrap">
+        <input id="marketSearch" type="search" placeholder="Search Central Market items to track..." autocomplete="off" />
+        <div id="marketSearchResults" class="marketSearchResults"></div>
+      </div>
+      <div class="marketRegionTabs" role="tablist" aria-label="Market region">
+        <button class="marketRegionTab active" data-market-region="eu" type="button" role="tab" aria-selected="true">EU</button>
+      </div>
+      <button id="marketExport" class="marketButton">Export CSV</button>
+    </div>
+
+    <div class="marketSubTabs" role="tablist">
+      <button class="marketSubTab active" data-market-panel="trackerPanel">Item Tracker</button>
+      <button class="marketSubTab" data-market-panel="outfitPanel">Outfit Opportunities</button>
+    </div>
+
+    <div id="trackerPanel" class="marketPanelView active">
+      <div class="marketWorkspace">
+        <aside class="marketPane">
+          <div class="marketPaneHead"><span>Tracked items</span><span id="trackedCount">0</span></div>
+          <div class="trackedFilters">
+            <input id="trackedFilter" class="marketFilter" type="search" placeholder="Filter..." />
+            <select id="trackedSort" aria-label="Sort tracked items">
+              <option value="name">Name</option>
+              <option value="priceDesc">Price high</option>
+              <option value="updated">Recently updated</option>
+            </select>
+          </div>
+          <div id="trackedItems" class="trackedItems"></div>
+        </aside>
+        <section class="marketPane">
+          <div id="marketEmpty" class="marketEmpty">Search for an item above, add it to tracking, then select it here.</div>
+          <div id="marketDetail" class="marketDetail" hidden>
+            <div class="detailTitle">
+              <div><h2 id="detailName"></h2><p id="detailMeta"></p></div>
+              <div class="marketRow">
+                <select id="historyRange" aria-label="Graph history range">
+                  <option value="7">7 days</option>
+                  <option value="30" selected>30 days</option>
+                  <option value="90">90 days</option>
+                  <option value="365">1 year</option>
+                </select>
+                <button id="removeTracked" class="marketButton">Remove</button>
+              </div>
+            </div>
+            <div class="marketKpis">
+              <div class="marketMetric"><span>Current</span><strong id="metricCurrent">-</strong></div>
+              <div class="marketMetric"><span>Minimum</span><strong id="metricMin">-</strong></div>
+              <div class="marketMetric"><span>Maximum</span><strong id="metricMax">-</strong></div>
+              <div class="marketMetric"><span>Average</span><strong id="metricAverage">-</strong></div>
+              <div class="marketMetric"><span>Trend</span><strong id="metricTrend">-</strong></div>
+            </div>
+            <div id="salesGrid" class="salesGrid"></div>
+            <div class="graphGrid">
+              <div class="graphPanel"><h3>Price history</h3><canvas id="priceChart" class="marketCanvas"></canvas><div class="graphTooltip"></div></div>
+              <div class="graphPanel"><h3>Observed sales volume</h3><canvas id="salesChart" class="marketCanvas"></canvas><div class="graphTooltip"></div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="outfitPanel" class="marketPanelView active">
+      <section class="mustOrderSection">
+        <h2>Top 3 Must Order</h2>
+        <div id="topOutfitCards" class="mustOrderGrid">
+          <div class="mustOrderCard">Scanning Central Market outfit data...</div>
+        </div>
+      </section>
+      <div class="outfitTopline">
+        <div>
+          <strong>Best outfits to preorder</strong>
+          <div id="outfitCoverage" class="coverageText">Building the outfit catalog...</div>
+        </div>
+        <input id="outfitFilter" class="marketFilter" type="search" placeholder="Filter outfits or class..." />
+      </div>
+      <div class="outfitTableWrap">
+        <table class="outfitTable">
+          <thead><tr>
+            <th>#</th><th>Outfit</th>
+            <th class="right">24h sales</th><th class="right">3d sales</th><th class="right">7d sales</th>
+            <th class="right">Preorders</th><th class="right">Queue estimate</th>
+            <th class="right">Price</th>
+          </tr></thead>
+          <tbody id="outfitRows"><tr><td colspan="8">Catalog scan is starting...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="portraitView" class="appView">
+  <div class="portraitShell">
+    <header class="portraitHeader ornateFrame">
+      <div>
+        <h1>BDO Face Texture Replacer</h1>
+        <p class="portraitSubtitle">Replace Black Desert character portraits with custom images.</p>
+      </div>
+      <span class="pillValue">624 &times; 804 BMP</span>
+    </header>
+
+    <p class="coverageText">Default folder: Documents\Black Desert\FaceTexture</p>
+    <section class="portraitPathCard">
+      <div>
+        <label>BDO FaceTexture folder</label>
+        <div id="portraitFolderPath" class="portraitPathValue">No folder selected</div>
+      </div>
+      <button id="portraitSelectFolder" class="marketButton primary">Choose Folder</button>
+    </section>
+
+    <div class="portraitWorkflow">
+      <div class="portraitGrid">
+        <section class="portraitPreviewCard">
+          <div class="portraitCardHead">
+          <strong><span class="stepBadge"><span>1</span></span><span>Existing Portrait</span></strong>
+          <button id="portraitSelectOld" class="marketButton">Select Old Image</button>
+        </div>
+        <div class="portraitCanvas">
+          <img id="portraitOldPreview" alt="Existing portrait preview" hidden />
+          <div id="portraitOldPlaceholder" class="portraitPlaceholder">
+            <span class="portraitEmptyIcon" aria-hidden="true">&#9670;</span>
+            <strong>No existing portrait selected</strong>
+            <span>Choose a .bmp from your FaceTexture folder.</span>
+          </div>
+        </div>
+        <div id="portraitOldMeta" class="portraitFileMeta">No old portrait selected</div>
+        </section>
+        <span class="workflowArrow" aria-hidden="true">&rarr;</span>
+
+        <section class="portraitPreviewCard">
+        <div class="portraitCardHead">
+          <strong><span class="stepBadge"><span>2</span></span><span>New Image</span></strong>
+          <button id="portraitSelectNew" class="marketButton">Select New Image</button>
+        </div>
+        <div class="portraitCanvas">
+          <img id="portraitNewPreview" alt="New portrait preview" hidden />
+          <div id="portraitNewPlaceholder" class="portraitPlaceholder">
+            <span class="portraitEmptyIcon" aria-hidden="true">&#10022;</span>
+            <strong>No new image selected</strong>
+            <span>Choose a PNG, JPG, JPEG, or BMP from your PC.</span>
+          </div>
+        </div>
+        <div id="portraitNewMeta" class="portraitFileMeta">No new image selected</div>
+        </section>
+        <span class="workflowArrow" aria-hidden="true">&rarr;</span>
+
+        <section class="portraitPreviewCard">
+        <div class="portraitCardHead">
+          <strong><span class="stepBadge"><span>3</span></span><span>Final Result</span></strong>
+          <span class="pillValue">BMP</span>
+        </div>
+        <div class="portraitCanvas final">
+          <img id="portraitFinalPreview" alt="Final converted portrait preview" hidden />
+          <div id="portraitFinalPlaceholder" class="portraitPlaceholder">
+            <span class="portraitEmptyIcon" aria-hidden="true">&#9671;</span>
+            <strong>Final preview will appear here</strong>
+            <span>The exact 624 &times; 804 result will be shown after processing.</span>
+          </div>
+        </div>
+        <div class="portraitControls">
+          <label>Resize method</label>
+          <div class="portraitModeRow">
+            <label class="portraitMode">
+              <input type="radio" name="portraitCropMode" value="crop" checked />
+              <span>Crop to fit</span>
+            </label>
+            <label class="portraitMode">
+              <input type="radio" name="portraitCropMode" value="stretch" />
+              <span>Stretch</span>
+            </label>
+          </div>
+        </div>
+        <div id="portraitFinalMeta" class="portraitFileMeta">
+          Crop to fit keeps the image proportional and trims the edges.
+        </div>
+        </section>
+      </div>
+
+      <section id="portraitCropEditor" class="portraitCropEditor">
+      <div class="portraitCropEditorHead">
+        <div>
+          <strong>Crop &amp; Position</strong>
+          <span>Slide the image focus until the final preview frames the portrait exactly where you want it.</span>
+          <small class="portraitEditingNote">Load an image to enable editing controls.</small>
+        </div>
+        <button id="portraitResetCrop" class="marketButton">Center Crop</button>
+      </div>
+      <div class="portraitCropSliders">
+        <div class="portraitCropSlider">
+          <div class="portraitCropSliderTop">
+            <span>Horizontal position</span>
+            <span id="portraitCropXValue">Center</span>
+          </div>
+          <input id="portraitCropX" class="strengthSlider" type="range" min="0" max="100" value="50" step="1" aria-label="Horizontal crop position" />
+        </div>
+        <div class="portraitCropSlider">
+          <div class="portraitCropSliderTop">
+            <span>Vertical position</span>
+            <span id="portraitCropYValue">Center</span>
+          </div>
+          <input id="portraitCropY" class="strengthSlider" type="range" min="0" max="100" value="50" step="1" aria-label="Vertical crop position" />
+        </div>
+        <div class="portraitCropSlider">
+          <div class="portraitCropSliderTop">
+            <span>Zoom</span>
+            <span id="portraitZoomValue">100%</span>
+          </div>
+          <div class="portraitZoomControls">
+            <button id="portraitZoomOut" class="marketButton" type="button" aria-label="Zoom out">&minus;</button>
+            <input id="portraitZoom" class="strengthSlider" type="range" min="100" max="300" value="100" step="10" aria-label="Portrait zoom" />
+            <button id="portraitZoomIn" class="marketButton" type="button" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+      </div>
+      </section>
+    </div>
+
+    <section class="portraitActionCard">
+      <div class="portraitBackupCopy">
+        <strong>Backup &amp; Restore</strong>
+        <div id="portraitStatus" class="portraitStatus">
+          Select your FaceTexture folder to begin.
+        </div>
+      </div>
+      <div class="portraitActions">
+        <button id="portraitOpenBackups" class="marketButton">Open Backup Folder</button>
+        <button id="portraitRestore" class="marketButton">Restore Last Backup</button>
+        <button id="portraitReplace" class="marketButton primary">Back Up &amp; Replace</button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<section id="fontChangerView" class="appView">
+  <div class="fontShell">
+    <header class="fontHeader">
+      <div>
+        <h1>BDO Font Changer</h1>
+      </div>
+    </header>
+
+    <p class="coverageText">Default folder: C:\Pearlabyss\BlackDesert. The app creates prestringtable\font inside it automatically.</p>
+    <div class="fontSetupRow">
+      <section class="fontPathCard">
+        <div>
+          <label>Black Desert Online folder</label>
+          <div id="fontBdoFolder" class="fontPathValue">No BDO folder selected</div>
+        </div>
+        <button id="fontSelectBdoFolder" class="marketButton primary">Choose BDO Folder</button>
+      </section>
+      <aside class="fontGuideCard" aria-label="Required in-game font setting">
+        <strong>Settings &gt; General Settings &gt; Quality of life</strong>
+        <span>Set the in-game font type to <b>DejaVu Sans</b> before applying a custom font.</span>
+        <img src="Assets/FontGuide/dejavu-sans-setting.png" alt="Black Desert font setting showing DejaVu Sans selected">
+      </aside>
+    </div>
+
+    <div class="fontCatalogLayout">
+      <div>
+        <div class="fontSectionHead"><div><h2>Font presets</h2></div></div>
+        <div id="fontPresetGallery" class="fontGallery"><div class="fontPresetCard">Loading bundled fonts...</div></div>
+      </div>
+    </div>
+
+    <div class="fontWorkspace">
+      <section class="fontCustomCard">
+        <div class="fontSectionHead">
+          <div>
+            <h2>Custom font</h2>
+            <p>Select any readable TrueType font from your PC.</p>
+          </div>
+          <button id="fontChooseCustom" class="marketButton">Choose Custom Font</button>
+        </div>
+        <div id="fontCustomEmpty" class="fontCustomEmpty">
+          Choose a .ttf file to preview it here. Your original file will never be moved or deleted.
+        </div>
+        <div id="fontCustomLoaded" class="fontCustomLoaded" hidden>
+          <div class="fontCustomMeta">
+            <div>
+              <strong id="fontCustomName">Custom font</strong>
+              <span id="fontCustomFile"></span>
+            </div>
+          </div>
+          <div class="fontPreview">
+            <img id="fontCustomPreview" alt="Custom font preview" />
+          </div>
+          <div class="fontCustomActions">
+            <button id="fontApplyCustom" class="marketButton primary">Apply Custom Font</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="fontUtilityCard">
+        <h2>Installed font</h2>
+        <p>BDO reads the custom font from prestringtable\font\pearl.ttf after restart.</p>
+        <button id="fontOpenFolder" class="marketButton">Open Font Folder</button>
+        <button id="fontRestoreBackup" class="marketButton">Restore Last Backup</button>
+        <button id="fontRemoveCustom" class="marketButton">Remove Custom Font</button>
+      </aside>
+    </div>
+
+    <div id="fontStatus" class="fontStatus">
+      Select your Black Desert Online folder to begin.
+    </div>
+  </div>
+</section>
+
+<section id="couponsView" class="appView">
+  <div class="couponV2">
+    <header class="couponHero">
+      <div class="couponIntro"><div class="couponSeal">&#9670;</div><div><h1>Coupons</h1><p>Redeem codes to claim in-game rewards.</p><p>New coupons are added automatically when available.</p></div></div>
+      <div class="couponMetric"><span>Available</span><strong id="couponAvailableCount" class="positive">0</strong><small>Coupons Ready</small></div>
+      <div class="couponMetric"><span>Total Coupons</span><strong id="couponTotalCount">0</strong><small>All Time</small></div>
+      <div class="couponMetric"><span>Last Check</span><strong id="couponLastCheck">&mdash;</strong><small>Today</small></div>
+      <div class="couponLiveCard"><div class="couponLiveTop"><span id="couponSourceBadge">CACHED DATA</span><span class="couponLiveSignal"></span></div><div class="couponLiveSync"><span id="couponSyncText">Stored locally</span><i class="couponPulse"></i></div><small id="couponLastUpdated">Last Attempt: &mdash;</small></div>
+    </header>
+    <section class="couponWorkspace">
+      <div class="couponFilters" hidden aria-hidden="true">
+        <input id="couponSearch" type="search" value="" placeholder="Search code or reward..." aria-label="Search coupons" autocomplete="off" />
+        <select id="couponStatusFilter" aria-label="Filter coupon status"><option value="all" selected>All statuses</option><option value="available">Available</option><option value="expired">Expired</option></select>
+        <select id="couponSort" aria-label="Sort coupons"><option value="newest" selected>Newest first</option><option value="oldest">Oldest first</option><option value="code">Code A-Z</option></select>
+      </div>
+      <div id="couponMessage" class="couponMessageV2"></div>
+       <div class="couponContent"><div><div class="couponTabsV2" role="tablist"><button class="active" data-coupon-tab="available" type="button">Available Coupons (<span id="couponAvailableTabCount">0</span>)</button><button data-coupon-tab="redeemed" type="button">Redeemed Coupons (<span id="couponRedeemedCount">0</span>)</button><button data-coupon-tab="expired" type="button">Expired (<span id="couponExpiredTabCount">0</span>)</button><button id="couponRefresh" class="couponRefreshV2 couponTabsRefresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8"></path><path d="M5.5 15A7 7 0 0 0 17.8 17.8L20 16"></path></svg><span>Refresh Coupons</span></button></div><div id="couponRows" class="couponRowsV2"><div class="couponDetailEmpty">Loading coupons...</div></div><div class="couponPagination"><button id="couponPagePrevious" class="couponPageButton" type="button" aria-label="Previous coupon page">&lsaquo;</button><span id="couponPageStatus" aria-live="polite">Page 1 of 1</span><button id="couponPageNext" class="couponPageButton" type="button" aria-label="Next coupon page">&rsaquo;</button></div></div><aside id="couponDetail" class="couponDetail"><div class="couponDetailEmpty">Select a coupon to see its details.</div></aside></div>
+      <footer class="couponBottom"><span class="couponTip">i &nbsp; Tip: New coupons are added automatically when available.</span></footer>
+    </section>
+    <input id="couponShowExpired" type="checkbox" hidden><span id="couponExpiredCount" hidden>0</span>
+  </div>
+</section>
+
+<section id="eventsView" class="appView">
+  <div class="eventsShell">
+    <header class="eventsHeader">
+      <div>
+        <h1>Events</h1>
+      </div>
+      <div class="eventsStatus"><i></i><span id="eventsStatusText">Official events loading...</span><button id="eventsRefresh" class="eventsRefresh" type="button">Refresh Events</button></div>
+    </header>
+    <section class="eventsLayout">
+      <section class="eventsTimeline" aria-label="Official event timeline">
+        <div class="eventsTimelineTop"><strong id="eventsTimelineTitle">Official BDO Events</strong><span id="eventsTimelineCount">0 active</span></div>
+        <div id="eventsTimelineDays" class="eventsTimelineDays"></div>
+        <div id="eventsTimelineBars" class="eventsTimelineBars"></div>
+      </section>
+      <aside id="eventsDetail" class="eventsDetail">
+        <div class="eventsEmpty">Select an event to see its details.</div>
+      </aside>
+    </section>
+  </div>
+</section>
+
+<section id="grindTrackerView" class="appView">
+  <div class="grindShell" data-grind-screen="summary">
+    <header class="grindHeader">
+      <div>
+        <h1>Grind Tracker</h1>
+        
+      </div>
+      <div class="grindHeaderActions">
+        <div class="grindModeTabs" role="tablist" aria-label="Grind tracker grouping">
+          <button class="active" data-grind-mode="spot" type="button">Spot</button>
+          <button data-grind-mode="class" type="button">Class</button>
+          <button data-grind-mode="overtime" type="button">Overtime</button>
+        </div>
+        <button id="grindAddSession" class="grindAddButton" type="button">+ Add Session</button>
+        <button id="grindBackSummary" class="grindGhostButton grindBackButton" type="button">Back to Summary</button>
+      </div>
+    </header>
+    <div class="grindRangeTabs" role="tablist" aria-label="Grind tracker date range">
+      <button class="active" data-grind-range="all" type="button">All</button>
+      <button data-grind-range="7" type="button">Past 7 Days</button>
+      <button data-grind-range="30" type="button">Past 30 Days</button>
+      <button data-grind-range="90" type="button">Past 90 Days</button>
+    </div>
+    <section class="grindSummaryGrid" aria-label="Grind tracker summary">
+      <article class="grindKpiCard" style="--kpi-color:#facc15"><span>Total Silver Earned</span><strong id="grindTotalSilver">0</strong><i class="grindKpiIcon">$</i></article>
+      <article class="grindKpiCard" style="--kpi-color:#38bdf8"><span>Average Silver an Hour</span><strong id="grindAverageHour">0</strong><i class="grindKpiIcon">/h</i></article>
+      <article class="grindKpiCard" style="--kpi-color:#cbd5e1"><span>Total Hours Grinded</span><strong id="grindTotalHours">0h</strong><i class="grindKpiIcon">h</i></article>
+    </section>
+    <section class="grindDashboardGrid" aria-label="Grind tracker charts">
+      <article class="grindPanel">
+        <div class="grindPanelHead"><h2>Total Hours</h2><small id="grindHoursSummary">No sessions yet</small></div>
+        <div class="grindPanelBody grindHoursLayout">
+          <div id="grindHoursLegend" class="grindLegend"></div>
+          <div id="grindHoursDonut" class="grindDonut" data-label="0h"></div>
+        </div>
+      </article>
+      <article class="grindPanel">
+        <div class="grindPanelHead"><h2>Total Silver</h2><small id="grindSilverSummary">By spot</small></div>
+        <div id="grindSilverBars" class="grindPanelBody grindBarList"></div>
+      </article>
+      <article class="grindPanel">
+        <div class="grindPanelHead"><h2>Silver an Hour</h2><small id="grindHourlySummary">Best average</small></div>
+        <div id="grindHourlyBars" class="grindPanelBody grindBarList"></div>
+      </article>
+      <article class="grindPanel">
+        <div class="grindPanelHead"><h2>Recent Sessions</h2><small id="grindRecentSummary">Latest captures</small></div>
+        <div id="grindRecentSessions" class="grindPanelBody grindRecentList"></div>
+      </article>
+    </section>
+    <section class="grindLowerGrid">
+      <article id="grindSpotDetail" class="grindSpotDetail">
+        <div class="grindEmpty">Choose a grind zone to see its drops and sessions.</div>
+      </article>
+      <article id="grindSessionPanel" class="grindSessionPanel">
+        <div class="grindPanelHead"><h2 id="grindFormTitle">Add Session</h2><small>Session review</small></div>
+        <form id="grindSessionForm" class="grindForm">
+          <input id="grindSessionId" type="hidden">
+          <div class="grindImageActions">
+            <button id="grindStartSession" class="grindSaveButton" type="button">Add Image</button>
+            <span id="grindDraftStatus" class="grindCaptureStatus">Add a loot screenshot to scan, or enter counts manually.</span>
+          </div>
+          <div id="grindImagePreview" class="grindImagePreview" aria-live="polite"></div>
+          <div class="grindFormGrid">
+            <div class="grindField grindBoxField grindFull"><label for="grindFormSpotSearch">Grind zone</label><input id="grindFormSpotSearch" class="grindSpotSearchInput" type="search" placeholder="Search zone, region, or trash loot..." autocomplete="off"><select id="grindFormSpot" required></select></div>
+            <div class="grindField grindBoxField grindTimePair"><label>Duration</label><div><input id="grindFormHours" type="number" min="0" step="1" placeholder="Hours" required><input id="grindFormMinutes" type="number" min="0" max="59" step="1" placeholder="Mins" required></div></div>
+            <div class="grindField grindBoxField grindClassField"><label for="grindClassButton">Class</label><select id="grindFormClass" hidden><option value="">Select class</option></select><div id="grindClassPicker" class="grindClassPicker"><button id="grindClassButton" class="grindClassButton" type="button" aria-haspopup="listbox" aria-expanded="false"></button><div id="grindClassMenu" class="grindClassMenu" role="listbox" hidden></div></div></div>
+            <div class="grindField grindBoxField"><label for="grindFormDropRate">Total drop rate</label><input id="grindFormDropRate" type="number" min="0" step="1" placeholder="e.g. 250"></div>
+            <div class="grindField grindBoxField"><label>Agris</label><div class="grindSegmented" role="group" aria-label="Agris used"><button class="active" data-grind-agris="off" type="button">Off</button><button data-grind-agris="on" type="button">On</button></div><input id="grindFormAgris" type="checkbox" hidden></div>
+            <div class="grindField grindBuffField grindFull"><label>Session modifiers</label><div id="grindBuffPicker" class="grindBuffPicker" role="group" aria-label="Session modifiers used"></div></div>
+            <div class="grindField grindFull"><label>Loot review</label><div id="grindLootInputs" class="grindLootInputGrid"></div></div>
+          </div>
+          <div class="grindFormActions">
+            <button id="grindCancelEdit" class="grindGhostButton" type="button">Cancel Edit</button>
+            <button class="grindSaveButton" type="submit">Save Session</button>
+          </div>
+        </form>
+      </article>
+    </section>
+    <div id="grindSpotPicker" class="grindPickerOverlay" hidden>
+      <div class="grindPickerModal" role="dialog" aria-modal="true" aria-labelledby="grindPickerTitle">
+        <div class="grindPanelHead">
+          <div>
+            <h2 id="grindPickerTitle">Pick spot</h2>
+            <p>Choose the grind zone before starting review.</p>
+          </div>
+          <button id="grindSpotPickerClose" class="grindIconButton" type="button" aria-label="Close grind spot picker">X</button>
+        </div>
+        <div class="grindPickerBody">
+          <input id="grindSpotPickerSearch" class="grindPickerSearch" type="search" placeholder="Search for spot" aria-label="Search grind spots">
+          <div class="grindPickerControls" role="group" aria-label="AP and DP display mode">
+            <button class="active" data-grind-power-mode="recommended" type="button">Recommended AP / DP</button>
+            <button data-grind-power-mode="max" type="button">Max AP / DP</button>
+          </div>
+          <div class="grindPickerHeader">
+            <span>Name</span>
+            <span>CC Effects</span>
+            <span id="grindPowerHeader">Recommended AP / DP</span>
+          </div>
+          <div id="grindSpotPickerList" class="grindPickerList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="bracketsView" class="appView">
+  <div class="bracketShell">
+    <header class="betaToolHeader"><div><h1>AP &amp; DP Brackets</h1><p>Check how many points you need for the next AP, DP, or Damage Reduction bracket.</p></div></header>
+    <div class="bracketTabs"><button class="active" data-bracket-tab="ap" type="button">AP</button><button data-bracket-tab="dp" type="button">DP</button><button data-bracket-tab="dr" type="button">DR</button></div>
+    <section class="bracketCard">
+      <h2 id="bracketTitle">AP Brackets</h2>
+      <div class="bracketCalc">
+        <div class="bracketInput statStepper"><label id="bracketCurrentLabel">Your AP</label><button data-bracket-step="current:-1" type="button">-</button><input id="bracketCurrent" type="number" value="378"><button data-bracket-step="current:1" type="button">+</button><small id="bracketNextHint">AP for next bracket: 3 AP</small></div>
+        <div></div>
+        <div class="bracketInput statStepper"><label>Goal</label><button data-bracket-step="goal:-1" type="button">-</button><input id="bracketGoal" type="number" value="381"><button data-bracket-step="goal:1" type="button">+</button><small aria-hidden="true">&nbsp;</small></div>
+      </div>
+      <div class="bracketResultGrid"><div><span id="bracketRequiredLabel">Required AP</span><strong id="bracketRequired">3 AP</strong></div><div><span id="bracketGainLabel">AP gain</span><strong id="bracketGain">6 AP</strong></div></div>
+    </section>
+    <div class="bracketTableWrap"><table class="bracketTable"><thead id="bracketHead"></thead><tbody id="bracketRows"></tbody></table></div>
+  </div>
+</section>
+
+<section id="masteryBracketsView" class="appView">
+  <div class="masteryShell">
+    <header class="masteryHeader">
+      <div>
+        <h1>Mastery Brackets</h1>
+        <p>Choose a lifeskill to view its mastery bonus table.</p>
+      </div>
+      <button id="masteryExtra" class="masteryExtra" type="button">Extra</button>
+    </header>
+    <div class="masterySkillTabs" id="masterySkillTabs" aria-label="Lifeskill mastery tables">
+      <button class="masterySkillTab active" data-mastery-skill="gathering" type="button" title="Gathering" aria-label="Gathering"><img src="Assets/MasteryIcons/gathering.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="fishing" type="button" title="Fishing" aria-label="Fishing"><img src="Assets/MasteryIcons/fishing.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="cooking" type="button" title="Cooking" aria-label="Cooking"><img src="Assets/MasteryIcons/cooking.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="alchemy" type="button" title="Alchemy" aria-label="Alchemy"><img src="Assets/MasteryIcons/alchemy.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="processing" type="button" title="Processing" aria-label="Processing"><img src="Assets/MasteryIcons/processing.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="hunting" type="button" title="Hunting" aria-label="Hunting"><img src="Assets/MasteryIcons/hunting.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="sailing" type="button" title="Sailing" aria-label="Sailing"><img src="Assets/MasteryIcons/sailing.png" alt=""></button>
+      <button class="masterySkillTab" data-mastery-skill="training" type="button" title="Training" aria-label="Training"><img src="Assets/MasteryIcons/training.png" alt=""></button>
+    </div>
+    <section class="masteryCalcCard" aria-label="Mastery goal calculator">
+      <div class="masteryCalcFields">
+        <label><span>Current mastery</span><input id="masteryCurrentInput" type="number" min="0" max="3000" step="1" value="1000"></label>
+        <label><span>Goal mastery</span><input id="masteryGoalInput" type="number" min="0" max="3000" step="1" value="1250"></label>
+      </div>
+      <div class="masteryCalcResults">
+        <div><span>Current bracket</span><strong id="masteryCurrentBracket">-</strong></div>
+        <div><span>Next bracket</span><strong id="masteryNextBracket">-</strong></div>
+        <div><span>Goal needed</span><strong id="masteryNeeded">-</strong></div>
+      </div>
+      <div id="masteryBonusPreview" class="masteryBonusPreview"></div>
+    </section>
+    <div id="masteryInfo" class="masteryInfo"></div>
+    <div id="masteryTableStage" class="masteryTableStage">
+      <div class="masteryTableWrap">
+        <div id="masteryRarityStrip" class="masteryRarityStrip" aria-label="Gathering rarity categories">
+          <div class="masteryRarityBox rarityCommon"><span class="masteryRarityIcons"><i class="rarityIcon herb"></i><i class="rarityIcon ore"></i></span><span>Common</span></div>
+          <div class="masteryRarityBox raritySpecial"><span class="masteryRarityIcons"><i class="rarityIcon golden-herb"></i><i class="rarityIcon ember"></i></span><span>Special</span></div>
+          <div class="masteryRarityBox rarityRare"><span class="masteryRarityIcons"><i class="rarityIcon amethyst"></i><i class="rarityIcon sapphire"></i></span><span>Rare</span></div>
+          <div class="masteryRarityBox rarityVeryRare"><span class="masteryRarityIcons"><i class="rarityIcon relic"></i><i class="rarityIcon crimson-flame"></i></span><span>Very Rare</span></div>
+        </div>
+        <table class="masteryTable"><thead id="masteryHead"></thead><tbody id="masteryRows"></tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="lightstoneSetsView" class="appView">
+  <div class="lightstoneShell">
+    <header class="lightstoneHeader">
+      <div>
+        <h1>Lightstone Sets</h1>
+      </div>
+      <div id="lightstoneModePill" class="lightstoneModePill">Select a category</div>
+    </header>
+
+    <section id="lightstoneChooser" class="lightstoneChooser" aria-label="Lightstone set categories">
+      <button class="lightstoneChoice" data-lightstone-choice="lifeskill" type="button">
+        <span class="lightstoneChoiceIcon" aria-hidden="true">&#10022;</span>
+        <h2>Lifeskill</h2>
+        <p>Cooking, alchemy, gathering, fishing, processing, trading, sailing, training, and other lifeskill sets.</p>
+      </button>
+      <button class="lightstoneChoice" data-lightstone-choice="combat" type="button">
+        <span class="lightstoneChoiceIcon" aria-hidden="true">&#9876;</span>
+        <h2>Combat</h2>
+        <p>Damage, defense, accuracy, survivability, PvE, PvP, and class-focused combat sets.</p>
+      </button>
+    </section>
+
+    <section id="lightstoneStage" class="lightstoneStage" aria-live="polite">
+      <div class="lightstoneStageTop">
+        <div>
+          <h2 id="lightstoneStageTitle">Lightstone Sets</h2>
+          <p id="lightstoneStageSubtitle" class="muted" hidden></p>
+        </div>
+        <div class="lightstoneStageActions">
+          <label class="lightstoneAmpToggle" title="Replace eligible stones with their amplified versions">
+            <span>Amplified</span>
+            <span class="switch"><input id="lightstoneAmplifiedToggle" type="checkbox"><span class="slider"></span></span>
+          </label>
+          <div class="lightstoneTypeSwitch" role="tablist" aria-label="Lightstone category switch">
+            <button data-lightstone-choice="lifeskill" type="button">Lifeskill</button>
+            <button data-lightstone-choice="combat" type="button">Combat</button>
+          </div>
+        </div>
+      </div>
+      <div class="lightstoneToolbar">
+        <input id="lightstoneSearch" type="search" placeholder="Search set, effect, or lightstone...">
+        <select id="lightstoneCategoryFilter" aria-label="Filter lightstone set category">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div id="lightstoneSummary" class="lightstoneSummary"></div>
+      <div id="lightstoneSetGrid" class="lightstoneSetGrid"></div>
+    </section>
+  </div>
+</section>
+
+<section id="settingsView" class="appView">
+  <div class="settingsShell">
+    <header class="settingsHeader">
+      <h1>Settings</h1>
+      <p>Shape the app around how you like to use it.</p>
+    </header>
+
+    <div class="settingsGrid">
+      <section class="settingsCard presetControlled" id="themePresetControls">
+        <h2>Theme</h2>
+        <p class="settingsCardIntro">Choose a color atmosphere. Every theme works in light and dark mode.</p>
+        <div class="themeChoices" id="themeChoices">
+          <button class="themeChoice" data-theme-choice="ocean" style="--swatch1:#38bdf8;--swatch2:#2dd4bf"><strong>Ocean</strong><span>Clear and balanced</span></button>
+          <button class="themeChoice" data-theme-choice="forest" style="--swatch1:#22c55e;--swatch2:#84cc16"><strong>Forest</strong><span>Natural greens</span></button>
+          <button class="themeChoice" data-theme-choice="sunset" style="--swatch1:#fb923c;--swatch2:#f472b6"><strong>Sunset</strong><span>Warm and vivid</span></button>
+          <button class="themeChoice" data-theme-choice="lavender" style="--swatch1:#a78bfa;--swatch2:#22d3ee"><strong>Lavender</strong><span>Soft neon glow</span></button>
+          <button class="themeChoice" data-theme-choice="slate" style="--swatch1:#94a3b8;--swatch2:#38bdf8"><strong>Slate</strong><span>Quiet and neutral</span></button>
+          <button class="themeChoice" data-theme-choice="crimson" style="--swatch1:#fb7185;--swatch2:#f97316"><strong>Crimson</strong><span>Bold red warmth</span></button>
+          <button class="themeChoice" data-theme-choice="gold" style="--swatch1:#fbbf24;--swatch2:#f59e0b"><strong>Golden Hour</strong><span>Warm amber light</span></button>
+          <button class="themeChoice" data-theme-choice="midnight" style="--swatch1:#818cf8;--swatch2:#38bdf8"><strong>Midnight</strong><span>Deep blue focus</span></button>
+        </div>
+      </section>
+
+      <section class="settingsCard">
+        <h2>Interface</h2>
+        <p class="settingsCardIntro">Fine-tune comfort, spacing, and movement.</p>
+        <div class="settingsControls">
+          <div class="interfacePreviewIntro">
+            <strong>Interface style</strong>
+            <span>Choose a visual language for the whole app.</span>
+          </div>
+          <select id="interfaceStyle" class="settingSelect interfaceStyleHidden" aria-hidden="true" tabindex="-1">
+            <option value="custom">OFF &mdash; Default / Custom</option>
+            <option value="fantasy">Fantasy</option>
+            <option value="cyber">Cyber</option>
+            <option value="cinematic">Cinematic</option>
+            <option value="crystal">Crystal Palace</option>
+            <option value="tactical">Tactical HUD</option>
+            <option value="retro">Retro Grid</option>
+            <option value="abyssal">Abyssal Temple</option>
+            <option value="royal">Royal Crimson</option>
+            <option value="paper">Paper Alchemist</option>
+            <option value="foundry">Dwarven Foundry</option>
+            <option value="void">Void Monolith</option>
+            <option value="caravan">Desert Caravan</option>
+          </select>
+          <div class="interfacePreviewGrid" id="interfacePreviewGrid" aria-label="Interface style previews">
+            <button class="interfacePreviewCard" data-interface-preview="custom" type="button" style="--preview-a:#38bdf8;--preview-b:#34d399"><strong>Custom</strong><span>Use the controls below</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="fantasy" type="button" style="--preview-a:#d6ad55;--preview-b:#2d1f0b"><strong>Fantasy</strong><span>Ornate gold frame</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="cyber" type="button" style="--preview-a:#22d3ee;--preview-b:#180a35"><strong>Cyber</strong><span>Neon circuit glow</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="cinematic" type="button" style="--preview-a:#d1b48a;--preview-b:#101827"><strong>Cinematic</strong><span>Dark scenic plates</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="crystal" type="button" style="--preview-a:#7dd3fc;--preview-b:#263b6d"><strong>Crystal Palace</strong><span>Clean icy glass</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="tactical" type="button" style="--preview-a:#b6ef46;--preview-b:#12220c"><strong>Tactical HUD</strong><span>Green command lines</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="retro" type="button" style="--preview-a:#39ff14;--preview-b:#230042"><strong>Retro Grid</strong><span>Arcade matrix glow</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="abyssal" type="button" style="--preview-a:#42e5e9;--preview-b:#031525"><strong>Abyssal Temple</strong><span>Deep water energy</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="royal" type="button" style="--preview-a:#f2c45d;--preview-b:#3c0614"><strong>Royal Crimson</strong><span>Red and gold trim</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="paper" type="button" style="--preview-a:#7c4a24;--preview-b:#f1dfb8"><strong>Paper Alchemist</strong><span>Warm parchment ink</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="foundry" type="button" style="--preview-a:#ff8a1f;--preview-b:#24120b"><strong>Dwarven Foundry</strong><span>Metal and ember</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="void" type="button" style="--preview-a:#a855f7;--preview-b:#090018"><strong>Void Monolith</strong><span>Sharp violet depth</span></button>
+            <button class="interfacePreviewCard" data-interface-preview="caravan" type="button" style="--preview-a:#d19a4a;--preview-b:#55361c"><strong>Desert Caravan</strong><span>Sunlit sand route</span></button>
+          </div>
+          <div class="settingRow presetControlled" id="modePresetControl">
+            <div class="settingCopy"><strong id="modeLabel">Dark mode</strong><span>Switch between dark and light surfaces</span></div>
+            <label class="switch" title="Toggle dark or light mode">
+              <input id="themeModeToggle" type="checkbox" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settingRow presetControlled" id="densityPresetControl">
+            <div class="settingCopy"><strong>Interface density</strong><span>Choose roomy or compact spacing</span></div>
+            <select id="interfaceDensity" class="settingSelect">
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </div>
+          <div class="settingRow presetControlled" id="cornerPresetControl">
+            <div class="settingCopy"><strong>Corner style</strong><span>Change the shape of cards and controls</span></div>
+            <select id="cornerStyle" class="settingSelect">
+              <option value="soft">Soft</option>
+              <option value="round">Rounded</option>
+              <option value="sharp">Sharp</option>
+            </select>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Reduce motion</strong><span>Minimize interface animations</span></div>
+            <label class="switch" title="Reduce motion">
+              <input id="reduceMotion" type="checkbox" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Enable toast notifications</strong><span>Show non-blocking action confirmations and errors</span></div>
+            <label class="switch" title="Enable toast notifications"><input id="toastNotificationsEnabled" type="checkbox" checked /><span class="slider"></span></label>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Close button minimizes to tray</strong><span>When enabled, pressing X hides the app in the system tray instead of fully closing it.</span></div>
+            <label class="switch" title="Minimize to system tray"><input id="minimizeToTrayEnabled" type="checkbox" checked /><span class="slider"></span></label>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Toast duration</strong><span>How long notifications remain visible</span></div>
+            <select id="toastDuration" class="settingSelect"><option value="3">3 seconds</option><option value="5" selected>5 seconds</option><option value="8">8 seconds</option><option value="12">12 seconds</option></select>
+          </div>
+          <div class="rangeControl settingsRange presetControlled" id="glowPresetControl">
+            <div class="rangeTop">
+              <div class="rangeLabel"><strong>Background glow</strong><span>Control the strength of the colored backdrop</span></div>
+              <span class="pillValue" id="strengthValue">72%</span>
+            </div>
+            <input id="backgroundStrength" class="strengthSlider" type="range" min="20" max="100" step="1" value="72" aria-label="Background glow" />
+          </div>
+        </div>
+      </section>
+    </div>
+    <section class="settingsCard backgroundSettingsCard presetControlled" id="backgroundPresetControls">
+      <h2>Animated environment</h2>
+      <p class="settingsCardIntro">Transform the atmosphere behind the interface. Reduce Motion freezes animation while preserving the selected design.</p>
+      <div class="backgroundChoices" id="backgroundChoices">
+        <button class="backgroundChoice" data-background-choice="none"><span class="backgroundChoicePreview preview-none"></span><span class="backgroundChoiceCopy"><strong>Still Canvas</strong><span>Quiet and distraction-free</span></span></button>
+        <button class="backgroundChoice" data-background-choice="aurora"><span class="backgroundChoicePreview preview-aurora"></span><span class="backgroundChoiceCopy"><strong>Aurora Drift</strong><span>Flowing ribbons of colored light</span></span></button>
+        <button class="backgroundChoice" data-background-choice="stars"><span class="backgroundChoicePreview preview-stars"></span><span class="backgroundChoiceCopy"><strong>Deep Space</strong><span>Twinkling stars and a distant nebula</span></span></button>
+        <button class="backgroundChoice" data-background-choice="matrix"><span class="backgroundChoicePreview preview-matrix"></span><span class="backgroundChoiceCopy"><strong>Digital Rain</strong><span>Falling green data streams</span></span></button>
+        <button class="backgroundChoice" data-background-choice="embers"><span class="backgroundChoicePreview preview-embers"></span><span class="backgroundChoiceCopy"><strong>Ember Forge</strong><span>Rising sparks over a warm furnace</span></span></button>
+        <button class="backgroundChoice" data-background-choice="ocean"><span class="backgroundChoicePreview preview-ocean"></span><span class="backgroundChoiceCopy"><strong>Abyssal Tides</strong><span>Layered waves rolling in the deep</span></span></button>
+        <button class="backgroundChoice" data-background-choice="geometry"><span class="backgroundChoicePreview preview-geometry"></span><span class="backgroundChoiceCopy"><strong>Prism Grid</strong><span>Shifting crystalline geometry</span></span></button>
+      </div>
+    </section>
+  </div>
+</section>
+
+<div id="appConfirmOverlay" class="appConfirmOverlay" hidden>
+  <section class="appConfirmDialog" role="alertdialog" aria-modal="true" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmMessage">
+    <h2 id="appConfirmTitle">Confirm action</h2>
+    <p id="appConfirmMessage"></p>
+    <div class="appConfirmActions">
+      <button id="appConfirmCancel" type="button">Cancel</button>
+      <button id="appConfirmAccept" class="danger" type="button">Delete</button>
+    </div>
+  </section>
+</div>
+
+<footer class="appStatusBar">
+  <span class="statusLeft"><span class="statusReady">Ready</span><button class="supportHeart" type="button" data-open-url="https://ko-fi.com/chucksterboy" aria-label="Support Me" title="Support Me" data-tooltip="Support Me"><svg class="supportHeartGlyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg><span class="supportHeartLabel">Support Me</span></button></span>
+  <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
+</footer>
+
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.19"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.19"></script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

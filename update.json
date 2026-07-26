@@ -1,7 +1,7 @@
-﻿{
-    "version":  "v0.9.18",
-    "releaseUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/BDOMultiTool/releases/download/v0.9.18/BDO-Multi-Tool-Installer.exe",
-    "sha256":  "46484B2E7C779490EE281513B3A870A14950F1C40D6FAE9914AEC9B28E7F6446",
-    "notes":  "Corrects official event date boundaries, streamlines the Font Changer and Coupons layouts, and restores the manual Refresh Coupons action alongside the coupon status tabs."
+{
+    "version":  "v0.9.19",
+    "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.19/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "7E04E2FD26C1BA5187846E3FEFA58A10E0F6C9083CC5B80F4BCB1834A82BC12D",
+    "notes":  "Rebrands the application as Black Spirit Hub across the UI, executable, installer, updater, and repository; safely migrates existing settings, sessions, caches, backups, install paths, shortcuts, and scheduled tasks; preserves all tab functionality and strengthens EU market refresh retry behavior."
 }
