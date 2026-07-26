@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.20",
+    "version":  "v0.9.21",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.20/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "7B963B66A8BAE8C00363F99B6D43A19E57A3804E3236ECC1D1B24E377BFFD143",
-    "notes":  "Completes the Black Spirit Hub rebrand migration by normalizing retained rotated and native diagnostic log filenames without overwriting existing logs. Includes the full v0.9.19 application, installer, updater, repository, data, shortcut, and install-path rebrand."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.21/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "1FDFD69D6D8B901360636D634E663914807918079C133D84A36AE2AD5234DAA0",
+    "notes":  "Finalizes the Black Spirit Hub rebrand release pipeline: the app, updater manifest, GitHub release, and installer Windows metadata now share the same version. Includes complete legacy path, data, shortcut, resource, and diagnostic-log migration with all existing tab functionality preserved."
 }

@@ -100,6 +100,7 @@ function Replace-Text {
 }
 
 $versionTag = Normalize-Version $Version
+$packageVersion = $versionTag.Substring(1)
 $assemblyVersion = Get-Assembly-Version $versionTag
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $sourceRoot = Join-Path $repoRoot "Source Code"
@@ -130,6 +131,10 @@ Replace-Text $appVersionFile 'public const string Current = "v[^"]+";' ('public 
 Replace-Text $assemblyInfoFile 'AssemblyFileVersion\("[^"]+"\)' ('AssemblyFileVersion("' + $assemblyVersion + '")')
 Replace-Text $assemblyInfoFile 'AssemblyInformationalVersion\("[^"]+"\)' ('AssemblyInformationalVersion("' + $versionTag + '")')
 Replace-Text $assemblyInfoFile 'AssemblyVersion\("[^"]+"\)' ('AssemblyVersion("' + $assemblyVersion + '")')
+Replace-Text $installerProject '<Version>[^<]+</Version>' ('<Version>' + $packageVersion + '</Version>')
+Replace-Text $installerProject '<AssemblyVersion>[^<]+</AssemblyVersion>' ('<AssemblyVersion>' + $assemblyVersion + '</AssemblyVersion>')
+Replace-Text $installerProject '<FileVersion>[^<]+</FileVersion>' ('<FileVersion>' + $assemblyVersion + '</FileVersion>')
+Replace-Text $installerProject '<InformationalVersion>[^<]+</InformationalVersion>' ('<InformationalVersion>' + $versionTag + '</InformationalVersion>')
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=' + $versionTag)
 Replace-Text $htmlFile 'Assets/GrindTracker/grind-spots\.js(?:\?v=[^"]+)?' ('Assets/GrindTracker/grind-spots.js?v=' + $versionTag)
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=' + $versionTag)
