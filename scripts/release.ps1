@@ -118,6 +118,7 @@ $installerExe = Join-Path $installerOut "Black Spirit Hub Installer.exe"
 $installerReleaseAsset = Join-Path $installerOut "Black-Spirit-Hub-Installer.exe"
 $installerAssetName = Split-Path $installerReleaseAsset -Leaf
 $verifyScript = Join-Path $repoRoot "scripts\verify.ps1"
+$iconBuildScript = Join-Path $repoRoot "scripts\build-app-icons.ps1"
 
 $dotnet = Resolve-DotnetSdkPath $repoRoot
 $git = Resolve-ToolPath "git" @("$env:LOCALAPPDATA\GitHubDesktop\app-*\resources\app\git\cmd\git.exe")
@@ -153,6 +154,11 @@ $manifestJson = $manifest | ConvertTo-Json
 	[System.Text.UTF8Encoding]::new($false)
 )
 Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
+
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $iconBuildScript
+if ($LASTEXITCODE -ne 0) {
+	throw "Application icon generation failed."
+}
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verifyScript
 if ($LASTEXITCODE -ne 0) {

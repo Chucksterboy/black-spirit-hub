@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.21",
+    "version":  "v0.9.22",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.21/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "1FDFD69D6D8B901360636D634E663914807918079C133D84A36AE2AD5234DAA0",
-    "notes":  "Finalizes the Black Spirit Hub rebrand release pipeline: the app, updater manifest, GitHub release, and installer Windows metadata now share the same version. Includes complete legacy path, data, shortcut, resource, and diagnostic-log migration with all existing tab functionality preserved."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.22/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "61865EC042DF16FF1B10A71FF4BB7282328EA8C8612281D1127B047C5527B67C",
+    "notes":  "Replaces the application identity with the new Midnight Sigil artwork across the app window, Windows taskbar, system tray, shortcuts, and installer. Adds purpose-built high-contrast native icon frames, enlarges the in-app title-bar mark, and hides the outer scrollbar while preserving scrolling."
 }

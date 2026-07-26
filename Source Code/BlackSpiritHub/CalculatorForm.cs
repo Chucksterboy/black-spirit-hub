@@ -119,6 +119,8 @@ internal sealed class CalculatorForm : Form
 
 	private readonly Icon appIcon;
 
+	private readonly Icon trayAppIcon;
+
 	private readonly CancellationTokenSource lifetimeCancellation = new();
 
 	private readonly ConcurrentDictionary<string, CancellationTokenSource> activeBridgeRequests = new(StringComparer.Ordinal);
@@ -163,7 +165,10 @@ internal sealed class CalculatorForm : Form
 		appStateStore = new AppStateStore(paths, logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
 		Text = "Black Spirit Hub";
-		appIcon = (Icon?)System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath)?.Clone() ?? SystemIcons.Application;
+		appIcon = LoadPackagedIcon(SystemInformation.IconSize)
+			?? (Icon?)System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath)?.Clone()
+			?? (Icon)SystemIcons.Application.Clone();
+		trayAppIcon = LoadPackagedIcon(SystemInformation.SmallIconSize) ?? (Icon)appIcon.Clone();
 		base.Icon = appIcon;
 		trayIcon = CreateTrayIcon();
 		base.StartPosition = FormStartPosition.CenterScreen;
@@ -191,6 +196,26 @@ internal sealed class CalculatorForm : Form
 		base.Controls.Add(loadingLabel);
 	}
 
+	private static Icon? LoadPackagedIcon(Size requestedSize)
+	{
+		try
+		{
+			string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon", "app-icon.ico");
+			if (!File.Exists(iconPath))
+			{
+				return null;
+			}
+
+			int width = Math.Max(16, requestedSize.Width);
+			int height = Math.Max(16, requestedSize.Height);
+			return new Icon(iconPath, width, height);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
 	private NotifyIcon CreateTrayIcon()
 	{
 		ContextMenuStrip menu = new ContextMenuStrip();
@@ -207,7 +232,7 @@ internal sealed class CalculatorForm : Form
 
 		NotifyIcon icon = new NotifyIcon
 		{
-			Icon = appIcon,
+			Icon = trayAppIcon,
 			Text = "Black Spirit Hub",
 			ContextMenuStrip = menu,
 			Visible = false
@@ -386,13 +411,13 @@ internal sealed class CalculatorForm : Form
 			trayBadgeIcon = null;
 			if (count <= 0)
 			{
-				trayIcon.Icon = appIcon;
+				trayIcon.Icon = trayAppIcon;
 				trayIcon.Text = "Black Spirit Hub";
 				previousBadge?.Dispose();
 				return;
 			}
 
-			trayBadgeIcon = CreateTrayIconWithCouponDot(appIcon);
+			trayBadgeIcon = CreateTrayIconWithCouponDot(trayAppIcon);
 			trayIcon.Icon = trayBadgeIcon;
 			trayIcon.Text = count == 1 ? "Black Spirit Hub - 1 new coupon" : "Black Spirit Hub - new coupons available";
 			previousBadge?.Dispose();
@@ -456,12 +481,17 @@ internal sealed class CalculatorForm : Form
 
 	private static Icon CreateTrayIconWithCouponDot(Icon baseIcon)
 	{
-		using Bitmap bitmap = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+		int size = Math.Clamp(Math.Max(baseIcon.Width, baseIcon.Height), 16, 32);
+		using Bitmap bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 		using Graphics graphics = Graphics.FromImage(bitmap);
 		graphics.SmoothingMode = SmoothingMode.AntiAlias;
 		graphics.Clear(Color.Transparent);
-		graphics.DrawIcon(baseIcon, new Rectangle(0, 0, 32, 32));
-		DrawCouponDot(graphics, new RectangleF(20f, 2f, 10f, 10f), 1.6f);
+		graphics.DrawIcon(baseIcon, new Rectangle(0, 0, size, size));
+		float dotSize = Math.Max(6f, size * 0.35f);
+		DrawCouponDot(
+			graphics,
+			new RectangleF(size - dotSize - 1f, 1f, dotSize, dotSize),
+			Math.Max(1f, size / 20f));
 		IntPtr handle = bitmap.GetHicon();
 		try
 		{
@@ -636,6 +666,7 @@ internal sealed class CalculatorForm : Form
 		try { trayIcon.Dispose(); } catch { }
 		try { taskbarBadgeIcon?.Dispose(); } catch { }
 		try { trayBadgeIcon?.Dispose(); } catch { }
+		try { trayAppIcon.Dispose(); } catch { }
 		try { appIcon.Dispose(); } catch { }
 		try { eventsBrowserView?.Dispose(); } catch { }
 		try { backgroundNotificationTimer?.Stop(); } catch { }
