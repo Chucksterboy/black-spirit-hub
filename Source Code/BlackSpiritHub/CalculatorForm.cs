@@ -92,11 +92,25 @@ internal sealed class CalculatorForm : Form
 
 	private readonly AppLogger logger;
 
-	private readonly WebView2 webView;
+	private WebView2 webView;
 
 	private WebView2? eventsBrowserView;
 
 	private readonly Label loadingLabel;
+
+	private readonly Queue<DateTime> webViewRecoveryHistory = new();
+
+	private bool webViewRecoveryActive;
+
+	private bool webViewHealthCheckActive;
+
+	private bool webViewClosing;
+
+	private int webViewGeneration = 1;
+
+	private int recentUnresponsiveFailures;
+
+	private DateTime lastUnresponsiveFailureUtc = DateTime.MinValue;
 
 	private readonly PortraitReplacerService portraitReplacerService;
 
@@ -184,17 +198,22 @@ internal sealed class CalculatorForm : Form
 			Dock = DockStyle.Fill,
 			Text = "Loading Black Spirit Hub...",
 			TextAlign = ContentAlignment.MiddleCenter,
-			ForeColor = Color.FromArgb(36, 49, 63),
+			ForeColor = Color.FromArgb(190, 231, 255),
 			BackColor = BackColor,
 			Font = new Font("Segoe UI", 13f)
 		};
-		webView = new WebView2
+		webView = CreateMainWebViewControl();
+		base.Controls.Add(webView);
+		base.Controls.Add(loadingLabel);
+	}
+
+	private static WebView2 CreateMainWebViewControl()
+	{
+		return new WebView2
 		{
 			Dock = DockStyle.Fill,
 			Visible = false
 		};
-		base.Controls.Add(webView);
-		base.Controls.Add(loadingLabel);
 	}
 
 	private static Icon? LoadPackagedIcon(Size requestedSize)
@@ -651,6 +670,9 @@ internal sealed class CalculatorForm : Form
 			MinimizeToSystemTray();
 			return;
 		}
+		webViewClosing = true;
+		webViewGeneration++;
+		CancelActiveBridgeRequests();
 		lifetimeCancellation.Cancel();
 		base.OnFormClosing(e);
 	}
@@ -669,9 +691,9 @@ internal sealed class CalculatorForm : Form
 		try { trayBadgeIcon?.Dispose(); } catch { }
 		try { trayAppIcon.Dispose(); } catch { }
 		try { appIcon.Dispose(); } catch { }
-		try { eventsBrowserView?.Dispose(); } catch { }
 		try { backgroundNotificationTimer?.Stop(); } catch { }
 		try { backgroundNotificationTimer?.Dispose(); } catch { }
+		DisposeEventsBrowser();
 		lock (grindIconCacheSync)
 		{
 			foreach (Bitmap bitmap in grindIconCache.Values)
@@ -680,6 +702,7 @@ internal sealed class CalculatorForm : Form
 			}
 			grindIconCache.Clear();
 		}
+		DetachMainWebViewEvents(webView);
 		try { webView.Dispose(); } catch { }
 		try { lifetimeCancellation.Dispose(); } catch { }
 		base.OnFormClosed(e);
@@ -687,6 +710,7 @@ internal sealed class CalculatorForm : Form
 
 	private async Task InitializeAsync()
 	{
+		int startupWebViewGeneration = webViewGeneration;
 		try
 		{
 			CancellationToken cancellationToken = lifetimeCancellation.Token;
@@ -708,69 +732,379 @@ internal sealed class CalculatorForm : Form
 				default,
 				TaskContinuationOptions.OnlyOnFaulted,
 				TaskScheduler.Default);
-			CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, paths.WebViewDataPath);
-			await webView.EnsureCoreWebView2Async(environment);
-			webView.CoreWebView2.SetVirtualHostNameToFolderMapping(LocalAppHost, paths.Root, CoreWebView2HostResourceAccessKind.DenyCors);
-			webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-			webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-			webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-			webView.CoreWebView2.NavigationStarting += delegate(object? _, CoreWebView2NavigationStartingEventArgs args)
-			{
-				if (!IsTrustedLocalUi(args.Uri))
-				{
-					args.Cancel = true;
-				}
-			};
-			webView.CoreWebView2.NewWindowRequested += delegate(object? _, CoreWebView2NewWindowRequestedEventArgs args)
-			{
-				args.Handled = true;
-			};
-			webView.CoreWebView2.PermissionRequested += delegate(object? _, CoreWebView2PermissionRequestedEventArgs args)
-			{
-				args.State = CoreWebView2PermissionState.Deny;
-			};
-			webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-			webView.CoreWebView2.DocumentTitleChanged += delegate
-			{
-				string documentTitle = webView.CoreWebView2.DocumentTitle;
-				if (!string.IsNullOrWhiteSpace(documentTitle))
-				{
-					Text = documentTitle;
-				}
-			};
-			TaskCompletionSource<bool> navigationReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
-			void NavigationCompleted(object? _, CoreWebView2NavigationCompletedEventArgs args)
-			{
-				if (args.IsSuccess)
-				{
-					navigationReady.TrySetResult(true);
-				}
-				else
-				{
-					navigationReady.TrySetException(new InvalidOperationException($"The interface could not be loaded ({args.WebErrorStatus})."));
-				}
-			}
-			webView.CoreWebView2.NavigationCompleted += NavigationCompleted;
-			try
-			{
-				webView.CoreWebView2.Navigate($"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current)}");
-				await navigationReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
-			}
-			finally
-			{
-				webView.CoreWebView2.NavigationCompleted -= NavigationCompleted;
-			}
-			webView.Visible = true;
-			loadingLabel.Visible = false;
+			await InitializeMainWebViewControlAsync(webView, webViewGeneration, cancellationToken);
 			StartBackgroundNotificationTimer();
 		}
 		catch (OperationCanceledException) when (lifetimeCancellation.IsCancellationRequested)
 		{
 		}
+		catch (Exception ex) when (startupWebViewGeneration != webViewGeneration)
+		{
+			logger.Warn("Stale startup WebView initialization ended after the control was replaced: " + ex.Message);
+		}
 		catch (Exception ex)
 		{
 			logger.Error("Application startup failed.", ex);
 			ShowError("Could not start Black Spirit Hub." + Environment.NewLine + Environment.NewLine + ex.Message);
+		}
+	}
+
+	private async Task InitializeMainWebViewControlAsync(
+		WebView2 target,
+		int generation,
+		CancellationToken cancellationToken)
+	{
+		logger.Info($"WebView generation {generation}: creating environment.");
+		CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, paths.WebViewDataPath);
+		ThrowIfStaleWebView(target, generation, cancellationToken);
+		await target.EnsureCoreWebView2Async(environment);
+		ThrowIfStaleWebView(target, generation, cancellationToken);
+
+		CoreWebView2 core = target.CoreWebView2
+			?? throw new InvalidOperationException("The WebView2 controller did not initialize.");
+		ConfigureMainWebView(core);
+		logger.Info($"WebView generation {generation}: controller ready.");
+
+		TaskCompletionSource<bool> navigationReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		void NavigationCompleted(object? _, CoreWebView2NavigationCompletedEventArgs args)
+		{
+			if (args.IsSuccess)
+				navigationReady.TrySetResult(true);
+			else
+				navigationReady.TrySetException(
+					new InvalidOperationException($"The interface could not be loaded ({args.WebErrorStatus})."));
+		}
+
+		core.NavigationCompleted += NavigationCompleted;
+		try
+		{
+			string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current)}";
+			logger.Info($"WebView generation {generation}: navigating local interface.");
+			core.Navigate(url);
+			await navigationReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
+			ThrowIfStaleWebView(target, generation, cancellationToken);
+			string healthJson = await core.ExecuteScriptAsync(
+				"Boolean(document.readyState === 'complete' && document.body)");
+			if (!JsonSerializer.Deserialize<bool>(healthJson, JsonOptions))
+				throw new InvalidOperationException("The interface loaded without a usable document.");
+		}
+		finally
+		{
+			try { core.NavigationCompleted -= NavigationCompleted; } catch { }
+		}
+
+		ThrowIfStaleWebView(target, generation, cancellationToken);
+		target.Visible = true;
+		loadingLabel.Visible = false;
+		recentUnresponsiveFailures = 0;
+		logger.Info($"WebView generation {generation}: interface ready.");
+	}
+
+	private void ConfigureMainWebView(CoreWebView2 core)
+	{
+		core.SetVirtualHostNameToFolderMapping(LocalAppHost, paths.Root, CoreWebView2HostResourceAccessKind.DenyCors);
+		core.Settings.AreDevToolsEnabled = false;
+		core.Settings.AreDefaultContextMenusEnabled = false;
+		core.Settings.IsStatusBarEnabled = false;
+		core.NavigationStarting += OnMainNavigationStarting;
+		core.NewWindowRequested += OnMainNewWindowRequested;
+		core.PermissionRequested += OnMainPermissionRequested;
+		core.WebMessageReceived += OnWebMessageReceived;
+		core.DocumentTitleChanged += OnMainDocumentTitleChanged;
+		core.ProcessFailed += OnMainProcessFailed;
+	}
+
+	private void DetachMainWebViewEvents(WebView2 target)
+	{
+		try
+		{
+			CoreWebView2? core = target.CoreWebView2;
+			if (core is null)
+				return;
+			core.NavigationStarting -= OnMainNavigationStarting;
+			core.NewWindowRequested -= OnMainNewWindowRequested;
+			core.PermissionRequested -= OnMainPermissionRequested;
+			core.WebMessageReceived -= OnWebMessageReceived;
+			core.DocumentTitleChanged -= OnMainDocumentTitleChanged;
+			core.ProcessFailed -= OnMainProcessFailed;
+		}
+		catch
+		{
+			// A failed browser process can close the controller before handlers are detached.
+		}
+	}
+
+	private void OnMainNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs args)
+	{
+		if (!IsTrustedLocalUi(args.Uri))
+			args.Cancel = true;
+	}
+
+	private static void OnMainNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs args)
+	{
+		args.Handled = true;
+	}
+
+	private static void OnMainPermissionRequested(object? sender, CoreWebView2PermissionRequestedEventArgs args)
+	{
+		args.State = CoreWebView2PermissionState.Deny;
+	}
+
+	private void OnMainDocumentTitleChanged(object? sender, object args)
+	{
+		if (sender is not CoreWebView2 core || !ReferenceEquals(core, webView.CoreWebView2))
+			return;
+		string documentTitle = core.DocumentTitle;
+		if (!string.IsNullOrWhiteSpace(documentTitle))
+			Text = documentTitle;
+	}
+
+	private void ThrowIfStaleWebView(WebView2 target, int generation, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		if (webViewClosing
+			|| generation != webViewGeneration
+			|| !ReferenceEquals(target, webView)
+			|| target.IsDisposed)
+		{
+			throw new OperationCanceledException("The WebView was replaced while it was initializing.", cancellationToken);
+		}
+	}
+
+	internal enum WebViewRecoveryAction
+	{
+		None,
+		CheckHealth,
+		Recreate,
+		ShowIntegrityError
+	}
+
+	internal static WebViewRecoveryAction DecideWebViewRecovery(
+		CoreWebView2ProcessFailedKind kind,
+		CoreWebView2ProcessFailedReason reason,
+		int unresponsiveFailureCount)
+	{
+		if (reason == CoreWebView2ProcessFailedReason.IntegrityFailure)
+			return WebViewRecoveryAction.ShowIntegrityError;
+
+		return kind switch
+		{
+			CoreWebView2ProcessFailedKind.BrowserProcessExited
+				or CoreWebView2ProcessFailedKind.RenderProcessExited => WebViewRecoveryAction.Recreate,
+			CoreWebView2ProcessFailedKind.GpuProcessExited
+				or CoreWebView2ProcessFailedKind.UnknownProcessExited => WebViewRecoveryAction.CheckHealth,
+			CoreWebView2ProcessFailedKind.RenderProcessUnresponsive when unresponsiveFailureCount >= 2
+				=> WebViewRecoveryAction.Recreate,
+			_ => WebViewRecoveryAction.None
+		};
+	}
+
+	private void OnMainProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs args)
+	{
+		CoreWebView2ProcessFailedKind kind = args.ProcessFailedKind;
+		CoreWebView2ProcessFailedReason reason = args.Reason;
+		int exitCode = args.ExitCode;
+		string description = args.ProcessDescription ?? string.Empty;
+		string modulePath = args.FailureSourceModulePath ?? string.Empty;
+		int generation = webViewGeneration;
+
+		logger.Warn(
+			$"WebView process failed: generation={generation}, kind={kind}, reason={reason}, "
+			+ $"exit={exitCode}, description={description}, module={modulePath}");
+		if (webViewClosing || sender is not CoreWebView2 failedCore)
+			return;
+
+		try
+		{
+			if (!ReferenceEquals(failedCore, webView.CoreWebView2))
+				return;
+		}
+		catch
+		{
+			return;
+		}
+
+		if (kind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+		{
+			DateTime now = DateTime.UtcNow;
+			if (now - lastUnresponsiveFailureUtc > TimeSpan.FromSeconds(60))
+				recentUnresponsiveFailures = 0;
+			lastUnresponsiveFailureUtc = now;
+			recentUnresponsiveFailures++;
+		}
+		else
+		{
+			recentUnresponsiveFailures = 0;
+		}
+
+		WebViewRecoveryAction action = DecideWebViewRecovery(kind, reason, recentUnresponsiveFailures);
+		if (action == WebViewRecoveryAction.None)
+			return;
+
+		void Recover()
+		{
+			if (webViewClosing || generation != webViewGeneration || IsDisposed)
+				return;
+			if (action == WebViewRecoveryAction.ShowIntegrityError)
+			{
+				ShowError(
+					"Microsoft WebView2 was blocked by Windows code-integrity protection."
+					+ Environment.NewLine + Environment.NewLine
+					+ (string.IsNullOrWhiteSpace(modulePath) ? string.Empty : modulePath + Environment.NewLine + Environment.NewLine)
+					+ "Repair Microsoft Edge WebView2 Runtime, then restart Black Spirit Hub.");
+				return;
+			}
+			if (action == WebViewRecoveryAction.CheckHealth)
+			{
+				_ = CheckMainWebViewHealthAndRecoverAsync($"{kind} ({reason})", generation);
+				return;
+			}
+
+			QueueMainWebViewRecreation($"{kind} ({reason})", generation);
+		}
+
+		try
+		{
+			// Always queue out of ProcessFailed. Disposing or recreating the
+			// controller from inside its failure callback is re-entrant and unsafe.
+			BeginInvoke((Action)Recover);
+		}
+		catch (InvalidOperationException)
+		{
+			// The window was closed while the browser failure was being reported.
+		}
+	}
+
+	private async Task CheckMainWebViewHealthAndRecoverAsync(string reason, int generation)
+	{
+		if (webViewHealthCheckActive
+			|| webViewRecoveryActive
+			|| webViewClosing
+			|| generation != webViewGeneration)
+		{
+			return;
+		}
+
+		webViewHealthCheckActive = true;
+		bool healthy = false;
+		try
+		{
+			await Task.Delay(1200, lifetimeCancellation.Token);
+			if (webViewClosing || generation != webViewGeneration || webView.IsDisposed)
+				return;
+			CoreWebView2? core = webView.CoreWebView2;
+			if (core is not null)
+			{
+				string result = await core.ExecuteScriptAsync(
+					"Boolean(document.readyState === 'complete' && document.body)")
+					.WaitAsync(TimeSpan.FromSeconds(8), lifetimeCancellation.Token);
+				healthy = JsonSerializer.Deserialize<bool>(result, JsonOptions);
+			}
+		}
+		catch (OperationCanceledException) when (lifetimeCancellation.IsCancellationRequested)
+		{
+			return;
+		}
+		catch (Exception ex)
+		{
+			logger.Warn("WebView health check failed after " + reason + ": " + ex.Message);
+		}
+		finally
+		{
+			webViewHealthCheckActive = false;
+		}
+
+		if (healthy)
+		{
+			logger.Info("WebView remained healthy after " + reason + "; no recreation was needed.");
+			return;
+		}
+		if (!webViewClosing && generation == webViewGeneration)
+			QueueMainWebViewRecreation(reason + "; interface health check failed", generation);
+	}
+
+	private void QueueMainWebViewRecreation(string reason, int failedGeneration)
+	{
+		if (webViewClosing || IsDisposed || failedGeneration != webViewGeneration || webViewRecoveryActive)
+			return;
+
+		DateTime now = DateTime.UtcNow;
+		while (webViewRecoveryHistory.Count > 0
+			&& now - webViewRecoveryHistory.Peek() > TimeSpan.FromMinutes(5))
+		{
+			webViewRecoveryHistory.Dequeue();
+		}
+		if (webViewRecoveryHistory.Count >= 3)
+		{
+			logger.Warn("WebView automatic recovery stopped after three attempts in five minutes.");
+			ShowError(
+				"The interface stopped repeatedly and automatic recovery was paused."
+				+ Environment.NewLine + Environment.NewLine
+				+ "Please restart Black Spirit Hub. If this continues, use the installer's WebView2 repair option.");
+			return;
+		}
+
+		webViewRecoveryHistory.Enqueue(now);
+		webViewRecoveryActive = true;
+		_ = RecreateMainWebViewAsync(reason, failedGeneration);
+	}
+
+	private async Task RecreateMainWebViewAsync(string reason, int failedGeneration)
+	{
+		try
+		{
+			logger.Warn($"Recreating WebView generation {failedGeneration}: {reason}.");
+			backgroundNotificationTimer?.Stop();
+			loadingLabel.Text = "Restoring Black Spirit Hub...";
+			loadingLabel.Visible = true;
+			loadingLabel.BringToFront();
+			CancelActiveBridgeRequests();
+
+			WebView2 oldWebView = webView;
+			DetachMainWebViewEvents(oldWebView);
+			try { Controls.Remove(oldWebView); } catch { }
+			try { oldWebView.Dispose(); } catch { }
+
+			if (webViewClosing || lifetimeCancellation.IsCancellationRequested)
+				return;
+
+			webViewGeneration++;
+			int newGeneration = webViewGeneration;
+			WebView2 replacement = CreateMainWebViewControl();
+			webView = replacement;
+			Controls.Add(replacement);
+			replacement.SendToBack();
+			loadingLabel.BringToFront();
+
+			await Task.Delay(400, lifetimeCancellation.Token);
+			await InitializeMainWebViewControlAsync(replacement, newGeneration, lifetimeCancellation.Token);
+			StartBackgroundNotificationTimer();
+			logger.Info($"WebView recovery succeeded: generation {newGeneration}.");
+		}
+		catch (OperationCanceledException) when (webViewClosing || lifetimeCancellation.IsCancellationRequested)
+		{
+		}
+		catch (Exception ex)
+		{
+			logger.Error("WebView recovery failed.", ex);
+			ShowError(
+				"Black Spirit Hub could not restore its interface."
+				+ Environment.NewLine + Environment.NewLine
+				+ ex.Message
+				+ Environment.NewLine + Environment.NewLine
+				+ "Restart the app or use the installer's WebView2 repair option.");
+		}
+		finally
+		{
+			webViewRecoveryActive = false;
+		}
+	}
+
+	private void CancelActiveBridgeRequests()
+	{
+		foreach (CancellationTokenSource request in activeBridgeRequests.Values)
+		{
+			try { request.Cancel(); } catch { }
 		}
 	}
 
@@ -847,10 +1181,17 @@ internal sealed class CalculatorForm : Form
 	private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
 	{
 		string? requestId = null;
+		string? requestKey = null;
 		CancellationTokenSource? requestCancellation = null;
 		bool requestRegistered = false;
+		int requestGeneration = webViewGeneration;
 		try
 		{
+			if (sender is not CoreWebView2 requestCore
+				|| !ReferenceEquals(requestCore, webView.CoreWebView2))
+			{
+				return;
+			}
 			using JsonDocument document = JsonDocument.Parse(e.WebMessageAsJson);
 			if (!IsTrustedLocalUi(e.Source))
 			{
@@ -864,41 +1205,55 @@ internal sealed class CalculatorForm : Form
 			if (string.Equals(command, "cancelRequest", StringComparison.Ordinal))
 			{
 				string targetId = payload.TryGetProperty("requestId", out JsonElement target) ? target.GetString() ?? string.Empty : string.Empty;
-				if (activeBridgeRequests.TryGetValue(targetId, out CancellationTokenSource? active))
+				string targetKey = GetBridgeRequestKey(requestGeneration, targetId);
+				if (activeBridgeRequests.TryGetValue(targetKey, out CancellationTokenSource? active))
 				{
 					active.Cancel();
 				}
-				PostResponse(requestId, ok: true, new { cancelled = !string.IsNullOrWhiteSpace(targetId) }, null);
+				PostResponse(requestGeneration, requestId, ok: true, new { cancelled = !string.IsNullOrWhiteSpace(targetId) }, null);
 				return;
 			}
 
 			requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeCancellation.Token);
 			requestCancellation.CancelAfter(GetCommandTimeout(command));
-			if (string.IsNullOrWhiteSpace(requestId) || !activeBridgeRequests.TryAdd(requestId, requestCancellation))
+			requestKey = GetBridgeRequestKey(requestGeneration, requestId);
+			if (string.IsNullOrWhiteSpace(requestId) || !activeBridgeRequests.TryAdd(requestKey, requestCancellation))
 			{
 				throw new InvalidOperationException("The request identifier is invalid or already active.");
 			}
 			requestRegistered = true;
 
-			PostResponse(requestId, ok: true, await ExecuteCommandAsync(command, payload, requestCancellation.Token), null);
+			PostResponse(
+				requestGeneration,
+				requestId,
+				ok: true,
+				await ExecuteCommandAsync(command, payload, requestCancellation.Token),
+				null);
 		}
 		catch (OperationCanceledException)
 		{
-			PostResponse(requestId, ok: false, null, "The request timed out or was cancelled.");
+			PostResponse(requestGeneration, requestId, ok: false, null, "The request timed out or was cancelled.");
 		}
 		catch (Exception ex)
 		{
 			logger.Error("Application command failed.", ex);
-			PostResponse(requestId, ok: false, null, ex.Message);
+			PostResponse(requestGeneration, requestId, ok: false, null, ex.Message);
 		}
 		finally
 		{
-			if (requestRegistered && !string.IsNullOrWhiteSpace(requestId))
+			if (requestRegistered && !string.IsNullOrWhiteSpace(requestKey))
 			{
-				activeBridgeRequests.TryRemove(requestId, out _);
+				activeBridgeRequests.TryRemove(requestKey, out _);
 			}
 			requestCancellation?.Dispose();
 		}
+	}
+
+	private static string GetBridgeRequestKey(int generation, string? requestId)
+	{
+		return generation.ToString(System.Globalization.CultureInfo.InvariantCulture)
+			+ ":"
+			+ (requestId ?? string.Empty);
 	}
 
 	private static TimeSpan GetCommandTimeout(string command)
@@ -1254,8 +1609,7 @@ internal sealed class CalculatorForm : Form
 	{
 		using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		timeout.CancelAfter(TimeSpan.FromSeconds(55));
-		WebView2 browser = await EnsureEventsBrowserAsync(timeout.Token);
-		await NavigateEventsBrowserWithRetryAsync(browser, EventService.OfficialEventsUrl, timeout.Token);
+		WebView2 browser = await NavigateEventsBrowserWithRetryAsync(EventService.OfficialEventsUrl, timeout.Token);
 
 		string latestHtml = "";
 		for (int attempt = 0; attempt < 50; attempt++)
@@ -1272,15 +1626,16 @@ internal sealed class CalculatorForm : Form
 		return latestHtml;
 	}
 
-	private async Task NavigateEventsBrowserWithRetryAsync(WebView2 browser, string url, CancellationToken cancellationToken)
+	private async Task<WebView2> NavigateEventsBrowserWithRetryAsync(string url, CancellationToken cancellationToken)
 	{
 		Exception? lastError = null;
 		for (int attempt = 1; attempt <= 2; attempt++)
 		{
 			try
 			{
+				WebView2 browser = await EnsureEventsBrowserAsync(cancellationToken);
 				await NavigateEventsBrowserAsync(browser, url, cancellationToken);
-				return;
+				return browser;
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -1290,6 +1645,7 @@ internal sealed class CalculatorForm : Form
 			{
 				lastError = ex;
 				logger.Warn($"Events browser navigation attempt {attempt} failed: {ex.Message}");
+				DisposeEventsBrowser();
 				if (attempt < 2)
 					await Task.Delay(750, cancellationToken);
 			}
@@ -1326,8 +1682,68 @@ internal sealed class CalculatorForm : Form
 		{
 			args.Handled = true;
 		};
+		eventsBrowserView.CoreWebView2.ProcessFailed += OnEventsBrowserProcessFailed;
 		cancellationToken.ThrowIfCancellationRequested();
 		return eventsBrowserView;
+	}
+
+	private void OnEventsBrowserProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs args)
+	{
+		logger.Warn(
+			$"Events WebView process failed: kind={args.ProcessFailedKind}, "
+			+ $"reason={args.Reason}, exit={args.ExitCode}.");
+		if (args.ProcessFailedKind is CoreWebView2ProcessFailedKind.UtilityProcessExited
+			or CoreWebView2ProcessFailedKind.SandboxHelperProcessExited
+			or CoreWebView2ProcessFailedKind.PpapiPluginProcessExited
+			or CoreWebView2ProcessFailedKind.PpapiBrokerProcessExited
+			or CoreWebView2ProcessFailedKind.FrameRenderProcessExited)
+		{
+			return;
+		}
+
+		WebView2? failedBrowser = eventsBrowserView;
+		if (failedBrowser is null)
+			return;
+		try
+		{
+			if (sender is not CoreWebView2 failedCore
+				|| !ReferenceEquals(failedCore, failedBrowser.CoreWebView2))
+			{
+				return;
+			}
+		}
+		catch
+		{
+			return;
+		}
+
+		try
+		{
+			BeginInvoke((Action)(() => DisposeEventsBrowser(failedBrowser)));
+		}
+		catch (InvalidOperationException)
+		{
+		}
+	}
+
+	private void DisposeEventsBrowser(WebView2? expectedBrowser = null)
+	{
+		WebView2? browser = eventsBrowserView;
+		if (expectedBrowser is not null && !ReferenceEquals(browser, expectedBrowser))
+			return;
+		eventsBrowserView = null;
+		if (browser is null)
+			return;
+		try
+		{
+			if (browser.CoreWebView2 is not null)
+				browser.CoreWebView2.ProcessFailed -= OnEventsBrowserProcessFailed;
+		}
+		catch
+		{
+		}
+		try { Controls.Remove(browser); } catch { }
+		try { browser.Dispose(); } catch { }
 	}
 
 	private static async Task NavigateEventsBrowserAsync(WebView2 browser, string url, CancellationToken cancellationToken)
@@ -2675,8 +3091,10 @@ internal sealed class CalculatorForm : Form
 
 	private sealed record DigitComponent(Rectangle Bounds, bool[,] Mask);
 
-	private void PostResponse(string? id, bool ok, object? data, string? error)
+	private void PostResponse(int generation, string? id, bool ok, object? data, string? error)
 	{
+		if (generation != webViewGeneration)
+			return;
 		PostJson(new { id, ok, data, error });
 	}
 
@@ -2691,20 +3109,34 @@ internal sealed class CalculatorForm : Form
 
 	private void PostJson(object value)
 	{
-		if (base.IsDisposed)
+		if (base.IsDisposed || webViewClosing)
 		{
 			return;
 		}
 		if (base.InvokeRequired)
 		{
-			BeginInvoke(delegate
+			try
 			{
-				PostJson(value);
-			});
+				BeginInvoke(delegate
+				{
+					PostJson(value);
+				});
+			}
+			catch (InvalidOperationException)
+			{
+			}
 		}
-		else if (webView.CoreWebView2 != null)
+		else
 		{
-			webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value, JsonOptions));
+			try
+			{
+				if (!webView.IsDisposed && webView.CoreWebView2 is not null)
+					webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(value, JsonOptions));
+			}
+			catch (Exception ex) when (ex is InvalidOperationException or COMException)
+			{
+				logger.Warn("Web message was skipped while the interface was recovering: " + ex.Message);
+			}
 		}
 	}
 
@@ -2712,7 +3144,9 @@ internal sealed class CalculatorForm : Form
 	{
 		loadingLabel.Text = message;
 		loadingLabel.Visible = true;
-		webView.Visible = false;
+		loadingLabel.BringToFront();
+		if (!webView.IsDisposed)
+			webView.Visible = false;
 	}
 
 	private bool IsTrustedLocalUi(string value)

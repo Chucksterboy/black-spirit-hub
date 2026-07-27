@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.22",
+    "version":  "v0.9.23",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.22/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "C297D79B20C164B5F8FB2AD2510D31B50BD52C414CF4D5AA48F61F0F543CD0C5",
-    "notes":  "New Midnight Sigil branding across the app, taskbar, tray, shortcut, and installer; a transparent in-app title icon; a hidden outer scrollbar with scrolling retained; and a resilient official Events refresh with browser fallback, cached-detail preservation, retry and timeout hardening, and correct Ongoing event handling."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.23/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "8E9D8E0B8261BCDF9E812CB223BEE9E56A17F54303577C9DC718B213D3C8C599",
+    "notes":  "Self-contained app and installer with no .NET 8 prerequisite; one-time verified Microsoft WebView2 install and repair flow; renderer and GPU failure health checks with automatic WebView recreation; embedded payload validation and isolated smoke tests."
 }

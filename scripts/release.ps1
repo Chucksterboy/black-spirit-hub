@@ -41,7 +41,7 @@ function Resolve-DotnetSdkPath {
 	)
 	$pathCommand = Get-Command "dotnet" -ErrorAction SilentlyContinue
 	if ($pathCommand) {
-		$candidates = @($pathCommand.Source) + $candidates
+		$candidates += $pathCommand.Source
 	}
 
 	foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -99,6 +99,89 @@ function Replace-Text {
 	)
 }
 
+function Assert-RunsWithoutDotnetRuntime {
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$FilePath,
+
+		[string[]]$Arguments = @(),
+
+		[string]$WorkingDirectory = (Split-Path -Parent $FilePath)
+	)
+
+	$tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd("\") + "\"
+	$emptyDotnetRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("black-spirit-hub-empty-dotnet-" + [Guid]::NewGuid().ToString("N"))
+	[System.IO.Directory]::CreateDirectory($emptyDotnetRoot) | Out-Null
+	$environmentNames = @(
+		"DOTNET_ROOT",
+		"DOTNET_ROOT_X64",
+		"DOTNET_MULTILEVEL_LOOKUP",
+		"DOTNET_DISABLE_GUI_ERRORS"
+	)
+	$savedEnvironment = @{}
+	foreach ($name in $environmentNames) {
+		$savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+	}
+
+	try {
+		[Environment]::SetEnvironmentVariable("DOTNET_ROOT", $emptyDotnetRoot, "Process")
+		[Environment]::SetEnvironmentVariable("DOTNET_ROOT_X64", $emptyDotnetRoot, "Process")
+		[Environment]::SetEnvironmentVariable("DOTNET_MULTILEVEL_LOOKUP", "0", "Process")
+		[Environment]::SetEnvironmentVariable("DOTNET_DISABLE_GUI_ERRORS", "1", "Process")
+		$process = Start-Process `
+			-FilePath $FilePath `
+			-ArgumentList $Arguments `
+			-WorkingDirectory $WorkingDirectory `
+			-Wait `
+			-PassThru
+		if ($process.ExitCode -ne 0) {
+			throw "Self-contained smoke test failed: $FilePath (exit $($process.ExitCode))."
+		}
+	} finally {
+		foreach ($name in $environmentNames) {
+			[Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], "Process")
+		}
+		$resolvedEmptyRoot = [System.IO.Path]::GetFullPath($emptyDotnetRoot)
+		if (!$resolvedEmptyRoot.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
+			throw "Refusing unsafe temporary cleanup path: $resolvedEmptyRoot"
+		}
+		if (Test-Path -LiteralPath $resolvedEmptyRoot) {
+			Remove-Item -LiteralPath $resolvedEmptyRoot -Recurse -Force
+		}
+	}
+}
+
+function Assert-AppPublishFiles {
+	param([Parameter(Mandatory = $true)][string]$PublishRoot)
+
+	$requiredFiles = @(
+		"Black Spirit Hub.exe",
+		"WebView2Loader.dll",
+		"e_sqlite3.dll",
+		"BlackSpiritHub.Resources.Black_Spirit_Hub.html",
+		"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
+		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+		"gold-coins.png",
+		"Assets\AppIcon\app-icon.ico",
+		"Assets\AppIcon\app-icon.png",
+		"Assets\AppIcon\app-icon-ui.png",
+		"Assets\GrindTracker\grind-spots.js"
+	)
+	foreach ($relativePath in $requiredFiles) {
+		$path = Join-Path $PublishRoot $relativePath
+		if (!(Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
+			throw "Required self-contained application file is missing or empty: $relativePath"
+		}
+	}
+	foreach ($relativeDirectory in @("Assets", "ThemeAssets")) {
+		$directory = Join-Path $PublishRoot $relativeDirectory
+		if (!(Test-Path -LiteralPath $directory -PathType Container) -or
+			!(Get-ChildItem -LiteralPath $directory -Recurse -File | Select-Object -First 1)) {
+			throw "Required application directory is missing or empty: $relativeDirectory"
+		}
+	}
+}
+
 $versionTag = Normalize-Version $Version
 $packageVersion = $versionTag.Substring(1)
 $assemblyVersion = Get-Assembly-Version $versionTag
@@ -117,6 +200,7 @@ $installerOut = Join-Path $artifactRoot "Installer"
 $installerExe = Join-Path $installerOut "Black Spirit Hub Installer.exe"
 $installerReleaseAsset = Join-Path $installerOut "Black-Spirit-Hub-Installer.exe"
 $installerAssetName = Split-Path $installerReleaseAsset -Leaf
+$maxInAppInstallerBytes = [int64]250 * 1024 * 1024
 $verifyScript = Join-Path $repoRoot "scripts\verify.ps1"
 $iconBuildScript = Join-Path $repoRoot "scripts\build-app-icons.ps1"
 
@@ -171,7 +255,7 @@ if (Test-Path -LiteralPath $artifactRoot) {
 New-Item -ItemType Directory -Path $appOut -Force | Out-Null
 New-Item -ItemType Directory -Path $installerOut -Force | Out-Null
 
-& $dotnet publish $projectFile -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:PublishReadyToRun=false -o $appOut
+& $dotnet publish $projectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:PublishReadyToRun=false -p:PublishTrimmed=false -o $appOut
 if ($LASTEXITCODE -ne 0) {
 	throw "Application publish failed."
 }
@@ -182,12 +266,19 @@ if (Test-Path -LiteralPath $runtimes) {
 	Get-ChildItem -LiteralPath $runtimes -Directory | Where-Object { $_.Name -ne "win-x64" } | Remove-Item -Recurse -Force
 }
 
+Assert-AppPublishFiles -PublishRoot $appOut
+$appExe = Join-Path $appOut "Black Spirit Hub.exe"
+Assert-RunsWithoutDotnetRuntime `
+	-FilePath $appExe `
+	-Arguments @("--offline-smoke-test") `
+	-WorkingDirectory $appOut
+
 if (Test-Path -LiteralPath $installerPayload) {
 	Remove-Item -LiteralPath $installerPayload -Force
 }
 Compress-Archive -Path (Join-Path $appOut "*") -DestinationPath $installerPayload -CompressionLevel Optimal -Force
 
-& $dotnet publish $installerProject -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -o $installerOut
+& $dotnet publish $installerProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -p:PublishTrimmed=false -o $installerOut
 if ($LASTEXITCODE -ne 0) {
 	throw "Installer publish failed."
 }
@@ -197,11 +288,14 @@ if (!(Test-Path -LiteralPath $installerExe)) {
 	throw "Installer was not created: $installerExe"
 }
 Copy-Item -LiteralPath $installerExe -Destination $installerReleaseAsset -Force
-
-$installerSelfTest = Start-Process -FilePath $installerReleaseAsset -ArgumentList "--self-test" -Wait -PassThru
-if ($installerSelfTest.ExitCode -ne 0) {
-	throw "Installer transactional self-test failed with exit code $($installerSelfTest.ExitCode)."
+if ((Get-Item -LiteralPath $installerReleaseAsset).Length -gt $maxInAppInstallerBytes) {
+	throw "Installer exceeds the application's 250 MiB safe-download limit."
 }
+
+Assert-RunsWithoutDotnetRuntime `
+	-FilePath $installerReleaseAsset `
+	-Arguments @("--self-test") `
+	-WorkingDirectory $installerOut
 
 $manifest.sha256 = (Get-FileHash -LiteralPath $installerReleaseAsset -Algorithm SHA256).Hash.ToUpperInvariant()
 $manifestJson = $manifest | ConvertTo-Json

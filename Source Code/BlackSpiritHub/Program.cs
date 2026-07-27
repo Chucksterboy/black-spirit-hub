@@ -679,6 +679,42 @@ internal static class Program
 				return 60;
 			}
 
+			if (CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.BrowserProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Unexpected,
+					0) != CalculatorForm.WebViewRecoveryAction.Recreate
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Crashed,
+					0) != CalculatorForm.WebViewRecoveryAction.Recreate
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.GpuProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Crashed,
+					0) != CalculatorForm.WebViewRecoveryAction.CheckHealth
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.UnknownProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Crashed,
+					0) != CalculatorForm.WebViewRecoveryAction.CheckHealth
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessUnresponsive,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Unresponsive,
+					1) != CalculatorForm.WebViewRecoveryAction.None
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessUnresponsive,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Unresponsive,
+					2) != CalculatorForm.WebViewRecoveryAction.Recreate
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.UtilityProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.Crashed,
+					0) != CalculatorForm.WebViewRecoveryAction.None
+				|| CalculatorForm.DecideWebViewRecovery(
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.GpuProcessExited,
+					Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedReason.IntegrityFailure,
+					0) != CalculatorForm.WebViewRecoveryAction.ShowIntegrityError)
+			{
+				return 62;
+			}
+
 			return persistedRecovery.GetArrayLength() == 1
 				&& persistedRecovery[0].GetProperty("id").GetString() == "session-backup" ? 0 : 55;
 		}

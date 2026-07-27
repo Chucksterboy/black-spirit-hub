@@ -25,6 +25,7 @@ $runtimeIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.png"
 $runtimeUiIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon-ui.png"
 $installerIconPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
 $iconMasterPath = Join-Path $repoRoot "Branding\AppIcon\midnight-sigil-source.png"
+$releaseScriptPath = Join-Path $repoRoot "scripts\release.ps1"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
@@ -560,8 +561,31 @@ if ($unusedFunctions) {
 }
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
+$installerSource = Get-Content -LiteralPath (Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Program.cs") -Raw
 if ($calculatorSource -match 'CancellationToken\.None') {
 	throw "CalculatorForm contains an uncancellable host operation."
+}
+$releaseScript = Get-Content -LiteralPath $releaseScriptPath -Raw
+if ($releaseScript -match '--self-contained\s+false' -or
+	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -lt 2 -or
+	$releaseScript -notmatch 'Assert-RunsWithoutDotnetRuntime' -or
+	$releaseScript -notmatch 'DOTNET_ROOT_X64') {
+	throw "Release packaging must publish and runtime-isolate both self-contained executables."
+}
+if ($calculatorSource -notmatch 'CoreWebView2ProcessFailedKind\.RenderProcessExited' -or
+	$calculatorSource -notmatch 'CoreWebView2ProcessFailedKind\.GpuProcessExited' -or
+	$calculatorSource -notmatch 'ProcessFailed\s*\+=\s*OnMainProcessFailed' -or
+	$calculatorSource -notmatch 'RecreateMainWebViewAsync') {
+	throw "Main WebView renderer/GPU crash detection and recreation are missing."
+}
+if ($installerSource -notmatch 'GetAvailableBrowserVersionString' -or
+	$installerSource -notmatch 'RegistryHive\.LocalMachine' -or
+	$installerSource -notmatch 'missingRuntimePromptShown' -or
+	$installerSource -notmatch 'ProbeRuntimeAsync' -or
+	$installerSource -notmatch 'WinVerifyTrust' -or
+	$installerSource -notmatch '"/silent /install"' -or
+	$installerSource -notmatch 'webView2OperationActive\s*&&\s*e\.CloseReason') {
+	throw "Installer WebView2 detection, one-time prompt, verified repair, or close safety is missing."
 }
 $bridgeCommands = @(
 	[regex]::Matches($script, 'bridgeCall\(\s*["'']([^"'']+)["'']') |
