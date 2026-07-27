@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.24",
+    "version":  "v0.9.25",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.24/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "700EC1BACF7E3B1C2C078E459E5C76B5DE6E56D09A03C1792FA51F606D52CD72",
-    "notes":  "Fix coupon synchronization so every structured-feed coupon reaches the app without keyword or numeric suppression. Parse official BDO coupon elements directly, normalize displayed separators, and add comprehensive feed-to-dashboard regression coverage."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.25/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "A7C40502655527DF3EA0E5FFAFCD45BA935008B9BB4C2F2EAB7489E4BFC5DE26",
+    "notes":  "Adds complete Edania origin coverage to the Trade Distance Calculator, including Frozen Halo, while preserving the existing distance formula and sell destinations."
 }

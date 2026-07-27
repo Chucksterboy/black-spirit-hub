@@ -384,6 +384,118 @@ finally {
 $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
+
+$nodeAssignment = [regex]::Match(
+	$script,
+	'(?s)^const NODES = (\[.*?\]);\r?\nconst TRADE_MANAGERS'
+)
+if (!$nodeAssignment.Success) {
+	throw "The trade-distance node catalog is malformed."
+}
+$tradeNodes = ConvertFrom-Json -InputObject $nodeAssignment.Groups[1].Value
+
+$frozenHaloAssignment = [regex]::Match(
+	$script,
+	'NODES\.push\(\{name:"Frozen Halo", x:([0-9.]+), y:([0-9.]+), type:"([^"]+)"\}\);'
+)
+if (!$frozenHaloAssignment.Success) {
+	throw "The Frozen Halo trade-distance node is missing or malformed."
+}
+$frozenHaloNode = [pscustomobject]@{
+	name = "Frozen Halo"
+	x = [double]::Parse($frozenHaloAssignment.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
+	y = [double]::Parse($frozenHaloAssignment.Groups[2].Value, [Globalization.CultureInfo]::InvariantCulture)
+	type = $frozenHaloAssignment.Groups[3].Value
+}
+$existingFrozenHaloNodes = @($tradeNodes | Where-Object name -eq "Frozen Halo")
+if ($existingFrozenHaloNodes.Count -gt 1) {
+	throw "The trade-distance catalog contains duplicate Frozen Halo nodes."
+}
+$effectiveTradeNodes = @($tradeNodes)
+if ($existingFrozenHaloNodes.Count -eq 0) {
+	$effectiveTradeNodes += $frozenHaloNode
+}
+
+$edaniaNameAssignment = [regex]::Match(
+	$script,
+	'(?s)const EDANIA_NODE_NAMES = new Set\(\[(.*?)\]\);'
+)
+if (!$edaniaNameAssignment.Success) {
+	throw "The Edania node manifest is missing or malformed."
+}
+$edaniaNamesJson = "[" + [regex]::Replace($edaniaNameAssignment.Groups[1].Value, ',\s*$', '') + "]"
+$edaniaNames = ConvertFrom-Json -InputObject $edaniaNamesJson
+$duplicateEdaniaNames = $edaniaNames | Group-Object | Where-Object Count -gt 1
+if ($edaniaNames.Count -ne 37 -or $duplicateEdaniaNames) {
+	throw "The Edania manifest must contain exactly 37 unique nodes."
+}
+foreach ($edaniaName in $edaniaNames) {
+	$matches = @($effectiveTradeNodes | Where-Object name -eq $edaniaName)
+	if ($matches.Count -ne 1) {
+		throw "Edania node '$edaniaName' is missing or duplicated in the trade-distance catalog."
+	}
+	$node = $matches[0]
+	if ([string]::IsNullOrWhiteSpace([string]$node.type) -or
+		![double]::TryParse([string]$node.x, [ref]$null) -or
+		![double]::TryParse([string]$node.y, [ref]$null) -or
+		[double]::IsNaN([double]$node.x) -or
+		[double]::IsNaN([double]$node.y) -or
+		[double]::IsInfinity([double]$node.x) -or
+		[double]::IsInfinity([double]$node.y)) {
+		throw "Edania node '$edaniaName' has invalid type or coordinates."
+	}
+}
+if ([Math]::Abs($frozenHaloNode.x - 617526.0) -gt 0.001 -or
+	[Math]::Abs($frozenHaloNode.y - 456027.0) -gt 0.001 -or
+	$frozenHaloNode.type -ne "Connection") {
+	throw "Frozen Halo no longer matches the verified BDO world-map node."
+}
+if ($script -notmatch 'if\(EDANIA_NODE_NAMES\.has\(node\.name\)\) node\.region = "Edania";' -or
+	$script -notmatch 'search:norm\(`\$\{node\.name\} \$\{node\.type\|\|""\} \$\{node\.region\|\|""\}`\)' -or
+	$script -notmatch '(?s)const list = q\s*\?\s*nodeSearchIndex.*?\.slice\(0,\s*300\)\s*:\s*ORIGIN_NODES;') {
+	throw "Edania must remain region-searchable and visible in the complete origin list."
+}
+if ($script -notmatch 'const SCALE = 1470588;' -or
+	$script -notmatch '(?s)function mapDistance\(a,b\)\s*\{\s*return Math\.hypot\(a\.x-b\.x, a\.y-b\.y\);\s*\}' -or
+	$script -notmatch '(?s)function distanceBonusPct\(dist\)\s*\{\s*const pct = \(dist / SCALE\) \* 100\.0;\s*return Math\.max\(0, Math\.min\(DIST_CAP, pct\)\);\s*\}') {
+	throw "The verified trade-distance formula or scale changed unexpectedly."
+}
+
+$tradeManagerAssignment = [regex]::Match(
+	$script,
+	'(?s)const TRADE_MANAGERS = (\[.*?\]);\r?\n// Edania'
+)
+if (!$tradeManagerAssignment.Success) {
+	throw "The trade-manager catalog is malformed."
+}
+$tradeManagers = ConvertFrom-Json -InputObject $tradeManagerAssignment.Groups[1].Value
+$firstNodeByName = @{}
+foreach ($node in $effectiveTradeNodes) {
+	if (!$firstNodeByName.ContainsKey([string]$node.name)) {
+		$firstNodeByName[[string]$node.name] = $node
+	}
+}
+$sellTargetNames = [System.Collections.Generic.HashSet[string]]::new(
+	[System.StringComparer]::Ordinal
+)
+foreach ($manager in $tradeManagers) {
+	if ($firstNodeByName.ContainsKey([string]$manager.node)) {
+		[void]$sellTargetNames.Add([string]$manager.node)
+	}
+}
+if ($sellTargetNames.Count -ne 118 -or $sellTargetNames.Contains("Frozen Halo")) {
+	throw "Adding Edania origins unexpectedly changed the existing sell-destination set."
+}
+$veliaNode = $firstNodeByName["Velia"]
+$hakinzaNode = $firstNodeByName["Hakinza Sanctuary"]
+$veliaToHakinzaDistance = [Math]::Sqrt(
+	[Math]::Pow([double]$veliaNode.x - [double]$hakinzaNode.x, 2) +
+	[Math]::Pow([double]$veliaNode.y - [double]$hakinzaNode.y, 2)
+)
+if ([Math]::Abs($veliaToHakinzaDistance - 663583.9061155266) -gt 0.001) {
+	throw "Representative legacy trade-distance coordinates changed unexpectedly."
+}
+
 if ($html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css' -or $html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js') {
 	throw "The HTML shell does not reference the external UI assets."
 }
