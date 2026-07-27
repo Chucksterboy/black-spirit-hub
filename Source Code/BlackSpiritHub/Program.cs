@@ -37,6 +37,8 @@ internal static class Program
 			using CouponService service = new CouponService(testPaths, testLogger);
 			JsonElement dashboard = JsonSerializer.SerializeToElement(service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult());
 			JsonElement refresh = JsonSerializer.SerializeToElement(service.RefreshAsync(CancellationToken.None).GetAwaiter().GetResult());
+			using JsonDocument refreshedCache = JsonDocument.Parse(File.ReadAllText(testPaths.CouponsCachePath));
+			int cachedCouponCount = refreshedCache.RootElement.GetProperty("coupons").GetArrayLength();
 			int result = dashboard.GetProperty("coupons").GetArrayLength() >= 3
 				&& dashboard.GetProperty("availableCount").GetInt32() >= 1
 				&& File.Exists(testPaths.CouponsCachePath)
@@ -44,7 +46,8 @@ internal static class Program
 				&& refresh.TryGetProperty("lastAttempt", out _)
 				&& refresh.TryGetProperty("refreshDebug", out _)
 				&& refresh.GetProperty("status").GetString() == "LIVE"
-				&& refresh.GetProperty("coupons").GetArrayLength() >= 1 ? 0 : 41;
+				&& refresh.GetProperty("coupons").GetArrayLength() == cachedCouponCount
+				&& cachedCouponCount >= 1 ? 0 : 41;
 			try { Directory.Delete(root, true); } catch { }
 			Environment.Exit(result);
 			return;
@@ -601,6 +604,114 @@ internal static class Program
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
 			statePaths.EnsureDirectories();
 			AppStateStore stateStore = new(statePaths, logger);
+			const string couponFeedJson = """
+				{
+				  "coupons": [
+				    { "code": "TYALLADVENTURERS", "is_expired": false },
+				    { "code": "BLACKDESERT2026", "is_expired": false },
+				    { "code": "PEARLABYSSGIFT", "is_expired": false },
+				    { "code": "WINDOWSREWARD26", "is_expired": false },
+				    { "code": "JAVASCRIPT2026", "is_expired": false },
+				    { "code": " community-gift-26 ", "is_expired": false },
+				    { "code": "ANNOUNCEMENT", "is_expired": true },
+				    { "code": "UPDATEHISTORY26", "is_expired": false },
+				    { "code": "DOWNLOADGAME26", "is_expired": false },
+				    { "code": "1234567890123456", "is_expired": false },
+				    { "code": "ADVENTURER", "is_expired": false }
+				  ]
+				}
+				""";
+			string[] expectedCouponCodes =
+			[
+				"TYALLADVENTURERS",
+				"BLACKDESERT2026",
+				"PEARLABYSSGIFT",
+				"WINDOWSREWARD26",
+				"JAVASCRIPT2026",
+				"COMMUNITY-GIFT-26",
+				"ANNOUNCEMENT",
+				"UPDATEHISTORY26",
+				"DOWNLOADGAME26",
+				"1234567890123456",
+				"ADVENTURER"
+			];
+			List<CouponEntry> parsedCoupons = CouponService.ParseBdoAlertsResponse(couponFeedJson);
+			if (parsedCoupons.Count != expectedCouponCodes.Length
+				|| !parsedCoupons.Select(coupon => coupon.Code).SequenceEqual(expectedCouponCodes))
+			{
+				return 63;
+			}
+
+			JsonSerializerOptions couponJsonOptions = new()
+			{
+				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+			};
+			CouponCache passThroughCache = new(
+				DateTimeOffset.UtcNow,
+				"Structured feed regression",
+				parsedCoupons,
+				null);
+			await File.WriteAllTextAsync(
+				statePaths.CouponsCachePath,
+				JsonSerializer.Serialize(passThroughCache, couponJsonOptions),
+				CancellationToken.None);
+			using (CouponService couponService = new(statePaths, logger))
+			{
+				JsonElement couponDashboard = JsonSerializer.SerializeToElement(
+					await couponService.InitializeAsync(CancellationToken.None),
+					couponJsonOptions);
+				string[] dashboardCodes = couponDashboard
+					.GetProperty("coupons")
+					.EnumerateArray()
+					.Select(coupon => coupon.GetProperty("code").GetString() ?? "")
+					.ToArray();
+				if (!dashboardCodes.SequenceEqual(expectedCouponCodes, StringComparer.OrdinalIgnoreCase)
+					|| couponDashboard.GetProperty("totalCount").GetInt32() != expectedCouponCodes.Length
+					|| couponDashboard.GetProperty("availableCount").GetInt32() != expectedCouponCodes.Length - 1
+					|| couponDashboard.GetProperty("expiredCount").GetInt32() != 1)
+				{
+					return 64;
+				}
+			}
+
+			const string officialCouponSample = """
+				<main>
+				  <div>DOWNLOADGAME26 9999999999999999</div>
+				  <div class="tpl_glance glance_coupon_code js-couponCopyWrap">
+				    <span class="js-couponNumber">TYAL-LADV-ENTU-RERS</span>
+				    <button><span class="js-couponNumber">Copy</span></button>
+				  </div>
+				  <div class="glance_coupon_code js-couponCopyWrap">
+				    <span class="extra js-couponNumber featured">BLAC-KDES-ERT2-026</span>
+				  </div>
+				  <div class="glance_coupon_code js-couponCopyWrap">
+				    <span class="js-couponNumber">COMM-UNIT-YGIF-T202-6</span>
+				  </div>
+				  <div class="glance_coupon_code js-couponCopyWrap">
+				    <span class="js-couponNumber">ANNO-UNCE-MENT</span>
+				  </div>
+				  <div class="glance_coupon_code js-couponCopyWrap">
+				    <span class="js-couponNumber">1234-5678-9012-3456</span>
+				  </div>
+				</main>
+				""";
+			HashSet<string> officialCouponCodes = CouponService.ParseOfficialCouponPage(officialCouponSample)
+				.Select(coupon => coupon.Code)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			string[] expectedOfficialCouponCodes =
+			[
+				"TYALLADVENTURERS",
+				"BLACKDESERT2026",
+				"COMMUNITYGIFT2026",
+				"ANNOUNCEMENT",
+				"1234567890123456"
+			];
+			if (officialCouponCodes.Count != expectedOfficialCouponCodes.Length
+				|| !officialCouponCodes.SetEquals(expectedOfficialCouponCodes))
+			{
+				return 65;
+			}
+
 			JsonElement firstSessions = JsonSerializer.SerializeToElement(new[]
 			{
 				new { id = "session-backup", spotId = "test-spot", minutes = 60 }

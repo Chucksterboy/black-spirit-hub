@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.23",
+    "version":  "v0.9.24",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.23/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "8E9D8E0B8261BCDF9E812CB223BEE9E56A17F54303577C9DC718B213D3C8C599",
-    "notes":  "Self-contained app and installer with no .NET 8 prerequisite; one-time verified Microsoft WebView2 install and repair flow; renderer and GPU failure health checks with automatic WebView recreation; embedded payload validation and isolated smoke tests."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.24/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "700EC1BACF7E3B1C2C078E459E5C76B5DE6E56D09A03C1792FA51F606D52CD72",
+    "notes":  "Fix coupon synchronization so every structured-feed coupon reaches the app without keyword or numeric suppression. Parse official BDO coupon elements directly, normalize displayed separators, and add comprehensive feed-to-dashboard regression coverage."
 }

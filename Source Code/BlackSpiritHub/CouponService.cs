@@ -172,7 +172,9 @@ internal sealed class CouponService : IDisposable
 			?? new CouponSettings(true, true, "", "all");
 		bool isStale = DateTimeOffset.UtcNow - cache.LastRefreshed > TimeSpan.FromHours(6);
 		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((DateTimeOffset.UtcNow - cache.LastRefreshed).TotalMinutes));
-		var coupons = cache.Coupons.Where(c => !IsLikelyNonCouponToken(c.Code)).Select(c => new
+		// Coupon entries from structured feeds and the local cache are authoritative.
+		// Never suppress them based on words or patterns contained in the coupon code.
+		var coupons = cache.Coupons.Select(c => new
 		{
 			c.Code,
 			addedUtc = c.AddedUtc,
@@ -244,7 +246,7 @@ internal sealed class CouponService : IDisposable
 			[new("Resplendent Oasis Box", 1, "https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp")], "Garmoth")
 	];
 
-	private static List<CouponEntry> ParseBdoAlertsResponse(string json)
+	internal static List<CouponEntry> ParseBdoAlertsResponse(string json)
 	{
 		List<CouponEntry> result = [];
 		using JsonDocument document = JsonDocument.Parse(json);
@@ -282,32 +284,26 @@ internal sealed class CouponService : IDisposable
 		return result;
 	}
 
-	private static List<CouponEntry> ParseOfficialCouponPage(string html)
+	internal static List<CouponEntry> ParseOfficialCouponPage(string html)
 	{
 		List<CouponEntry> result = [];
 		HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-		string text = WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]+>", " "));
-		foreach (Match match in Regex.Matches(text, @"\b[A-Z0-9]{12,20}\b"))
+		foreach (Match codeElement in Regex.Matches(
+			html,
+			@"<div\b[^>]*\bjs-couponCopyWrap\b[^>]*>\s*<span\b[^>]*\bjs-couponNumber\b[^>]*>(?<code>.*?)</span\s*>",
+			RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant))
 		{
-			string code = match.Value.Trim().ToUpperInvariant();
-			if (!seen.Add(code) || IsLikelyNonCouponToken(code))
+			string displayedCode = WebUtility.HtmlDecode(Regex.Replace(codeElement.Groups["code"].Value, "<[^>]+>", " "));
+			string code = new(displayedCode
+				.Where(character => character != '-' && !char.IsWhiteSpace(character))
+				.Select(char.ToUpperInvariant)
+				.ToArray());
+			if (string.IsNullOrWhiteSpace(code) || !seen.Add(code))
 				continue;
 			result.Add(new CouponEntry(code, null, "Official source", null, "No expiry listed", false,
 				[new CouponReward("Official BDO coupon reward", 1, "", "")], "Official BDO"));
 		}
 		return result;
-	}
-
-	private static bool IsLikelyNonCouponToken(string value)
-	{
-		if (Regex.IsMatch(value, @"^\d+$"))
-			return true;
-		string[] blocked =
-		[
-			"BLACKDESERT", "PEARLABYSS", "WINDOWS", "JAVASCRIPT", "COMMUNITY",
-			"ANNOUNCEMENT", "ADVENTURER", "UPDATEHISTORY", "DOWNLOADGAME"
-		];
-		return blocked.Any(value.Contains);
 	}
 
 	private static List<CouponEntry> MergeCouponSources(IEnumerable<CouponEntry> officialCoupons, IEnumerable<CouponEntry> alertCoupons)
