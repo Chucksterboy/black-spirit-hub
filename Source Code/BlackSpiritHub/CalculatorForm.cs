@@ -193,10 +193,10 @@ internal sealed class CalculatorForm : Form
 		appStateStore = new AppStateStore(paths, logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
 		Text = "Black Spirit Hub";
-		appIcon = LoadPackagedIcon(SystemInformation.IconSize)
+		appIcon = LoadPackagedIcon("app-icon.ico", SystemInformation.IconSize)
 			?? (Icon?)System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath)?.Clone()
 			?? (Icon)SystemIcons.Application.Clone();
-		trayAppIcon = LoadPackagedIcon(SystemInformation.SmallIconSize) ?? (Icon)appIcon.Clone();
+		trayAppIcon = LoadPackagedIcon("tray-icon.ico", SystemInformation.SmallIconSize) ?? (Icon)appIcon.Clone();
 		base.Icon = appIcon;
 		trayIcon = CreateTrayIcon();
 		base.StartPosition = FormStartPosition.CenterScreen;
@@ -229,11 +229,11 @@ internal sealed class CalculatorForm : Form
 		};
 	}
 
-	private static Icon? LoadPackagedIcon(Size requestedSize)
+	private static Icon? LoadPackagedIcon(string fileName, Size requestedSize)
 	{
 		try
 		{
-			string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon", "app-icon.ico");
+			string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon", fileName);
 			if (!File.Exists(iconPath))
 			{
 				return null;
@@ -2025,10 +2025,13 @@ internal sealed class CalculatorForm : Form
 			UseShellExecute = true,
 			WorkingDirectory = directory
 		};
-		installerStart.ArgumentList.Add("--install-path");
-		installerStart.ArgumentList.Add(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-		installerStart.ArgumentList.Add("--source-pid");
-		installerStart.ArgumentList.Add(Environment.ProcessId.ToString());
+		string currentInstallDirectory = AppContext.BaseDirectory.TrimEnd(
+			Path.DirectorySeparatorChar,
+			Path.AltDirectorySeparatorChar);
+		installerStart.ArgumentList.Add("/DIR=" + currentInstallDirectory);
+		installerStart.ArgumentList.Add("/SOURCEPID=" + Environment.ProcessId);
+		installerStart.ArgumentList.Add("/CLOSEAPPLICATIONS");
+		installerStart.ArgumentList.Add("/NORESTART");
 		Process.Start(installerStart);
 		BeginInvoke(new Action(() =>
 		{

@@ -22,11 +22,14 @@ $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
 $alarmPath = Join-Path $sourceRoot "Assets\Alarm.mp3"
 $appIconPath = Join-Path $sourceRoot "app.ico"
 $runtimeIconPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.ico"
+$runtimeTrayIconPath = Join-Path $sourceRoot "Assets\AppIcon\tray-icon.ico"
 $runtimeIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.png"
 $runtimeUiIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon-ui.png"
 $installerIconPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
 $iconMasterPath = Join-Path $repoRoot "Branding\AppIcon\midnight-sigil-source.png"
 $releaseScriptPath = Join-Path $repoRoot "scripts\release.ps1"
+$nativeInstallerBuildScriptPath = Join-Path $repoRoot "scripts\build-native-installer.ps1"
+$nativeInstallerSourcePath = Join-Path $sourceRoot "InstallerSource\InnoSetup\BlackSpiritHub.iss"
 $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 
@@ -43,7 +46,7 @@ if ((Get-Item -LiteralPath $alarmPath).Length -lt 32000) {
 }
 
 $iconPaths = @($appIconPath, $runtimeIconPath, $installerIconPath)
-foreach ($path in $iconPaths + @($runtimeIconPngPath, $runtimeUiIconPngPath, $iconMasterPath)) {
+foreach ($path in $iconPaths + @($runtimeTrayIconPath, $runtimeIconPngPath, $runtimeUiIconPngPath, $iconMasterPath)) {
 	if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
 		throw "Required application icon asset is missing: $path"
 	}
@@ -239,6 +242,7 @@ foreach ($path in $iconPaths) {
 		$runtimeIconFrames = $verifiedFrames
 	}
 }
+$runtimeTrayIconFrames = @(Read-VerifiedIcoFrames -Path $runtimeTrayIconPath)
 
 Add-Type -AssemblyName System.Drawing
 $iconMasterBitmap = [System.Drawing.Bitmap]::new($iconMasterPath)
@@ -292,6 +296,43 @@ foreach ($frame in $runtimeIconFrames | Where-Object Size -le 48) {
 		throw "Native $($frame.Size)x$($frame.Size) icon frame failed visual validation: bounds $($metrics.Width)x$($metrics.Height), pixels $($metrics.Count), whites $($metrics.WhiteCount), contrast $([Math]::Round($metrics.Contrast, 2))."
 	}
 	Write-Host "Icon $($frame.Size)x$($frame.Size): bounds $($metrics.Width)x$($metrics.Height), $([Math]::Round(100 * $heightCoverage, 1))% tall, $($metrics.Count) luminous pixels, $([Math]::Round($metrics.Contrast, 2)):1 contrast."
+}
+
+foreach ($frame in $runtimeTrayIconFrames | Where-Object Size -le 48) {
+	$metrics = Get-IcoFrameMetrics -Frame $frame
+	$minimumLuminousPixels = [Math]::Max(10, [int][Math]::Ceiling(0.04 * $frame.Size * $frame.Size))
+	$widthCoverage = $metrics.Width / [double]$frame.Size
+	$heightCoverage = $metrics.Height / [double]$frame.Size
+	$horizontalCenterError = [Math]::Abs(($metrics.MinX + $metrics.MaxX) - ($frame.Size - 1))
+	$verticalCenterError = [Math]::Abs(($metrics.MinY + $metrics.MaxY) - ($frame.Size - 1))
+	$cornerCoordinates = @(
+		@(0, 0),
+		@(($frame.Size - 1), 0),
+		@(0, ($frame.Size - 1)),
+		@(($frame.Size - 1), ($frame.Size - 1))
+	)
+	$opaqueCornerCount = 0
+	foreach ($corner in $cornerCoordinates) {
+		$storedRow = $frame.Size - 1 - $corner[1]
+		$alphaOffset = $frame.PixelOffset +
+			($storedRow * $frame.XorStride) +
+			($corner[0] * 4) +
+			3
+		if ($frame.Bytes[$alphaOffset] -ne 0) {
+			$opaqueCornerCount++
+		}
+	}
+	if ($metrics.Count -lt $minimumLuminousPixels -or
+		$metrics.WhiteCount -lt 4 -or
+		$widthCoverage -lt 0.82 -or
+		$heightCoverage -lt 0.90 -or
+		$horizontalCenterError -gt 2 -or
+		$verticalCenterError -gt 2 -or
+		$opaqueCornerCount -ne 0 -or
+		$metrics.Contrast -lt 3.0) {
+		throw "Tray $($frame.Size)x$($frame.Size) icon failed micro-frame validation: bounds $($metrics.Width)x$($metrics.Height), pixels $($metrics.Count), whites $($metrics.WhiteCount), transparent corners $($opaqueCornerCount -eq 0), contrast $([Math]::Round($metrics.Contrast, 2))."
+	}
+	Write-Host "Tray $($frame.Size)x$($frame.Size): bounds $($metrics.Width)x$($metrics.Height), $([Math]::Round(100 * $widthCoverage, 1))% wide, $([Math]::Round(100 * $heightCoverage, 1))% tall, $($metrics.Count) luminous pixels."
 }
 
 $runtimeIconBitmap = [System.Drawing.Bitmap]::new($runtimeIconPngPath)
@@ -679,15 +720,22 @@ if ($unusedFunctions) {
 }
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
+$programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
+$marketCollectorTaskSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketCollectorTaskManager.cs") -Raw
 $bossScheduleSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BossScheduleService.cs"
 if (!(Test-Path -LiteralPath $bossScheduleSourcePath -PathType Leaf)) {
 	throw "The cached boss schedule service is missing."
 }
 $bossScheduleSource = Get-Content -LiteralPath $bossScheduleSourcePath -Raw
-$installerSource = Get-Content -LiteralPath (Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Program.cs") -Raw
+$installerSource = Get-Content -LiteralPath $nativeInstallerSourcePath -Raw
+$nativeInstallerBuildScript = Get-Content -LiteralPath $nativeInstallerBuildScriptPath -Raw
 $bossScheduleRefreshCallCount = [regex]::Matches($script, 'bridgeCall\("refreshBossSchedule"\)').Count
 if ($calculatorSource -match 'CancellationToken\.None') {
 	throw "CalculatorForm contains an uncancellable host operation."
+}
+if ($calculatorSource -notmatch 'LoadPackagedIcon\("app-icon\.ico",\s*SystemInformation\.IconSize\)' -or
+	$calculatorSource -notmatch 'LoadPackagedIcon\("tray-icon\.ico",\s*SystemInformation\.SmallIconSize\)') {
+	throw "The application and tray must load their dedicated icon assets."
 }
 if ($calculatorSource -notmatch 'mciGetErrorString' -or
 	$calculatorSource -notmatch 'SendMciCommand\(\$"play \{alias\} from 0"\)' -or
@@ -749,6 +797,11 @@ if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px
 	$css -notmatch 'background-position:calc\(100% - 18px\) 50%,calc\(100% - 12px\) 50%,0 0!important') {
 	throw "The dashboard lead-time selector can shrink and clip multi-digit minute labels."
 }
+if ($css -notmatch 'body\[data-style\] \.navFrame \.navButton\{\s*grid-template-columns:36px minmax\(0,1fr\) 36px!important;\s*column-gap:0!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.navButton \.navLabel\{[^}]*grid-column:1 / -1!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.navButton \.navLabel\{[^}]*padding-inline:36px!important;') {
+	throw "Navigation labels can drift away from the button and ornament centerline."
+}
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
 	$script -notmatch 'sizeBossScheduleTable\(state\.times\.length\)' -or
@@ -757,14 +810,21 @@ if ($css -notmatch '--boss-schedule-min-width' -or
 }
 $releaseScript = Get-Content -LiteralPath $releaseScriptPath -Raw
 if ($releaseScript -notmatch 'Assets\\Alarm\.mp3' -or
-	$installerSource -notmatch 'Assets/Alarm\.mp3') {
+	$installerSource -notmatch 'Source:\s*"\{#AppFilesDir\}\\\*";[^\r\n]*recursesubdirs') {
 	throw "Release or installer validation no longer requires Alarm.mp3."
 }
 if ($releaseScript -match '--self-contained\s+false' -or
-	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -lt 2 -or
+	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -ne 1 -or
 	$releaseScript -notmatch 'Assert-RunsWithoutDotnetRuntime' -or
-	$releaseScript -notmatch 'DOTNET_ROOT_X64') {
-	throw "Release packaging must publish and runtime-isolate both self-contained executables."
+	$releaseScript -notmatch 'DOTNET_ROOT_X64' -or
+	$releaseScript -notmatch 'build-native-installer\.ps1' -or
+	$releaseScript -notmatch '-RunIntegrationTest' -or
+	$releaseScript -match 'Payload\.zip|dotnet publish \$installerProject' -or
+	$nativeInstallerBuildScript -notmatch 'Assert-NativeWindowsExecutable' -or
+	$nativeInstallerBuildScript -notmatch 'CLR header' -or
+	$nativeInstallerBuildScript -notmatch 'Black-Spirit-Hub-Installer-SelfTest' -or
+	$nativeInstallerBuildScript -notmatch 'Assert-AppRunsWithoutDotnetRuntime') {
+	throw "Release packaging must publish one self-contained app and one native, CLR-free installer."
 }
 if ($calculatorSource -notmatch 'CoreWebView2ProcessFailedKind\.RenderProcessExited' -or
 	$calculatorSource -notmatch 'CoreWebView2ProcessFailedKind\.GpuProcessExited' -or
@@ -772,14 +832,38 @@ if ($calculatorSource -notmatch 'CoreWebView2ProcessFailedKind\.RenderProcessExi
 	$calculatorSource -notmatch 'RecreateMainWebViewAsync') {
 	throw "Main WebView renderer/GPU crash detection and recreation are missing."
 }
-if ($installerSource -notmatch 'GetAvailableBrowserVersionString' -or
-	$installerSource -notmatch 'RegistryHive\.LocalMachine' -or
-	$installerSource -notmatch 'missingRuntimePromptShown' -or
-	$installerSource -notmatch 'ProbeRuntimeAsync' -or
-	$installerSource -notmatch 'WinVerifyTrust' -or
-	$installerSource -notmatch '"/silent /install"' -or
-	$installerSource -notmatch 'webView2OperationActive\s*&&\s*e\.CloseReason') {
-	throw "Installer WebView2 detection, one-time prompt, verified repair, or close safety is missing."
+if ($installerSource -notmatch 'F3017226-FE2A-4295-8BDF-00C3A9A7E4C5' -or
+	$installerSource -notmatch 'HKCU32' -or
+	$installerSource -notmatch 'HKLM32' -or
+	$installerSource -notmatch 'HKCU64' -or
+	$installerSource -notmatch 'HKLM64' -or
+	$installerSource -notmatch 'WebViewInstallAttempted' -or
+	$installerSource -notmatch 'ExtractTemporaryFile\(WebView2BootstrapperName\)' -or
+	$installerSource -notmatch "'/silent /install'" -or
+	$installerSource -notmatch 'WaitForApplicationShutdown' -or
+	$installerSource -notmatch 'ApplicationAppearsRunning' -or
+	$nativeInstallerBuildScript -notmatch 'LinkId=2124703' -or
+	$nativeInstallerBuildScript -notmatch 'Get-AuthenticodeSignature' -or
+	$nativeInstallerBuildScript -notmatch 'Microsoft Corporation') {
+	throw "Native installer WebView2 detection, verified one-time repair, or graceful-close safety is missing."
+}
+if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
+	$installerSource -notmatch 'DefaultDirName=\{code:GetDefaultInstallDir\}' -or
+	$installerSource -notmatch 'CloseApplications=yes' -or
+	$installerSource -notmatch 'Uninstallable=yes' -or
+	$installerSource -notmatch "'--install-path'" -or
+	$installerSource -notmatch "'--source-pid'" -or
+	$calculatorSource -notmatch '"/DIR="\s*\+\s*currentInstallDirectory' -or
+	$calculatorSource -notmatch '"/SOURCEPID="\s*\+\s*Environment\.ProcessId' -or
+	$installerSource -notmatch '--install-market-task' -or
+	$installerSource -notmatch '--remove-market-task' -or
+	$programSource -notmatch 'SendShutdownRequestToExistingInstance' -or
+	$programSource -notmatch '--install-market-task' -or
+	$programSource -notmatch '--remove-market-task' -or
+	$marketCollectorTaskSource -notmatch '/SC HOURLY /MO 6 /RL LIMITED /F' -or
+	$marketCollectorTaskSource -match '/XML' -or
+	$marketCollectorTaskSource -notmatch '--market-scheduled-update') {
+	throw "Native installer update compatibility, uninstall integration, or market collector scheduling is incomplete."
 }
 $bridgeCommands = @(
 	[regex]::Matches($script, 'bridgeCall\(\s*["'']([^"'']+)["'']') |

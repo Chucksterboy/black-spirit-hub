@@ -592,6 +592,7 @@ internal sealed class InstallerForm : Form
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 		"gold-coins.png",
 		"Assets/AppIcon/app-icon.ico",
+		"Assets/AppIcon/tray-icon.ico",
 		"Assets/AppIcon/app-icon.png",
 		"Assets/AppIcon/app-icon-ui.png",
 		"Assets/Alarm.mp3",

@@ -154,6 +154,29 @@ internal static class Program
 			Environment.Exit(RunIsolatedAppSmokeTest(runOfflineSmokeTest));
 			return;
 		}
+		if (args.Any(a => string.Equals(a, "--shutdown-for-update", StringComparison.OrdinalIgnoreCase)))
+		{
+			SendShutdownRequestToExistingInstance();
+			return;
+		}
+		if (args.Any(a => string.Equals(a, "--install-market-task", StringComparison.OrdinalIgnoreCase)))
+		{
+			string executablePath = Environment.ProcessPath
+				?? Path.Combine(AppContext.BaseDirectory, "Black Spirit Hub.exe");
+			bool installed = MarketCollectorTaskManager.Install(executablePath, out string details);
+			if (!installed)
+			{
+				TryWriteInstallerDiagnostic(
+					"Market collector task was not created. " + details);
+			}
+			Environment.Exit(installed ? 0 : 1);
+			return;
+		}
+		if (args.Any(a => string.Equals(a, "--remove-market-task", StringComparison.OrdinalIgnoreCase)))
+		{
+			MarketCollectorTaskManager.RemoveKnownTasks();
+			return;
+		}
 		AppPaths appPaths3 = AppPaths.Create();
 		appPaths3.EnsureDirectories();
 		PrepareUiFiles(appPaths3);
@@ -317,6 +340,25 @@ internal static class Program
 			return;
 		}
 		TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "restore");
+	}
+
+	private static void SendShutdownRequestToExistingInstance()
+	{
+		TrySendSingleInstanceRequest(SingleInstancePipeName, "shutdown-for-update");
+		TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "shutdown-for-update");
+	}
+
+	private static void TryWriteInstallerDiagnostic(string message)
+	{
+		try
+		{
+			File.AppendAllText(
+				Path.Combine(AppContext.BaseDirectory, "install.log"),
+				DateTime.Now.ToString("s") + " " + message + Environment.NewLine);
+		}
+		catch
+		{
+		}
 	}
 
 	private static bool TrySendSingleInstanceRequest(string pipeName, string command)

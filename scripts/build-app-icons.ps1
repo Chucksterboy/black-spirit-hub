@@ -19,6 +19,7 @@ $resolvedSourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $appIconPath = Join-Path $resolvedSourceRoot "app.ico"
 $runtimeIconDirectory = Join-Path $resolvedSourceRoot "Assets\AppIcon"
 $runtimeIcoPath = Join-Path $runtimeIconDirectory "app-icon.ico"
+$runtimeTrayIcoPath = Join-Path $runtimeIconDirectory "tray-icon.ico"
 $runtimePngPath = Join-Path $runtimeIconDirectory "app-icon.png"
 $runtimeUiPngPath = Join-Path $runtimeIconDirectory "app-icon-ui.png"
 $installerIconPath = Join-Path $resolvedSourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
@@ -209,6 +210,84 @@ namespace BlackSpiritHub
 				}
 
 				Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+			}
+			finally
+			{
+				bitmap.UnlockBits(data);
+			}
+		}
+
+		public static void StyleBoldTrayMask(Bitmap bitmap, int radius)
+		{
+			Rectangle full = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+			BitmapData data = bitmap.LockBits(full, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+			try
+			{
+				int stride = Math.Abs(data.Stride);
+				int width = bitmap.Width;
+				int height = bitmap.Height;
+				byte[] source = new byte[stride * height];
+				Marshal.Copy(data.Scan0, source, 0, source.Length);
+				byte[] alpha = new byte[width * height];
+				for (int y = 0; y < height; y++)
+				{
+					int row = data.Stride >= 0 ? y * stride : (height - 1 - y) * stride;
+					for (int x = 0; x < width; x++)
+						alpha[y * width + x] = source[row + x * 4 + 3];
+				}
+
+				byte[] output = new byte[stride * height];
+				int radiusSquared = radius * radius;
+				for (int y = 0; y < height; y++)
+				{
+					for (int x = 0; x < width; x++)
+					{
+						byte bodyAlpha = alpha[y * width + x];
+						byte outlineAlpha = 0;
+						for (int sampleY = Math.Max(0, y - radius);
+							sampleY <= Math.Min(height - 1, y + radius);
+							sampleY++)
+						{
+							for (int sampleX = Math.Max(0, x - radius);
+								sampleX <= Math.Min(width - 1, x + radius);
+								sampleX++)
+							{
+								int deltaX = sampleX - x;
+								int deltaY = sampleY - y;
+								if (deltaX * deltaX + deltaY * deltaY <= radiusSquared
+									&& alpha[sampleY * width + sampleX] > outlineAlpha)
+								{
+									outlineAlpha = alpha[sampleY * width + sampleX];
+								}
+							}
+						}
+
+						if (outlineAlpha == 0)
+							continue;
+
+						int row = data.Stride >= 0 ? y * stride : (height - 1 - y) * stride;
+						int offset = row + x * 4;
+						if (bodyAlpha > 16)
+						{
+							// Deep navy body: visible against the tray without turning
+							// the logo into a flat cyan blob.
+							output[offset] = 53;
+							output[offset + 1] = 33;
+							output[offset + 2] = 8;
+							output[offset + 3] = bodyAlpha;
+						}
+						else
+						{
+							// Smooth supersampled cyan outline and internal seam.
+							output[offset] = 255;
+							output[offset + 1] = 231;
+							output[offset + 2] = 47;
+							output[offset + 3] = outlineAlpha;
+						}
+					}
+				}
+
+				Marshal.Copy(output, 0, data.Scan0, output.Length);
 			}
 			finally
 			{
@@ -410,6 +489,155 @@ function New-TransparentUiFrame {
 	return $frame
 }
 
+function New-TrayIconFrame {
+	param(
+		[System.Drawing.Bitmap]$SmallMaster,
+		[System.Drawing.Rectangle]$SmallMasterBounds,
+		[int]$Size
+	)
+
+	# Build the tray artwork at high resolution first, then downsample it once.
+	# At 16x16, styling the already-small pixels destroys the curved silhouette
+	# and turns the mark into a cyan blob.
+	$supersample = if ($Size -le 48) {
+		8
+	} elseif ($Size -le 96) {
+		4
+	} else {
+		2
+	}
+	$workSize = $Size * $supersample
+	$work = [System.Drawing.Bitmap]::new(
+		$workSize,
+		$workSize,
+		[System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+	)
+	$graphics = [System.Drawing.Graphics]::FromImage($work)
+	try {
+		$graphics.Clear([System.Drawing.Color]::Transparent)
+		$graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+		$graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+		$graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+		$graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+		$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+
+		# Use nearly every vertical pixel and widen the naturally narrow sigil
+		# optically. The tiny transparent inset keeps the antialiased edge intact.
+		$inset = [single](0.35 * $supersample)
+		$targetHeight = [single]($workSize - (2 * $inset))
+		$widen = if ($Size -le 24) {
+			1.50
+		} elseif ($Size -le 48) {
+			1.40
+		} else {
+			1.20
+		}
+		$naturalWidth = [single](
+			$SmallMasterBounds.Width *
+			($targetHeight / [double]$SmallMasterBounds.Height)
+		)
+		$targetWidth = [single][Math]::Min(
+			$workSize - (2 * $inset),
+			$naturalWidth * $widen
+		)
+		$targetX = [single](($workSize - $targetWidth) / 2.0)
+		$destination = [System.Drawing.RectangleF]::new(
+			$targetX,
+			$inset,
+			$targetWidth,
+			$targetHeight
+		)
+		$source = [System.Drawing.RectangleF]::new(
+			[float]$SmallMasterBounds.X,
+			[float]$SmallMasterBounds.Y,
+			[float]$SmallMasterBounds.Width,
+			[float]$SmallMasterBounds.Height
+		)
+		$graphics.DrawImage(
+			$SmallMaster,
+			$destination,
+			$source,
+			[System.Drawing.GraphicsUnit]::Pixel
+		)
+	}
+	finally {
+		$graphics.Dispose()
+	}
+
+	$logicalOutline = if ($Size -le 24) { $Size / 16.0 } else { 0.75 }
+	$outlineRadius = [Math]::Max(
+		1,
+		[int][Math]::Round(
+			$logicalOutline * $supersample,
+			[System.MidpointRounding]::AwayFromZero
+		)
+	)
+	[BlackSpiritHub.IconPixelTools]::StyleBoldTrayMask($work, $outlineRadius)
+
+	# Repaint the center diamond after silhouette styling so it stays clean and
+	# readable even in Windows' native 16x16 notification-area slot.
+	$starCenterX = [single]($targetX + ($targetWidth * 0.425))
+	$starCenterY = [single]($inset + ($targetHeight * 0.645))
+	$starRadius = [single][Math]::Max(15, $workSize * 0.09)
+	$starPath = [System.Drawing.Drawing2D.GraphicsPath]::new()
+	$starBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+	$starPen = [System.Drawing.Pen]::new(
+		[System.Drawing.Color]::FromArgb(255, 65, 226, 255),
+		[single][Math]::Max(1, $starRadius * 0.20)
+	)
+	$starGraphics = [System.Drawing.Graphics]::FromImage($work)
+	try {
+		$starGraphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
+		$starGraphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+		$starGraphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+		$starGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+		$starPath.AddPolygon(@(
+			[System.Drawing.PointF]::new($starCenterX, $starCenterY - $starRadius),
+			[System.Drawing.PointF]::new($starCenterX + $starRadius, $starCenterY),
+			[System.Drawing.PointF]::new($starCenterX, $starCenterY + $starRadius),
+			[System.Drawing.PointF]::new($starCenterX - $starRadius, $starCenterY)
+		))
+		$starGraphics.FillPath($starBrush, $starPath)
+		$starGraphics.DrawPath($starPen, $starPath)
+	}
+	finally {
+		$starGraphics.Dispose()
+		$starPen.Dispose()
+		$starBrush.Dispose()
+		$starPath.Dispose()
+	}
+
+	$frame = [System.Drawing.Bitmap]::new(
+		$Size,
+		$Size,
+		[System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+	)
+	$finalGraphics = [System.Drawing.Graphics]::FromImage($frame)
+	try {
+		$finalGraphics.Clear([System.Drawing.Color]::Transparent)
+		$finalGraphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+		$finalGraphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+		$finalGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+		$finalGraphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+		$finalGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+		$finalGraphics.DrawImage(
+			$work,
+			[System.Drawing.Rectangle]::new(0, 0, $Size, $Size),
+			0,
+			0,
+			$workSize,
+			$workSize,
+			[System.Drawing.GraphicsUnit]::Pixel
+		)
+	}
+	finally {
+		$finalGraphics.Dispose()
+		$work.Dispose()
+	}
+
+	return $frame
+}
+
 function Write-Ico {
 	param(
 		[string]$Path,
@@ -457,6 +685,7 @@ function Write-Ico {
 $master = [System.Drawing.Bitmap]::new($resolvedMasterPath)
 $smallMaster = [System.Drawing.Bitmap]::new($smallMasterPath)
 $frames = [System.Collections.Generic.List[object]]::new()
+$trayFrames = [System.Collections.Generic.List[object]]::new()
 $uiFrame = $null
 try {
 	$luminousBounds = [BlackSpiritHub.IconPixelTools]::GetLuminousBounds($master)
@@ -493,9 +722,23 @@ try {
 			Bitmap = $bitmap
 			Bounds = $visibleBounds
 		})
+
+		$trayBitmap = New-TrayIconFrame `
+			-SmallMaster $smallMaster `
+			-SmallMasterBounds $smallMasterBounds `
+			-Size $size
+		$trayBytes = [BlackSpiritHub.IconPixelTools]::ToIconDib($trayBitmap)
+		$trayVisibleBounds = [BlackSpiritHub.IconPixelTools]::GetLuminousBounds($trayBitmap)
+		$trayFrames.Add([pscustomobject]@{
+			Size = $size
+			Bytes = $trayBytes
+			Bitmap = $trayBitmap
+			Bounds = $trayVisibleBounds
+		})
 	}
 
 	Write-Ico -Path $appIconPath -Frames $frames.ToArray()
+	Write-Ico -Path $runtimeTrayIcoPath -Frames $trayFrames.ToArray()
 	[System.IO.File]::Copy($appIconPath, $runtimeIcoPath, $true)
 	[System.IO.File]::Copy($appIconPath, $installerIconPath, $true)
 
@@ -521,15 +764,35 @@ try {
 			}
 		}
 	}
+	foreach ($size in $iconSizes) {
+		$icon = [System.Drawing.Icon]::new($runtimeTrayIcoPath, $size, $size)
+		try {
+			$expectedSize = [Math]::Min($size, 128)
+			if ($icon.Width -ne $expectedSize -or $icon.Height -ne $expectedSize) {
+				throw "Tray icon validation failed: requested ${size}x${size}, loaded $($icon.Width)x$($icon.Height)."
+			}
+		}
+		finally {
+			$icon.Dispose()
+		}
+	}
 
 	foreach ($frame in $frames) {
 		$heightCoverage = [Math]::Round(100 * $frame.Bounds.Height / [double]$frame.Size, 1)
 		$widthCoverage = [Math]::Round(100 * $frame.Bounds.Width / [double]$frame.Size, 1)
 		Write-Host "$($frame.Size)x$($frame.Size): sigil bounds $($frame.Bounds.Width)x$($frame.Bounds.Height) (${widthCoverage}% wide, ${heightCoverage}% tall)"
 	}
+	foreach ($frame in $trayFrames) {
+		$heightCoverage = [Math]::Round(100 * $frame.Bounds.Height / [double]$frame.Size, 1)
+		$widthCoverage = [Math]::Round(100 * $frame.Bounds.Width / [double]$frame.Size, 1)
+		Write-Host "Tray $($frame.Size)x$($frame.Size): sigil bounds $($frame.Bounds.Width)x$($frame.Bounds.Height) (${widthCoverage}% wide, ${heightCoverage}% tall)"
+	}
 }
 finally {
 	foreach ($frame in $frames) {
+		$frame.Bitmap.Dispose()
+	}
+	foreach ($frame in $trayFrames) {
 		$frame.Bitmap.Dispose()
 	}
 	if ($null -ne $uiFrame) {
@@ -542,6 +805,7 @@ finally {
 Write-Host "Generated:"
 Write-Host "  $appIconPath"
 Write-Host "  $runtimeIcoPath"
+Write-Host "  $runtimeTrayIcoPath"
 Write-Host "  $runtimePngPath"
 Write-Host "  $runtimeUiPngPath"
 Write-Host "  $installerIconPath"

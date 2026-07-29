@@ -163,6 +163,7 @@ function Assert-AppPublishFiles {
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 		"gold-coins.png",
 		"Assets\AppIcon\app-icon.ico",
+		"Assets\AppIcon\tray-icon.ico",
 		"Assets\AppIcon\app-icon.png",
 		"Assets\AppIcon\app-icon-ui.png",
 		"Assets\Alarm.mp3",
@@ -189,8 +190,8 @@ $assemblyVersion = Get-Assembly-Version $versionTag
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $sourceRoot = Join-Path $repoRoot "Source Code"
 $projectFile = Join-Path $sourceRoot "Black Spirit Hub.csproj"
-$installerProject = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\BlackSpiritHubInstaller.csproj"
-$installerPayload = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Payload.zip"
+$legacyInstallerProject = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\BlackSpiritHubInstaller.csproj"
+$nativeInstallerSource = Join-Path $sourceRoot "InstallerSource\InnoSetup\BlackSpiritHub.iss"
 $appVersionFile = Join-Path $sourceRoot "BlackSpiritHub\AppVersion.cs"
 $htmlFile = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.html"
 $assemblyInfoFile = Join-Path $sourceRoot "Properties\AssemblyInfo.cs"
@@ -198,12 +199,12 @@ $updateManifestFile = Join-Path $repoRoot "update.json"
 $artifactRoot = Join-Path $repoRoot "artifacts"
 $appOut = Join-Path $artifactRoot "App Files"
 $installerOut = Join-Path $artifactRoot "Installer"
-$installerExe = Join-Path $installerOut "Black Spirit Hub Installer.exe"
 $installerReleaseAsset = Join-Path $installerOut "Black-Spirit-Hub-Installer.exe"
 $installerAssetName = Split-Path $installerReleaseAsset -Leaf
 $maxInAppInstallerBytes = [int64]250 * 1024 * 1024
 $verifyScript = Join-Path $repoRoot "scripts\verify.ps1"
 $iconBuildScript = Join-Path $repoRoot "scripts\build-app-icons.ps1"
+$nativeInstallerBuildScript = Join-Path $repoRoot "scripts\build-native-installer.ps1"
 
 $dotnet = Resolve-DotnetSdkPath $repoRoot
 $git = Resolve-ToolPath "git" @("$env:LOCALAPPDATA\GitHubDesktop\app-*\resources\app\git\cmd\git.exe")
@@ -217,10 +218,12 @@ Replace-Text $appVersionFile 'public const string Current = "v[^"]+";' ('public 
 Replace-Text $assemblyInfoFile 'AssemblyFileVersion\("[^"]+"\)' ('AssemblyFileVersion("' + $assemblyVersion + '")')
 Replace-Text $assemblyInfoFile 'AssemblyInformationalVersion\("[^"]+"\)' ('AssemblyInformationalVersion("' + $versionTag + '")')
 Replace-Text $assemblyInfoFile 'AssemblyVersion\("[^"]+"\)' ('AssemblyVersion("' + $assemblyVersion + '")')
-Replace-Text $installerProject '<Version>[^<]+</Version>' ('<Version>' + $packageVersion + '</Version>')
-Replace-Text $installerProject '<AssemblyVersion>[^<]+</AssemblyVersion>' ('<AssemblyVersion>' + $assemblyVersion + '</AssemblyVersion>')
-Replace-Text $installerProject '<FileVersion>[^<]+</FileVersion>' ('<FileVersion>' + $assemblyVersion + '</FileVersion>')
-Replace-Text $installerProject '<InformationalVersion>[^<]+</InformationalVersion>' ('<InformationalVersion>' + $versionTag + '</InformationalVersion>')
+Replace-Text $legacyInstallerProject '<Version>[^<]+</Version>' ('<Version>' + $packageVersion + '</Version>')
+Replace-Text $legacyInstallerProject '<AssemblyVersion>[^<]+</AssemblyVersion>' ('<AssemblyVersion>' + $assemblyVersion + '</AssemblyVersion>')
+Replace-Text $legacyInstallerProject '<FileVersion>[^<]+</FileVersion>' ('<FileVersion>' + $assemblyVersion + '</FileVersion>')
+Replace-Text $legacyInstallerProject '<InformationalVersion>[^<]+</InformationalVersion>' ('<InformationalVersion>' + $versionTag + '</InformationalVersion>')
+Replace-Text $nativeInstallerSource '#define AppVersion "[^"]+"' ('#define AppVersion "' + $packageVersion + '"')
+Replace-Text $nativeInstallerSource '#define AppFileVersion "[^"]+"' ('#define AppFileVersion "' + $assemblyVersion + '"')
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=' + $versionTag)
 Replace-Text $htmlFile 'Assets/GrindTracker/grind-spots\.js(?:\?v=[^"]+)?' ('Assets/GrindTracker/grind-spots.js?v=' + $versionTag)
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=' + $versionTag)
@@ -274,29 +277,24 @@ Assert-RunsWithoutDotnetRuntime `
 	-Arguments @("--offline-smoke-test") `
 	-WorkingDirectory $appOut
 
-if (Test-Path -LiteralPath $installerPayload) {
-	Remove-Item -LiteralPath $installerPayload -Force
-}
-Compress-Archive -Path (Join-Path $appOut "*") -DestinationPath $installerPayload -CompressionLevel Optimal -Force
-
-& $dotnet publish $installerProject -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -p:PublishTrimmed=false -o $installerOut
+& powershell.exe `
+	-NoProfile `
+	-ExecutionPolicy Bypass `
+	-File $nativeInstallerBuildScript `
+	-Version $packageVersion `
+	-AppFilesPath $appOut `
+	-OutputPath $installerOut `
+	-RunIntegrationTest
 if ($LASTEXITCODE -ne 0) {
-	throw "Installer publish failed."
+	throw "Native installer build failed."
 }
 
-Get-ChildItem -LiteralPath $installerOut -Recurse -File | Where-Object { $_.Extension -in @(".pdb", ".xml") } | Remove-Item -Force
-if (!(Test-Path -LiteralPath $installerExe)) {
-	throw "Installer was not created: $installerExe"
+if (!(Test-Path -LiteralPath $installerReleaseAsset)) {
+	throw "Native installer was not created: $installerReleaseAsset"
 }
-Copy-Item -LiteralPath $installerExe -Destination $installerReleaseAsset -Force
 if ((Get-Item -LiteralPath $installerReleaseAsset).Length -gt $maxInAppInstallerBytes) {
 	throw "Installer exceeds the application's 250 MiB safe-download limit."
 }
-
-Assert-RunsWithoutDotnetRuntime `
-	-FilePath $installerReleaseAsset `
-	-Arguments @("--self-test") `
-	-WorkingDirectory $installerOut
 
 $manifest.sha256 = (Get-FileHash -LiteralPath $installerReleaseAsset -Algorithm SHA256).Hash.ToUpperInvariant()
 $manifestJson = $manifest | ConvertTo-Json
@@ -306,8 +304,6 @@ $manifestJson = $manifest | ConvertTo-Json
 	[System.Text.UTF8Encoding]::new($false)
 )
 Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
-
-Remove-Item -LiteralPath $installerPayload -Force -ErrorAction SilentlyContinue
 
 & $gh auth status | Out-Host
 if ($LASTEXITCODE -ne 0) {

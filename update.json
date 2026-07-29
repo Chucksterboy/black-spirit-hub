@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.27",
+    "version":  "v0.9.28",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.27/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "F3CB726A51746410BA6789C4CD5E39B9947D86CF6433BD5C0705FCDE6DF06575",
-    "notes":  "Assigns every dynamically discovered event boss a stable vivid non-white color from a high-contrast palette while preserving all existing boss colors."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.28/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "DD53E58724CC42DB15356E0454806183BDE5C2B7581B96793AF7E9CC6E9185DA",
+    "notes":  "Adds the approved high-visibility tray icon, globally centers navigation labels and ornaments, introduces the smaller native installer with one self-contained app payload and verified WebView2 repair, improves graceful in-app updates, and keeps market analytics history fresh through a reliable least-privilege six-hour collector."
 }
