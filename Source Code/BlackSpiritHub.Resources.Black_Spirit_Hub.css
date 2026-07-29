@@ -3020,6 +3020,7 @@
   .bossDash { color:var(--muted2);opacity:.85; }
   .bossName { font-weight:800;line-height:1.2; }
   .boss-garmoth{color:#ff5b5b}.boss-vell{color:#4dd7dc}.boss-quint{color:#c78355}.boss-muraka{color:#34d084}.boss-kutum{color:#a78bfa}.boss-karanda{color:#2f9bff}.boss-kzarka{color:#ff6464}.boss-nouver{color:#ff8b22}.boss-offin{color:#63d98d}.boss-sangoon{color:#2cd18e}.boss-uturi{color:#2998ff}.boss-golden-pig-king{color:#ffd329}.boss-bulgasal{color:#ff5151}.boss-black-shadow{color:#8c62ff}
+  .bossName.boss-event { color:var(--boss-event-color,#55d6ff);text-shadow:0 0 10px color-mix(in srgb,var(--boss-event-color,#55d6ff) 34%,transparent); }
   .bossNotifyPanel h2 { margin:0 0 6px;color:var(--text);font:800 20px Georgia,serif;text-transform:uppercase; }
   .bossNotifyPanel p { margin:0 0 14px;color:var(--muted);font-size:12px; }
   .bossSettingRow { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:11px;border:1px solid color-mix(in srgb,var(--a1) 15%,var(--border));border-radius:10px;background:color-mix(in srgb,var(--surface2) 65%,transparent); }

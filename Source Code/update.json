@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.26",
+    "version":  "v0.9.27",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.26/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "339B918E4FE7C38F26DFD28AAC1911932E9521AB91EA24BBEAA3D8B3EDEC7B70",
-    "notes":  "Adds startup-synced and cached EU boss schedules with dynamic future event-boss support, repairs boss alert TTS and Alarm.mp3 delivery and testing, restores resilient Market Analytics sampling and 24-hour sales, and fixes dashboard lead-time selector clipping."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.27/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "F3CB726A51746410BA6789C4CD5E39B9947D86CF6433BD5C0705FCDE6DF06575",
+    "notes":  "Assigns every dynamically discovered event boss a stable vivid non-white color from a high-contrast palette while preserving all existing boss colors."
 }

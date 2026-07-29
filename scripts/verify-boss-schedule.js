@@ -9,7 +9,12 @@ const appScriptPath = path.join(
   repoRoot,
   "Source Code",
   "BlackSpiritHub.Resources.Black_Spirit_Hub.js");
+const appCssPath = path.join(
+  repoRoot,
+  "Source Code",
+  "BlackSpiritHub.Resources.Black_Spirit_Hub.css");
 const appScript = fs.readFileSync(appScriptPath, "utf8");
+const appCss = fs.readFileSync(appCssPath, "utf8");
 
 function requireMatch(pattern, description) {
   const match = appScript.match(pattern);
@@ -37,18 +42,26 @@ const extractedCode = [
   requireMatch(
     /const HOME_DAYS = \[[^\r\n]+\];/,
     "the weekly day manifest"),
+  requireMatch(
+    /const BUNDLED_HOME_BOSSES = \[[^\r\n]+\];/,
+    "the bundled boss color manifest"),
+  requireMatch(
+    /const HOME_EVENT_BOSS_COLORS = Object\.freeze\(\[[\s\S]*?\]\);/,
+    "the event boss color palette"),
+  extractFunction("bossClass", "bossEventColor"),
+  extractFunction("bossEventColor", "renderBossName"),
   extractFunction("zonedParts", "zonedOffsetMs"),
   extractFunction("zonedOffsetMs", "zonedTimeToDate"),
   extractFunction("zonedTimeToDate", "serverWeekMondayUtc"),
   extractFunction("normalizeBossScheduleDashboard", "applyBossScheduleDashboard"),
-  "globalThis.bossScheduleTest = { zonedTimeToDate, normalizeBossScheduleDashboard };"
+  "globalThis.bossScheduleTest = { bossEventColor, zonedTimeToDate, normalizeBossScheduleDashboard };"
 ].join("\n");
 
 const context = {};
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 
-const { zonedTimeToDate, normalizeBossScheduleDashboard } = context.bossScheduleTest;
+const { bossEventColor, zonedTimeToDate, normalizeBossScheduleDashboard } = context.bossScheduleTest;
 const days = [
   "Monday",
   "Tuesday",
@@ -81,6 +94,24 @@ if (!normalized
   || !normalized.bosses.includes("Winged Mermaid")
   || !normalized.bosses.includes("Baby Vell")) {
   throw new Error("Dynamic event columns or legitimate empty schedule cells were not normalized correctly.");
+}
+
+const babyVellColor = bossEventColor("Baby Vell");
+const wingedMermaidColor = bossEventColor("Winged Mermaid");
+if (!/^#[0-9a-f]{6}$/i.test(babyVellColor)
+  || !/^#[0-9a-f]{6}$/i.test(wingedMermaidColor)
+  || babyVellColor.toLowerCase() === "#ffffff"
+  || wingedMermaidColor.toLowerCase() === "#ffffff"
+  || babyVellColor === wingedMermaidColor
+  || bossEventColor("Baby Vell") !== babyVellColor
+  || bossEventColor("Vell") !== null) {
+  throw new Error("Unknown event bosses must receive stable, distinct, non-white colors without replacing existing boss colors.");
+}
+if (!appScript.includes("function renderBossName(name)")
+  || !appScript.includes("boss-event")
+  || !appCss.includes(".bossName.boss-event")
+  || !appCss.includes("--boss-event-color")) {
+  throw new Error("The dynamic event-boss palette is no longer connected to schedule rendering and styling.");
 }
 
 const springGap = zonedTimeToDate("Europe/Berlin", 2026, 3, 29, 2, 0);
