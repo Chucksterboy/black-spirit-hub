@@ -165,6 +165,7 @@ function Assert-AppPublishFiles {
 		"Assets\AppIcon\app-icon.ico",
 		"Assets\AppIcon\app-icon.png",
 		"Assets\AppIcon\app-icon-ui.png",
+		"Assets\Alarm.mp3",
 		"Assets\GrindTracker\grind-spots.js"
 	)
 	foreach ($relativePath in $requiredFiles) {

@@ -19,6 +19,7 @@ $htmlPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.htm
 $cssPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.css"
 $scriptPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.js"
 $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
+$alarmPath = Join-Path $sourceRoot "Assets\Alarm.mp3"
 $appIconPath = Join-Path $sourceRoot "app.ico"
 $runtimeIconPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.ico"
 $runtimeIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.png"
@@ -26,14 +27,19 @@ $runtimeUiIconPngPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon-ui.png"
 $installerIconPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\installer.ico"
 $iconMasterPath = Join-Path $repoRoot "Branding\AppIcon\midnight-sigil-source.png"
 $releaseScriptPath = Join-Path $repoRoot "scripts\release.ps1"
+$bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
+$bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
 	if ($LASTEXITCODE -ne 0) { throw "Application build failed." }
 }
 
-foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath)) {
+foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath, $alarmPath)) {
 	if (!(Test-Path -LiteralPath $path)) { throw "Required UI asset is missing: $path" }
+}
+if ((Get-Item -LiteralPath $alarmPath).Length -lt 32000) {
+	throw "Alarm.mp3 is unexpectedly small or empty."
 }
 
 $iconPaths = @($appIconPath, $runtimeIconPath, $installerIconPath)
@@ -673,11 +679,87 @@ if ($unusedFunctions) {
 }
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
+$bossScheduleSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BossScheduleService.cs"
+if (!(Test-Path -LiteralPath $bossScheduleSourcePath -PathType Leaf)) {
+	throw "The cached boss schedule service is missing."
+}
+$bossScheduleSource = Get-Content -LiteralPath $bossScheduleSourcePath -Raw
 $installerSource = Get-Content -LiteralPath (Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Program.cs") -Raw
+$bossScheduleRefreshCallCount = [regex]::Matches($script, 'bridgeCall\("refreshBossSchedule"\)').Count
 if ($calculatorSource -match 'CancellationToken\.None') {
 	throw "CalculatorForm contains an uncancellable host operation."
 }
+if ($calculatorSource -notmatch 'mciGetErrorString' -or
+	$calculatorSource -notmatch 'SendMciCommand\(\$"play \{alias\} from 0"\)' -or
+	$calculatorSource -notmatch 'speechThread\.SetApartmentState\(ApartmentState\.STA\)' -or
+	$calculatorSource -notmatch 'new object\[\]\s*\{\s*safeText,\s*0\s*\}' -or
+	$calculatorSource -notmatch 'return await SpeakTextAsync\(text, cancellationToken\)' -or
+	$calculatorSource -notmatch 'return PlayAlarmSound\(\)' -or
+	$calculatorSource -match 'new object\[\]\s*\{\s*safeText,\s*1\s*\}') {
+	throw "Native Alarm.mp3 or TTS playback lost its completion and error-reporting safeguards."
+}
+if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
+	$bossScheduleSource -notmatch 'BLACK_SPIRIT_HUB_BDOALERTS_API_KEY' -or
+	$bossScheduleSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
+	$bossScheduleSource -notmatch 'Europe/Berlin' -or
+	$bossScheduleSource -notmatch 'MinimumWeeklySlots' -or
+	$bossScheduleSource -notmatch 'Temporary compatibility access explicitly approved by the BDO Alerts owner' -or
+	$bossScheduleSource -notmatch 'Headers\.Referrer = new Uri\(AuthorizedWebsiteSchedulePage\)' -or
+	$bossScheduleSource -notmatch 'TryAddWithoutValidation\("Origin", AuthorizedWebsiteOrigin\)' -or
+	$bossScheduleSource -notmatch 'IsBdoAlertsScheduleEndpoint\(source\)' -or
+	$bossScheduleSource -notmatch 'AllowAutoRedirect = false' -or
+	$bossScheduleSource -notmatch 'startupRefreshAttempted' -or
+	$bossScheduleSource -notmatch 'RefreshOnceAsync' -or
+	$bossScheduleSource -notmatch 'normalizedSlots\.Count\(slot => slot\.Bosses\.Count > 0\)') {
+	throw "Boss schedule synchronization lost its approved-access, validation, cache, or timezone safeguards."
+}
+if ($script -notmatch 'let homeBossScheduleState=' -or
+	$script -notmatch 'normalizeBossScheduleDashboard' -or
+	$script -notmatch 'bossSpawnCache=\{mondayUtc:null,spawns:\[\]\}' -or
+	$script -notmatch 'settings\.bosses\[b\]!==false' -or
+	$script -notmatch 'bridgeCall\("initializeBossSchedule"\)' -or
+	$script -notmatch 'bridgeCall\("refreshBossSchedule"\)' -or
+	$bossScheduleRefreshCallCount -ne 1 -or
+	$script -match 'if\(!names\.length\)return null' -or
+	$script -match '\bHOME_BOSS_(?:TIMES|SCHEDULE|BOSSES)\b') {
+	throw "The Home dashboard is no longer fully driven by the replaceable runtime boss schedule."
+}
+if (!(Test-Path -LiteralPath $bossScheduleJsTestPath -PathType Leaf)) {
+	throw "The executable boss schedule JavaScript regression test is missing."
+}
+if (!(Test-Path -LiteralPath $bossAlertsJsTestPath -PathType Leaf)) {
+	throw "The executable boss alert JavaScript regression test is missing."
+}
+$nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+if ($nodeCommand) {
+	& $nodeCommand.Source $bossScheduleJsTestPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Boss schedule JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $bossAlertsJsTestPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Boss alert JavaScript regression tests failed."
+	}
+}
+else {
+	Write-Host "Node.js was not found; executable boss schedule and alert JavaScript checks were skipped."
+}
+if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px;width:172px;max-width:none;\s*\}' -or
+	$css -notmatch 'body\[data-style\]:not\(\[data-style="custom"\]\) #bossLeadTime\{' -or
+	$css -notmatch 'background-position:calc\(100% - 18px\) 50%,calc\(100% - 12px\) 50%,0 0!important') {
+	throw "The dashboard lead-time selector can shrink and clip multi-digit minute labels."
+}
+if ($css -notmatch '--boss-schedule-min-width' -or
+	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
+	$script -notmatch 'sizeBossScheduleTable\(state\.times\.length\)' -or
+	$script -notmatch 'sizeBossScheduleTable\(localTimes\.length\)') {
+	throw "Dynamic boss schedule columns can no longer expand safely at narrow window sizes."
+}
 $releaseScript = Get-Content -LiteralPath $releaseScriptPath -Raw
+if ($releaseScript -notmatch 'Assets\\Alarm\.mp3' -or
+	$installerSource -notmatch 'Assets/Alarm\.mp3') {
+	throw "Release or installer validation no longer requires Alarm.mp3."
+}
 if ($releaseScript -match '--self-contained\s+false' -or
 	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -lt 2 -or
 	$releaseScript -notmatch 'Assert-RunsWithoutDotnetRuntime' -or

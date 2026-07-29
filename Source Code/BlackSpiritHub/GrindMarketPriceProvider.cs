@@ -36,19 +36,29 @@ internal sealed record GrindMarketPriceResponse(
 internal sealed class GrindMarketPriceProvider : IDisposable
 {
 	private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(12);
+	private static readonly TimeSpan BatchSpacing = TimeSpan.FromMilliseconds(200);
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
+	private const int AnalyticsBatchItemCount = 250;
+	private const int InteractiveBatchAttempts = 2;
+	private const int AnalyticsBatchAttempts = 2;
+	private const int AnalyticsRecoveryRequestBudget = 128;
+	private const long AnalyticsHealthProbeItemId = 16001;
+	private const int MaximumConsecutiveEmptyAnalyticsBatches = 2;
 
 	private readonly HttpClient client;
 	private readonly AppLogger logger;
 
 	public GrindMarketPriceProvider(AppLogger logger)
+		: this(logger, null)
+	{
+	}
+
+	internal GrindMarketPriceProvider(AppLogger logger, HttpMessageHandler? handler)
 	{
 		this.logger = logger;
-		client = new HttpClient
-		{
-			Timeout = RequestTimeout,
-			MaxResponseContentBufferSize = MaxResponseBytes
-		};
+		client = handler == null ? new HttpClient() : new HttpClient(handler);
+		client.Timeout = RequestTimeout;
+		client.MaxResponseContentBufferSize = MaxResponseBytes;
 		client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Black-Spirit-Hub", AppVersion.Current.TrimStart('v', 'V')));
 		client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 	}
@@ -56,20 +66,24 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 	public async Task<GrindMarketPriceResponse> GetPricesAsync(IEnumerable<long> itemIds, string region, CancellationToken cancellationToken)
 	{
 		string normalizedRegion = NormalizeRegion(region);
-		long[] ids = itemIds.Where(id => id > 0).Distinct().OrderBy(id => id).ToArray();
+		long[] ids = NormalizeItemIds(itemIds);
 		DateTimeOffset captured = DateTimeOffset.UtcNow;
-		List<GrindMarketPrice> prices = new();
 		string provider = "Arsha GetWorldMarketSubList";
 
 		if (ids.Length == 0)
 		{
-			return new GrindMarketPriceResponse(normalizedRegion, captured, prices, Array.Empty<long>(), provider, "No market item IDs were supplied.");
+			return EmptyResponse(normalizedRegion, captured, provider);
 		}
 
+		IReadOnlyList<GrindMarketPrice> prices = Array.Empty<GrindMarketPrice>();
 		try
 		{
-			prices.AddRange(await FetchArshaSubListResilientAsync(ids, normalizedRegion, captured, cancellationToken));
-			logger.Info($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} batch returned {prices.Count.ToString(CultureInfo.InvariantCulture)}/{ids.Length.ToString(CultureInfo.InvariantCulture)} grind prices.");
+			prices = await FetchArshaSubListBatchAsync(
+				ids,
+				normalizedRegion,
+				captured,
+				InteractiveBatchAttempts,
+				cancellationToken);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -80,18 +94,107 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 			logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} batch failed: {ex.Message}");
 		}
 
+		return CreateResponse(ids, normalizedRegion, captured, provider, prices);
+	}
+
+	public async Task<GrindMarketPriceResponse> GetAnalyticsPricesAsync(IEnumerable<long> itemIds, string region, CancellationToken cancellationToken)
+	{
+		string normalizedRegion = NormalizeRegion(region);
+		long[] ids = NormalizeItemIds(itemIds);
+		DateTimeOffset captured = DateTimeOffset.UtcNow;
+		Dictionary<long, GrindMarketPrice> pricesById = new();
+		string provider = "Arsha GetWorldMarketSubList";
+
+		if (ids.Length == 0)
+		{
+			return EmptyResponse(normalizedRegion, captured, provider);
+		}
+
+		long[][] batches = ids.Chunk(AnalyticsBatchItemCount).Select(chunk => chunk.ToArray()).ToArray();
+		AnalyticsRecoveryContext recovery = new(AnalyticsRecoveryRequestBudget);
+		int consecutiveEmptyBatches = 0;
+		for (int index = 0; index < batches.Length; index++)
+		{
+			long[] batch = batches[index];
+			IReadOnlyList<GrindMarketPrice> batchPrices;
+			try
+			{
+				batchPrices = await FetchAnalyticsBatchAsync(batch, normalizedRegion, captured, recovery, cancellationToken);
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				batchPrices = Array.Empty<GrindMarketPrice>();
+				logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} analytics batch {index + 1}/{batches.Length} failed: {ex.Message}");
+			}
+
+			foreach (GrindMarketPrice price in batchPrices)
+			{
+				pricesById[price.ItemId] = price;
+			}
+
+			if (batchPrices.Count == 0)
+			{
+				consecutiveEmptyBatches++;
+				if (consecutiveEmptyBatches >= MaximumConsecutiveEmptyAnalyticsBatches)
+				{
+					logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} analytics sweep stopped after {consecutiveEmptyBatches} empty batches. Cached samples remain available.");
+					break;
+				}
+			}
+			else
+			{
+				consecutiveEmptyBatches = 0;
+			}
+
+			if (index + 1 < batches.Length)
+			{
+				await Task.Delay(BatchSpacing, cancellationToken);
+			}
+		}
+
+		IReadOnlyList<GrindMarketPrice> prices = pricesById.Values.OrderBy(price => price.ItemId).ToArray();
+		logger.Info($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} batches returned {prices.Count.ToString(CultureInfo.InvariantCulture)}/{ids.Length.ToString(CultureInfo.InvariantCulture)} market prices.");
+		return CreateResponse(ids, normalizedRegion, captured, provider, prices);
+	}
+
+	private static long[] NormalizeItemIds(IEnumerable<long> itemIds)
+	{
+		return itemIds.Where(id => id > 0).Distinct().OrderBy(id => id).ToArray();
+	}
+
+	private static GrindMarketPriceResponse EmptyResponse(string region, DateTimeOffset captured, string provider)
+	{
+		return new GrindMarketPriceResponse(region, captured, Array.Empty<GrindMarketPrice>(), Array.Empty<long>(), provider, "No market item IDs were supplied.");
+	}
+
+	private static GrindMarketPriceResponse CreateResponse(
+		long[] ids,
+		string region,
+		DateTimeOffset captured,
+		string provider,
+		IReadOnlyList<GrindMarketPrice> prices)
+	{
 		HashSet<long> resolved = prices.Select(price => price.ItemId).ToHashSet();
 		IReadOnlyList<long> missing = ids.Except(resolved).ToArray();
 		string message = prices.Count == 0
 			? "EU market prices could not be refreshed from Arsha. Cached prices remain available."
 			: $"EU market prices refreshed: {prices.Count.ToString(CultureInfo.InvariantCulture)}/{ids.Length.ToString(CultureInfo.InvariantCulture)} items.";
 
-		return new GrindMarketPriceResponse(normalizedRegion, captured, prices, missing, provider, message);
+		return new GrindMarketPriceResponse(region, captured, prices, missing, provider, message);
 	}
 
-	private async Task<IReadOnlyList<GrindMarketPrice>> FetchArshaSubListBatchAsync(long[] itemIds, string region, DateTimeOffset captured, CancellationToken cancellationToken)
+	private async Task<IReadOnlyList<GrindMarketPrice>> FetchArshaSubListBatchAsync(
+		long[] itemIds,
+		string region,
+		DateTimeOffset captured,
+		int maxAttempts,
+		CancellationToken cancellationToken)
 	{
-		for (int attempt = 1; attempt <= 2; attempt++)
+		for (int attempt = 1; attempt <= maxAttempts; attempt++)
 		{
 			try
 			{
@@ -120,21 +223,65 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 			{
 				throw;
 			}
-			catch (Exception ex) when (attempt < 2 && (IsEndpointUnavailable(ex) || ex is InvalidDataException))
+			catch (Exception ex) when (attempt < maxAttempts && (IsEndpointUnavailable(ex) || ex is InvalidDataException))
 			{
-				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} retrying after upstream failure: {ex.Message}");
-				await Task.Delay(400, cancellationToken);
+				TimeSpan delay = TimeSpan.FromMilliseconds(400);
+				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} retrying in {delay.TotalSeconds:0.##} seconds after upstream failure: {ex.Message}");
+				await Task.Delay(delay, cancellationToken);
 			}
 		}
 
 		throw new InvalidDataException("Arsha GetWorldMarketSubList did not return a usable response.");
 	}
 
-	private async Task<IReadOnlyList<GrindMarketPrice>> FetchArshaSubListResilientAsync(long[] itemIds, string region, DateTimeOffset captured, CancellationToken cancellationToken)
+	private async Task<IReadOnlyList<GrindMarketPrice>> FetchAnalyticsBatchAsync(
+		long[] itemIds,
+		string region,
+		DateTimeOffset captured,
+		AnalyticsRecoveryContext recovery,
+		CancellationToken cancellationToken)
 	{
 		try
 		{
-			return await FetchArshaSubListBatchAsync(itemIds, region, captured, cancellationToken);
+			return await FetchArshaSubListBatchAsync(itemIds, region, captured, AnalyticsBatchAttempts, cancellationToken);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch (Exception ex) when (CanSplitAnalyticsFailure(ex) && itemIds.Length > 1)
+		{
+			logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics batch contained an unusable item; attempting bounded recovery.");
+			if (!await IsAnalyticsProviderHealthyAsync(region, captured, recovery, cancellationToken))
+			{
+				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics recovery stopped because the provider health probe failed.");
+				return Array.Empty<GrindMarketPrice>();
+			}
+			return await RecoverFailedAnalyticsBatchAsync(itemIds, region, captured, recovery, cancellationToken);
+		}
+	}
+
+	private async Task<bool> IsAnalyticsProviderHealthyAsync(
+		string region,
+		DateTimeOffset captured,
+		AnalyticsRecoveryContext recovery,
+		CancellationToken cancellationToken)
+	{
+		if (!recovery.TryTakeRequest())
+		{
+			logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics recovery request budget was exhausted.");
+			return false;
+		}
+
+		try
+		{
+			IReadOnlyList<GrindMarketPrice> probe = await FetchArshaSubListBatchAsync(
+				[AnalyticsHealthProbeItemId],
+				region,
+				captured,
+				1,
+				cancellationToken);
+			return probe.Any(price => price.ItemId == AnalyticsHealthProbeItemId);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -142,23 +289,63 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		}
 		catch (Exception ex) when (IsProviderFailure(ex))
 		{
-			if (!CanSplitArshaFailure(ex) || itemIds.Length <= 1)
+			logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics health probe failed: {ex.Message}");
+			return false;
+		}
+	}
+
+	private async Task<IReadOnlyList<GrindMarketPrice>> RecoverFailedAnalyticsBatchAsync(
+		long[] failedIds,
+		string region,
+		DateTimeOffset captured,
+		AnalyticsRecoveryContext recovery,
+		CancellationToken cancellationToken)
+	{
+		if (failedIds.Length <= 1)
+		{
+			if (failedIds.Length == 1)
 			{
-				if (itemIds.Length == 1)
-				{
-					logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} skipped item {itemIds[0].ToString(CultureInfo.InvariantCulture)}: {ex.Message}");
-					return Array.Empty<GrindMarketPrice>();
-				}
-				throw;
+				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics sweep skipped item {failedIds[0].ToString(CultureInfo.InvariantCulture)}.");
+			}
+			return Array.Empty<GrindMarketPrice>();
+		}
+
+		int middle = failedIds.Length / 2;
+		long[][] children = [failedIds.Take(middle).ToArray(), failedIds.Skip(middle).ToArray()];
+		List<GrindMarketPrice> recovered = new();
+		List<long[]> stillFailing = new();
+		foreach (long[] child in children)
+		{
+			if (!recovery.TryTakeRequest())
+			{
+				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics recovery request budget was exhausted with {failedIds.Length.ToString(CultureInfo.InvariantCulture)} items still unresolved.");
+				break;
 			}
 
-			int middle = itemIds.Length / 2;
-			long[] leftIds = itemIds.Take(middle).ToArray();
-			long[] rightIds = itemIds.Skip(middle).ToArray();
-			IReadOnlyList<GrindMarketPrice> left = await FetchArshaSubListResilientAsync(leftIds, region, captured, cancellationToken);
-			IReadOnlyList<GrindMarketPrice> right = await FetchArshaSubListResilientAsync(rightIds, region, captured, cancellationToken);
-			return left.Concat(right).ToArray();
+			try
+			{
+				recovered.AddRange(await FetchArshaSubListBatchAsync(child, region, captured, 1, cancellationToken));
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (CanSplitAnalyticsFailure(ex))
+			{
+				stillFailing.Add(child);
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				logger.Warn($"Arsha GetWorldMarketSubList {region.ToUpperInvariant()} analytics recovery paused after an upstream failure. Cached samples remain available. {ex.Message}");
+				return recovered;
+			}
 		}
+
+		foreach (long[] child in stillFailing)
+		{
+			recovered.AddRange(await RecoverFailedAnalyticsBatchAsync(child, region, captured, recovery, cancellationToken));
+		}
+		return recovered;
 	}
 
 	private async Task<JsonDocument> SendJsonAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -331,6 +518,19 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 			};
 	}
 
+	private static bool CanSplitAnalyticsFailure(Exception ex)
+	{
+		if (CanSplitArshaFailure(ex))
+		{
+			return true;
+		}
+
+		return ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.InternalServerError }
+			&& (ex.Message.Contains("invalid data", StringComparison.OrdinalIgnoreCase)
+				|| ex.Message.Contains("invalid value", StringComparison.OrdinalIgnoreCase)
+				|| ex.Message.Contains("\"code\":103", StringComparison.OrdinalIgnoreCase));
+	}
+
 	private static bool IsProviderFailure(Exception ex)
 	{
 		return ex is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException or UnauthorizedAccessException;
@@ -412,4 +612,25 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		long? LastSoldPrice,
 		long? Stock,
 		long? TradeCount);
+
+	private sealed class AnalyticsRecoveryContext
+	{
+		private int remainingRequests;
+
+		public AnalyticsRecoveryContext(int requestBudget)
+		{
+			remainingRequests = requestBudget;
+		}
+
+		public bool TryTakeRequest()
+		{
+			if (remainingRequests <= 0)
+			{
+				return false;
+			}
+
+			remainingRequests--;
+			return true;
+		}
+	}
 }

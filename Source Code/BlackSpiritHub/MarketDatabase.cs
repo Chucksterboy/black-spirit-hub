@@ -13,6 +13,11 @@ namespace BlackSpiritHub;
 internal sealed class MarketDatabase
 {
 	private const int CurrentSchemaVersion = 2;
+	private static readonly TimeSpan OutfitSampleRetention = TimeSpan.FromDays(32);
+	private static readonly TimeSpan OutfitReportHistory = TimeSpan.FromDays(8);
+	private static readonly TimeSpan OutfitSampleFreshness = TimeSpan.FromHours(12);
+	private static readonly TimeSpan OutfitClockSkewTolerance = TimeSpan.FromMinutes(5);
+	private static readonly TimeSpan OutfitBulkFreshnessGrace = TimeSpan.FromMinutes(30);
 
 	private readonly string connectionString;
 
@@ -214,32 +219,84 @@ SELECT MAX(captured_utc) FROM (
 
 	public async Task<bool> IsMarketRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
 	{
+		return await IsTrackedItemRefreshDueAsync(region, maximumAge, cancellationToken)
+			|| await IsOutfitBulkRefreshDueAsync(region, maximumAge, cancellationToken);
+	}
+
+	public async Task<bool> IsTrackedItemRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
+	{
 		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge);
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using SqliteCommand command = connection.CreateCommand();
 		command.CommandText = @"
-SELECT CASE
-    WHEN NOT EXISTS (
-        SELECT 1 FROM outfit_catalog WHERE region=$region
-    ) THEN 1
-    WHEN EXISTS (
-        SELECT 1
-        FROM outfit_catalog
-        WHERE region=$region
-          AND (last_catalog_sync_utc IS NULL OR last_catalog_sync_utc <= $cutoff)
-    ) THEN 1
-    WHEN EXISTS (
-        SELECT 1
-        FROM tracked_items
-        WHERE region=$region
-          AND (last_updated_utc IS NULL OR last_updated_utc <= $cutoff)
-    ) THEN 1
-    ELSE 0
-END;";
+SELECT EXISTS (
+    SELECT 1
+    FROM tracked_items
+    WHERE region=$region
+      AND (last_updated_utc IS NULL OR last_updated_utc <= $cutoff)
+);";
 		command.Parameters.AddWithValue("$region", NormalizeRegion(region));
 		command.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
 		object? value = await command.ExecuteScalarAsync(cancellationToken);
 		return Convert.ToInt32(value ?? 1) != 0;
+	}
+
+	public async Task<bool> IsOutfitBulkRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
+	{
+		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge).Subtract(OutfitBulkFreshnessGrace);
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = @"
+SELECT
+    (SELECT COUNT(*) FROM outfit_catalog WHERE region=$region) AS catalog_count,
+    (
+        SELECT COUNT(DISTINCT samples.item_id)
+        FROM outfit_snapshots samples
+        JOIN outfit_catalog catalog
+          ON catalog.item_id=samples.item_id
+         AND catalog.region=samples.region
+        WHERE samples.region=$region
+          AND samples.source='bulk-sales'
+          AND samples.captured_utc > $cutoff
+    ) AS recent_count;";
+		command.Parameters.AddWithValue("$region", NormalizeRegion(region));
+		command.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
+		await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+		if (!await reader.ReadAsync(cancellationToken))
+		{
+			return true;
+		}
+
+		int catalogCount = reader.GetInt32(0);
+		int recentCount = reader.GetInt32(1);
+		if (catalogCount == 0)
+		{
+			return true;
+		}
+
+		// A handful of catalog entries can be retired or temporarily unavailable
+		// upstream. Requiring 100% coverage would make the six-hour task run on
+		// every launch forever, while 95% still prevents a small partial response
+		// from masquerading as a successful sweep.
+		int allowedMissing = Math.Max(3, (int)Math.Ceiling(catalogCount * 0.05));
+		int requiredRecent = Math.Max(1, catalogCount - allowedMissing);
+		return recentCount < requiredRecent;
+	}
+
+	public async Task<bool> IsOutfitDetailRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
+	{
+		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge);
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = "SELECT MAX(last_catalog_sync_utc) FROM outfit_catalog WHERE region=$region;";
+		command.Parameters.AddWithValue("$region", NormalizeRegion(region));
+		object? value = await command.ExecuteScalarAsync(cancellationToken);
+		if (value == null || value == DBNull.Value)
+		{
+			return true;
+		}
+		return !DateTimeOffset.TryParse(Convert.ToString(value), out DateTimeOffset latest)
+			|| latest <= cutoff;
 	}
 
 	public async Task SaveSnapshotAsync(TrackedItem item, MarketItem variant, MarketSnapshot snapshot, CancellationToken cancellationToken)
@@ -344,30 +401,66 @@ END;";
 
 	public async Task<int> PruneOldMarketSamplesAsync(TimeSpan retention, CancellationToken cancellationToken)
 	{
-		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(retention);
+		DateTimeOffset now = DateTimeOffset.UtcNow;
 		int removed = 0;
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using DbTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
-		string[] tables = ["snapshots", "outfit_snapshots"];
-		foreach (string table in tables)
+		(string Table, TimeSpan Retention)[] tables =
+		[
+			("snapshots", retention),
+			("outfit_snapshots", retention < OutfitSampleRetention ? retention : OutfitSampleRetention)
+		];
+		foreach ((string table, TimeSpan tableRetention) in tables)
 		{
 			await using SqliteCommand command = connection.CreateCommand();
 			command.Transaction = (SqliteTransaction)transaction;
 			command.CommandText = $"DELETE FROM {table} WHERE captured_utc < $cutoff;";
-			command.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
+			command.Parameters.AddWithValue("$cutoff", now.Subtract(tableRetention).ToString("O"));
 			removed += await command.ExecuteNonQueryAsync(cancellationToken);
 		}
 		await transaction.CommitAsync(cancellationToken);
 		return removed;
 	}
 
-	public async Task SyncOutfitCatalogAsync(IReadOnlyList<MarketItem> items, string region, CancellationToken cancellationToken)
+	public async Task<int> SyncOutfitCatalogAsync(
+		IReadOnlyList<MarketItem> items,
+		string region,
+		CancellationToken cancellationToken,
+		bool removeMissing = false)
 	{
+		if (removeMissing && items.Count == 0)
+		{
+			throw new InvalidDataException("A validated outfit catalog cannot be empty.");
+		}
+
+		region = NormalizeRegion(region);
 		DateTimeOffset now = DateTimeOffset.UtcNow;
+		int removed = 0;
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using DbTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
+		if (removeMissing)
+		{
+			await using SqliteCommand prepareIds = connection.CreateCommand();
+			prepareIds.Transaction = (SqliteTransaction)transaction;
+			prepareIds.CommandText = @"
+CREATE TEMP TABLE IF NOT EXISTS synced_outfit_ids (
+    item_id INTEGER PRIMARY KEY
+);
+DELETE FROM synced_outfit_ids;";
+			await prepareIds.ExecuteNonQueryAsync(cancellationToken);
+		}
+
 		foreach (MarketItem item in items)
 		{
+			if (removeMissing)
+			{
+				await using SqliteCommand rememberId = connection.CreateCommand();
+				rememberId.Transaction = (SqliteTransaction)transaction;
+				rememberId.CommandText = "INSERT OR IGNORE INTO synced_outfit_ids(item_id) VALUES($id);";
+				rememberId.Parameters.AddWithValue("$id", item.ItemId);
+				await rememberId.ExecuteNonQueryAsync(cancellationToken);
+			}
+
 			await using (SqliteCommand command = connection.CreateCommand())
 			{
 				command.Transaction = (SqliteTransaction)transaction;
@@ -406,7 +499,98 @@ WHERE NOT EXISTS (
 			snapshot.Parameters.AddWithValue("$stock", item.Stock);
 			await snapshot.ExecuteNonQueryAsync(cancellationToken);
 		}
+
+		if (removeMissing)
+		{
+			await using SqliteCommand prune = connection.CreateCommand();
+			prune.Transaction = (SqliteTransaction)transaction;
+			prune.CommandText = @"
+DELETE FROM outfit_catalog
+WHERE region=$region
+  AND NOT EXISTS (
+      SELECT 1
+      FROM synced_outfit_ids synced
+      WHERE synced.item_id=outfit_catalog.item_id
+  );";
+			prune.Parameters.AddWithValue("$region", region);
+			removed = await prune.ExecuteNonQueryAsync(cancellationToken);
+			await using SqliteCommand dropIds = connection.CreateCommand();
+			dropIds.Transaction = (SqliteTransaction)transaction;
+			dropIds.CommandText = "DROP TABLE synced_outfit_ids;";
+			await dropIds.ExecuteNonQueryAsync(cancellationToken);
+		}
+
 		await transaction.CommitAsync(cancellationToken);
+		return removed;
+	}
+
+	public async Task<IReadOnlyList<MarketItem>> GetOutfitCatalogAsync(string region, CancellationToken cancellationToken)
+	{
+		List<MarketItem> items = new List<MarketItem>();
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = @"
+SELECT item_id,name,grade,price,stock,sub_category
+FROM outfit_catalog
+WHERE region=$region
+ORDER BY item_id;";
+		command.Parameters.AddWithValue("$region", NormalizeRegion(region));
+		await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+		while (await reader.ReadAsync(cancellationToken))
+		{
+			items.Add(new MarketItem(
+				reader.GetInt64(0),
+				0,
+				reader.GetString(1),
+				reader.GetInt32(2),
+				reader.GetInt64(3),
+				reader.GetInt64(4),
+				0L,
+				55,
+				reader.GetInt32(5)));
+		}
+		return items;
+	}
+
+	public async Task<IReadOnlyList<MarketItem>> GetOutfitCatalogDueForBulkAsync(
+		string region,
+		TimeSpan maximumAge,
+		CancellationToken cancellationToken)
+	{
+		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge).Subtract(OutfitBulkFreshnessGrace);
+		List<MarketItem> items = new List<MarketItem>();
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = @"
+SELECT c.item_id,c.name,c.grade,c.price,c.stock,c.sub_category
+FROM outfit_catalog c
+WHERE c.region=$region
+  AND NOT EXISTS (
+      SELECT 1
+      FROM outfit_snapshots samples
+      WHERE samples.item_id=c.item_id
+        AND samples.region=c.region
+        AND samples.source='bulk-sales'
+        AND samples.captured_utc > $cutoff
+  )
+ORDER BY c.item_id;";
+		command.Parameters.AddWithValue("$region", NormalizeRegion(region));
+		command.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
+		await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+		while (await reader.ReadAsync(cancellationToken))
+		{
+			items.Add(new MarketItem(
+				reader.GetInt64(0),
+				0,
+				reader.GetString(1),
+				reader.GetInt32(2),
+				reader.GetInt64(3),
+				reader.GetInt64(4),
+				0L,
+				55,
+				reader.GetInt32(5)));
+		}
+		return items;
 	}
 
 	public async Task<IReadOnlyList<MarketItem>> GetOutfitsDueAsync(string region, int limit, CancellationToken cancellationToken)
@@ -445,6 +629,80 @@ WHERE NOT EXISTS (
 		return result;
 	}
 
+	public async Task<int> SaveOutfitBulkSamplesAsync(IReadOnlyList<GrindMarketPrice> samples, string region, CancellationToken cancellationToken)
+	{
+		GrindMarketPrice[] usable = samples
+			.Where(sample => sample.ItemId > 0 && sample.TradeCount.HasValue)
+			.GroupBy(sample => sample.ItemId)
+			.Select(group => group.First())
+			.ToArray();
+		if (usable.Length == 0)
+		{
+			return 0;
+		}
+
+		region = NormalizeRegion(region);
+		int inserted = 0;
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using DbTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
+		foreach (GrindMarketPrice sample in usable)
+		{
+			long price = sample.BasePrice.GetValueOrDefault(sample.Price);
+			await using (SqliteCommand command = connection.CreateCommand())
+			{
+				command.Transaction = (SqliteTransaction)transaction;
+				command.CommandText = @"
+INSERT INTO outfit_snapshots(
+    item_id,region,captured_utc,price,stock,trade_count,preorder_count,source)
+SELECT c.item_id,c.region,$captured,
+       CASE WHEN $price > 0 THEN $price ELSE c.price END,
+       COALESCE($stock,c.stock),$trades,
+       (
+           SELECT previous.preorder_count
+           FROM outfit_snapshots previous
+           WHERE previous.item_id=c.item_id
+             AND previous.region=c.region
+             AND previous.preorder_count IS NOT NULL
+           ORDER BY previous.captured_utc DESC
+           LIMIT 1
+       ),
+       'bulk-sales'
+FROM outfit_catalog c
+WHERE c.item_id=$id AND c.region=$region
+  AND NOT EXISTS (
+      SELECT 1
+      FROM outfit_snapshots existing
+      WHERE existing.item_id=c.item_id
+        AND existing.region=c.region
+        AND existing.source='bulk-sales'
+        AND existing.captured_utc=$captured
+  );";
+				command.Parameters.AddWithValue("$id", sample.ItemId);
+				command.Parameters.AddWithValue("$region", region);
+				command.Parameters.AddWithValue("$captured", sample.CapturedUtc.ToString("O"));
+				command.Parameters.AddWithValue("$price", price);
+				command.Parameters.AddWithValue("$stock", (object?)sample.Stock ?? DBNull.Value);
+				command.Parameters.AddWithValue("$trades", sample.TradeCount!.Value);
+				inserted += await command.ExecuteNonQueryAsync(cancellationToken);
+			}
+
+			await using SqliteCommand update = connection.CreateCommand();
+			update.Transaction = (SqliteTransaction)transaction;
+			update.CommandText = @"
+UPDATE outfit_catalog
+SET price=CASE WHEN $price > 0 THEN $price ELSE price END,
+    stock=COALESCE($stock,stock)
+WHERE item_id=$id AND region=$region;";
+			update.Parameters.AddWithValue("$id", sample.ItemId);
+			update.Parameters.AddWithValue("$region", region);
+			update.Parameters.AddWithValue("$price", price);
+			update.Parameters.AddWithValue("$stock", (object?)sample.Stock ?? DBNull.Value);
+			await update.ExecuteNonQueryAsync(cancellationToken);
+		}
+		await transaction.CommitAsync(cancellationToken);
+		return inserted;
+	}
+
 	public async Task SaveOutfitDetailAsync(MarketItem item, MarketItem variant, MarketSnapshot snapshot, string region, CancellationToken cancellationToken)
 	{
 		DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -480,6 +738,7 @@ WHERE NOT EXISTS (
 
 	public async Task<OutfitReport> GetOutfitReportAsync(string region, CancellationToken cancellationToken)
 	{
+		DateTimeOffset reportNow = DateTimeOffset.UtcNow;
 		List<(long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail)> catalog = new List<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>();
 		Dictionary<long, List<(DateTimeOffset Time, long Trades, long Preorders)>> samples = new Dictionary<long, List<(DateTimeOffset, long, long)>>();
 		OutfitReport result;
@@ -497,9 +756,17 @@ WHERE NOT EXISTS (
 			}
 			await using (SqliteCommand command = connection.CreateCommand())
 			{
-				command.CommandText = "SELECT item_id,captured_utc,trade_count,preorder_count\nFROM outfit_snapshots\nWHERE region=$region AND trade_count IS NOT NULL AND captured_utc >= $since\nORDER BY item_id,captured_utc;";
+				command.CommandText = @"
+SELECT item_id,captured_utc,trade_count,preorder_count
+FROM outfit_snapshots
+WHERE region=$region
+  AND trade_count IS NOT NULL
+  AND captured_utc >= $since
+  AND captured_utc <= $latest
+ORDER BY item_id,captured_utc;";
 				command.Parameters.AddWithValue("$region", region);
-				command.Parameters.AddWithValue("$since", DateTimeOffset.UtcNow.AddDays(-8).ToString("O"));
+				command.Parameters.AddWithValue("$since", reportNow.Subtract(OutfitReportHistory).ToString("O"));
+				command.Parameters.AddWithValue("$latest", reportNow.Add(OutfitClockSkewTolerance).ToString("O"));
 				await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
 				while (await reader.ReadAsync(cancellationToken))
 				{
@@ -519,13 +786,13 @@ WHERE NOT EXISTS (
 				{
 					value2 = new List<(DateTimeOffset, long, long)>();
 				}
-				long? num = CalculateOutfitSalesWindow(value2, TimeSpan.FromHours(24.0));
-				long? num2 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(3.0));
-				long? num3 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(7.0));
+				long? num = CalculateOutfitSalesWindow(value2, TimeSpan.FromHours(24.0), reportNow);
+				long? num2 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(3.0), reportNow);
+				long? num3 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(7.0), reportNow);
 				double? num4 = EstimateOutfitSalesPerDay(value2, num, num2, num3);
 				double? sevenDayChancePercent = null;
 				long? obj;
-				if (value2.Count != 0)
+				if (item2.Detail.HasValue && value2.Count != 0)
 				{
 					List<(DateTimeOffset, long, long)> list3 = value2;
 					obj = list3[list3.Count - 1].Item3;
@@ -583,45 +850,69 @@ WHERE NOT EXISTS (
 		return result;
 	}
 
-	private static long? CalculateOutfitSalesWindow(IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples, TimeSpan window)
+	private static long? CalculateOutfitSalesWindow(
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples,
+		TimeSpan window,
+		DateTimeOffset now)
 	{
 		if (samples.Count < 2)
 		{
 			return null;
 		}
 		(DateTimeOffset Time, long Trades, long Preorders) last = samples[samples.Count - 1];
+		if (last.Time > now.Add(OutfitClockSkewTolerance)
+			|| now - last.Time > OutfitSampleFreshness)
+		{
+			return null;
+		}
+
 		DateTimeOffset cutoff = last.Time - window;
+		TimeSpan baselineTolerance = TimeSpan.FromHours(
+			Math.Min(12.0, Math.Max(8.0, window.TotalHours * 0.25)));
 		(DateTimeOffset Time, long Trades, long Preorders)? before = null;
 		(DateTimeOffset Time, long Trades, long Preorders)? after = null;
 		foreach ((DateTimeOffset Time, long Trades, long Preorders) sample in samples.Take(samples.Count - 1))
 		{
+			if (sample.Time > last.Time
+				|| sample.Time < cutoff.Subtract(baselineTolerance)
+				|| sample.Time > cutoff.Add(baselineTolerance))
+			{
+				continue;
+			}
 			if (sample.Time <= cutoff)
 			{
 				before = sample;
 			}
-			if (sample.Time >= cutoff)
+			if (!after.HasValue && sample.Time >= cutoff)
 			{
 				after = sample;
-				break;
 			}
 		}
 		if (before.HasValue && after.HasValue)
 		{
-			double baseline = InterpolateTradeCount(before.Value, after.Value, cutoff);
+			double baseline = before.Value.Time == after.Value.Time
+				? before.Value.Trades
+				: InterpolateTradeCount(before.Value, after.Value, cutoff);
 			if (double.IsNaN(baseline) || last.Trades < baseline)
 			{
 				return null;
 			}
 			return (long)Math.Round(last.Trades - baseline);
 		}
-		(DateTimeOffset Time, long Trades, long Preorders) first = samples[0];
-		double coverageHours = (last.Time - first.Time).TotalHours;
-		double minimumCoverageHours = Math.Min(24.0, Math.Max(6.0, window.TotalHours * 0.35));
-		if (coverageHours < minimumCoverageHours || last.Trades < first.Trades)
+
+		(DateTimeOffset Time, long Trades, long Preorders)? nearest = before ?? after;
+		if (!nearest.HasValue)
 		{
 			return null;
 		}
-		return (long)Math.Round((double)(last.Trades - first.Trades) * window.TotalHours / coverageHours);
+		double observedHours = (last.Time - nearest.Value.Time).TotalHours;
+		if (observedHours <= 0.0
+			|| Math.Abs(observedHours - window.TotalHours) > baselineTolerance.TotalHours
+			|| last.Trades < nearest.Value.Trades)
+		{
+			return null;
+		}
+		return (long)Math.Round((last.Trades - nearest.Value.Trades) * window.TotalHours / observedHours);
 	}
 
 	private static double? EstimateOutfitSalesPerDay(IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples, long? sales24Hours, long? sales3Days, long? sales7Days)

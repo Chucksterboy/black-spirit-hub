@@ -5,6 +5,9 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,6 +51,34 @@ internal static class Program
 				&& refresh.GetProperty("status").GetString() == "LIVE"
 				&& refresh.GetProperty("coupons").GetArrayLength() == cachedCouponCount
 				&& cachedCouponCount >= 1 ? 0 : 41;
+			try { Directory.Delete(root, true); } catch { }
+			Environment.Exit(result);
+			return;
+		}
+		if (args.Any(a => string.Equals(a, "--boss-schedule-smoke-test", StringComparison.OrdinalIgnoreCase)))
+		{
+			string root = Path.Combine(Path.GetTempPath(), $"bdo-boss-schedule-smoke-{Guid.NewGuid():N}");
+			AppPaths testPaths = AppPaths.CreateAt(root);
+			testPaths.EnsureDirectories();
+			using AppLogger testLogger = new(testPaths.LogPath);
+			using BossScheduleService service = new(testPaths, testLogger);
+			JsonElement refresh = JsonSerializer.SerializeToElement(
+				service.RefreshAsync(CancellationToken.None).GetAwaiter().GetResult());
+			JsonElement repeatedRefresh = JsonSerializer.SerializeToElement(
+				service.RefreshAsync(CancellationToken.None).GetAwaiter().GetResult());
+			Console.WriteLine(refresh.GetRawText());
+			JsonElement schedule = refresh.GetProperty("schedule");
+			int result = refresh.GetProperty("status").GetString() == "LIVE"
+				&& repeatedRefresh.GetProperty("fetchedAtUtc").GetString()
+					== refresh.GetProperty("fetchedAtUtc").GetString()
+				&& repeatedRefresh.GetProperty("contentHash").GetString()
+					== refresh.GetProperty("contentHash").GetString()
+				&& schedule.ValueKind == JsonValueKind.Object
+				&& schedule.EnumerateObject().Count() == 7
+				&& schedule.EnumerateObject().All(day => day.Value.GetArrayLength() > 0)
+				&& File.Exists(testPaths.BossScheduleCachePath)
+					? 0
+					: 91;
 			try { Directory.Delete(root, true); } catch { }
 			Environment.Exit(result);
 			return;
@@ -574,7 +605,7 @@ internal static class Program
 		{
 			MarketDatabase database = new(testDatabasePath);
 			await database.InitializeAsync(CancellationToken.None);
-			await database.SaveSettingsAsync(new MarketSettings("eu", 1440), CancellationToken.None);
+			await database.SaveSettingsAsync(MarketSettings.Default, CancellationToken.None);
 
 			MarketItem trackedItem = new(4901, 0, "Test Black Stone Powder", 1, 10_000, 25, 50, 20, 1);
 			await database.AddTrackedItemAsync(trackedItem, "eu", CancellationToken.None);
@@ -588,17 +619,248 @@ internal static class Program
 			}
 
 			MarketItem outfit = new(700_001, 0, "Test Premium Outfit", 4, 2_200_000_000, 0, 123, 55, 1);
-			await database.SyncOutfitCatalogAsync([outfit], "eu", CancellationToken.None);
-			if ((await database.GetOutfitsDueAsync("eu", 10, CancellationToken.None)).Count != 1)
+			MarketItem retiredOutfit = new(700_099, 0, "Retired Test Outfit", 4, 1_000_000_000, 0, 1, 55, 1);
+			await database.SyncOutfitCatalogAsync([outfit, retiredOutfit], "eu", CancellationToken.None);
+			if ((await database.GetOutfitsDueAsync("eu", 10, CancellationToken.None)).Count != 2)
 			{
 				return 52;
+			}
+			int retiredRemoved = await database.SyncOutfitCatalogAsync(
+				[outfit],
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			if (retiredRemoved != 1
+				|| (await database.GetOutfitCatalogAsync("eu", CancellationToken.None)).Count != 1)
+			{
+				return 74;
+			}
+			if (!await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
+				|| await database.IsOutfitDetailRefreshDueAsync("eu", TimeSpan.FromHours(24), CancellationToken.None))
+			{
+				return 75;
+			}
+
+			DateTimeOffset bulkCapturedUtc = DateTimeOffset.UtcNow;
+			GrindMarketPrice olderOutfitSample = new(
+				outfit.ItemId, 0, outfit.Name, outfit.CurrentPrice, null, outfit.CurrentPrice, null,
+				outfit.Stock, 100, "offline-bulk-test", bulkCapturedUtc.AddHours(-24));
+			GrindMarketPrice currentOutfitSample = olderOutfitSample with
+			{
+				TradeCount = 112,
+				CapturedUtc = bulkCapturedUtc
+			};
+			int olderSaved = await database.SaveOutfitBulkSamplesAsync([olderOutfitSample], "eu", CancellationToken.None);
+			int currentSaved = await database.SaveOutfitBulkSamplesAsync([currentOutfitSample], "eu", CancellationToken.None);
+			OutfitReport bulkReport = await database.GetOutfitReportAsync("eu", CancellationToken.None);
+			OutfitOpportunity bulkOpportunity = bulkReport.Opportunities.Single();
+			if (olderSaved != 1 || currentSaved != 1)
+			{
+				return 55;
+			}
+			if (bulkOpportunity.Sales24Hours != 12)
+			{
+				return bulkOpportunity.Sales24Hours.HasValue
+					? 100 + (int)Math.Clamp(bulkOpportunity.Sales24Hours.Value, 0, 99)
+					: 66;
+			}
+			if (bulkOpportunity.PreorderCount.HasValue)
+			{
+				return 67;
+			}
+			if (await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None))
+			{
+				return 76;
 			}
 			MarketSnapshot outfitSnapshot = new(2_200_000_000, 0, 123, 7, 2_100_000_000, 2_200_000_000, 2_150_000_000, Array.Empty<ProviderHistoryPoint>());
 			await database.SaveOutfitDetailAsync(outfit, outfit, outfitSnapshot, "eu", CancellationToken.None);
 			OutfitReport report = await database.GetOutfitReportAsync("eu", CancellationToken.None);
-			if (report.CatalogCount != 1 || report.DetailedCount != 1 || report.Opportunities.Count != 1)
+			if (report.CatalogCount != 1
+				|| report.DetailedCount != 1
+				|| report.Opportunities.Count != 1
+				|| !report.Opportunities[0].Sales24Hours.HasValue
+				|| report.Opportunities[0].PreorderCount != 7)
 			{
 				return 53;
+			}
+
+			MarketItem oldBaselineOutfit = new(700_002, 0, "Old Baseline Test Outfit", 4, 1_100_000_000, 0, 0, 55, 1);
+			MarketItem nearBaselineOutfit = new(700_003, 0, "Near Baseline Test Outfit", 4, 1_200_000_000, 0, 0, 55, 1);
+			MarketItem staleLatestOutfit = new(700_004, 0, "Stale Latest Test Outfit", 4, 1_300_000_000, 0, 0, 55, 1);
+			await database.SyncOutfitCatalogAsync(
+				[outfit, oldBaselineOutfit, nearBaselineOutfit, staleLatestOutfit],
+				"eu",
+				CancellationToken.None);
+
+			GrindMarketPrice oldBaseline = olderOutfitSample with
+			{
+				ItemId = oldBaselineOutfit.ItemId,
+				Name = oldBaselineOutfit.Name,
+				TradeCount = 100,
+				CapturedUtc = bulkCapturedUtc.AddDays(-9)
+			};
+			GrindMarketPrice oldBaselineCurrent = oldBaseline with
+			{
+				TradeCount = 500,
+				CapturedUtc = bulkCapturedUtc
+			};
+			GrindMarketPrice nearBaseline = olderOutfitSample with
+			{
+				ItemId = nearBaselineOutfit.ItemId,
+				Name = nearBaselineOutfit.Name,
+				TradeCount = 100,
+				CapturedUtc = bulkCapturedUtc.AddHours(-20)
+			};
+			GrindMarketPrice nearBaselineCurrent = nearBaseline with
+			{
+				TradeCount = 112,
+				CapturedUtc = bulkCapturedUtc
+			};
+			GrindMarketPrice staleBaseline = olderOutfitSample with
+			{
+				ItemId = staleLatestOutfit.ItemId,
+				Name = staleLatestOutfit.Name,
+				TradeCount = 100,
+				CapturedUtc = bulkCapturedUtc.AddHours(-37)
+			};
+			GrindMarketPrice staleCurrent = staleBaseline with
+			{
+				TradeCount = 112,
+				CapturedUtc = bulkCapturedUtc.AddHours(-13)
+			};
+			await database.SaveOutfitBulkSamplesAsync(
+				[oldBaseline, nearBaseline, staleBaseline],
+				"eu",
+				CancellationToken.None);
+			await database.SaveOutfitBulkSamplesAsync(
+				[oldBaselineCurrent, nearBaselineCurrent, staleCurrent],
+				"eu",
+				CancellationToken.None);
+			OutfitReport windowReport = await database.GetOutfitReportAsync("eu", CancellationToken.None);
+			OutfitOpportunity oldBaselineResult = windowReport.Opportunities.Single(item => item.ItemId == oldBaselineOutfit.ItemId);
+			OutfitOpportunity nearBaselineResult = windowReport.Opportunities.Single(item => item.ItemId == nearBaselineOutfit.ItemId);
+			OutfitOpportunity staleLatestResult = windowReport.Opportunities.Single(item => item.ItemId == staleLatestOutfit.ItemId);
+			if (oldBaselineResult.Sales24Hours.HasValue
+				|| oldBaselineResult.Sales3Days.HasValue
+				|| oldBaselineResult.Sales7Days.HasValue)
+			{
+				return 77;
+			}
+			if (nearBaselineResult.Sales24Hours != 14)
+			{
+				return 78;
+			}
+			if (staleLatestResult.Sales24Hours.HasValue
+				|| staleLatestResult.Sales3Days.HasValue
+				|| staleLatestResult.Sales7Days.HasValue)
+			{
+				return 79;
+			}
+
+			MarketItem[] coverageCatalog = Enumerable.Range(0, 100)
+				.Select(index => new MarketItem(
+					710_000 + index,
+					0,
+					$"Coverage Test Outfit {index}",
+					4,
+					1_000_000_000 + index,
+					0,
+					0,
+					55,
+					1))
+				.ToArray();
+			await database.SyncOutfitCatalogAsync(
+				coverageCatalog,
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			GrindMarketPrice[] coverageSamples = coverageCatalog
+				.Take(94)
+				.Select(item => currentOutfitSample with
+				{
+					ItemId = item.ItemId,
+					Name = item.Name,
+					Price = item.CurrentPrice,
+					BasePrice = item.CurrentPrice,
+					TradeCount = 1_000 + item.ItemId,
+					CapturedUtc = DateTimeOffset.UtcNow
+				})
+				.ToArray();
+			await database.SaveOutfitBulkSamplesAsync(coverageSamples, "eu", CancellationToken.None);
+			IReadOnlyList<MarketItem> sixPending = await database.GetOutfitCatalogDueForBulkAsync(
+				"eu",
+				TimeSpan.FromHours(6),
+				CancellationToken.None);
+			if (!await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
+				|| sixPending.Count != 6)
+			{
+				return 86;
+			}
+			await database.SaveOutfitBulkSamplesAsync(
+				[
+					currentOutfitSample with
+					{
+						ItemId = coverageCatalog[94].ItemId,
+						Name = coverageCatalog[94].Name,
+						Price = coverageCatalog[94].CurrentPrice,
+						BasePrice = coverageCatalog[94].CurrentPrice,
+						TradeCount = 1_000 + coverageCatalog[94].ItemId,
+						CapturedUtc = DateTimeOffset.UtcNow
+					}
+				],
+				"eu",
+				CancellationToken.None);
+			IReadOnlyList<MarketItem> fivePending = await database.GetOutfitCatalogDueForBulkAsync(
+				"eu",
+				TimeSpan.FromHours(6),
+				CancellationToken.None);
+			if (await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
+				|| fivePending.Count != 5)
+			{
+				return 86;
+			}
+
+			using (AnalyticsMarketStubHandler marketHandler = new(invalidItemId: 103))
+			using (GrindMarketPriceProvider marketProvider = new(logger, marketHandler))
+			{
+				long[] testIds = [101, 102, 103, 104, 105];
+				GrindMarketPriceResponse recovered = await marketProvider.GetAnalyticsPricesAsync(
+					testIds,
+					"eu",
+					CancellationToken.None);
+				if (recovered.Prices.Count != 4
+					|| !recovered.Missing.SequenceEqual([103L])
+					|| marketHandler.RequestCount > 8)
+				{
+					return 80;
+				}
+
+				int requestsBeforeInteractive = marketHandler.RequestCount;
+				GrindMarketPriceResponse interactive = await marketProvider.GetPricesAsync(
+					testIds,
+					"eu",
+					CancellationToken.None);
+				if (interactive.Prices.Count != 0
+					|| marketHandler.RequestCount - requestsBeforeInteractive > 2)
+				{
+					return 81;
+				}
+			}
+
+			using (AnalyticsMarketStubHandler multiPoisonHandler = new([103, 111]))
+			using (GrindMarketPriceProvider multiPoisonProvider = new(logger, multiPoisonHandler))
+			{
+				long[] multiPoisonIds = Enumerable.Range(101, 16).Select(value => (long)value).ToArray();
+				GrindMarketPriceResponse recovered = await multiPoisonProvider.GetAnalyticsPricesAsync(
+					multiPoisonIds,
+					"eu",
+					CancellationToken.None);
+				if (recovered.Prices.Count != 14
+					|| !recovered.Missing.SequenceEqual([103L, 111L])
+					|| multiPoisonHandler.RequestCount > 40)
+				{
+					return 87;
+				}
 			}
 
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
@@ -710,6 +972,197 @@ internal static class Program
 				|| !officialCouponCodes.SetEquals(expectedOfficialCouponCodes))
 			{
 				return 65;
+			}
+
+			const string bossScheduleFixture = """
+				{
+				  "Monday": [
+				    { "time": "18:30", "bosses": ["Winged Mermaid"] },
+				    { "time": "19:30", "bosses": ["Baby Vell", "Baby Vell"] },
+				    { "time": "19:30", "bosses": ["Future Event Boss"] }
+				  ],
+				  "Tuesday": [
+				    { "time": "00:15", "bosses": ["Karanda"] },
+				    { "time": "02:00", "bosses": [] },
+				    { "time": "22:30", "bosses": ["Baby Vell"] }
+				  ],
+				  "Wednesday": [
+				    { "time": "02:00", "bosses": ["Kutum"] },
+				    { "time": "23:30", "bosses": ["Future Event Boss"] }
+				  ],
+				  "Thursday": [
+				    { "time": "12:00", "bosses": ["Nouver"] },
+				    { "time": "19:00", "bosses": ["Kzarka"] }
+				  ],
+				  "Friday": [
+				    { "time": "14:00", "bosses": ["Garmoth"] },
+				    { "time": "22:15", "bosses": ["Offin"] }
+				  ],
+				  "Saturday": [
+				    { "time": "16:00", "bosses": ["Black Shadow"] },
+				    { "time": "23:15", "bosses": ["Garmoth"] }
+				  ],
+				  "Sunday": [
+				    { "time": "19:15", "bosses": ["Garmoth"] },
+				    { "time": "23:30", "bosses": ["Baby Vell"] }
+				  ]
+				}
+				""";
+			DateTimeOffset bossScheduleFetchedAt = new(2026, 7, 29, 10, 0, 0, TimeSpan.Zero);
+			BossScheduleSnapshot bossSchedule = BossScheduleService.ParseAndNormalizeForTest(
+				bossScheduleFixture,
+				bossScheduleFetchedAt);
+			BossScheduleSlot mondayEvent = bossSchedule.Schedule["Monday"]
+				.Single(slot => slot.Time == "19:30");
+			if (bossSchedule.Schedule.Count != 7
+				|| bossSchedule.Schedule["Monday"].Count != 2
+				|| !mondayEvent.Bosses.SequenceEqual(["Baby Vell", "Future Event Boss"])
+				|| bossSchedule.Schedule["Tuesday"].Single(slot => slot.Time == "02:00").Bosses.Count != 0
+				|| !bossSchedule.Schedule["Tuesday"].Any(slot => slot.Time == "22:30")
+				|| !bossSchedule.Schedule["Wednesday"].Any(slot => slot.Time == "23:30"))
+			{
+				return 82;
+			}
+
+			using (HttpRequestMessage authorizedScheduleRequest =
+				BossScheduleService.CreateRequestForTest(
+					new Uri(BossScheduleService.DefaultSourceUrl),
+					apiKey: null,
+					useAuthorizedWebsiteHeaders: true))
+			{
+				if (authorizedScheduleRequest.Headers.Referrer?.AbsoluteUri
+						!= BossScheduleService.AuthorizedWebsiteSchedulePage
+					|| !authorizedScheduleRequest.Headers.TryGetValues("Origin", out IEnumerable<string>? origins)
+					|| !origins.SequenceEqual([BossScheduleService.AuthorizedWebsiteOrigin]))
+				{
+					return 88;
+				}
+			}
+
+			using (HttpRequestMessage apiKeyScheduleRequest =
+				BossScheduleService.CreateRequestForTest(
+					new Uri(BossScheduleService.DefaultSourceUrl),
+					apiKey: "test-key",
+					useAuthorizedWebsiteHeaders: true))
+			{
+				if (!apiKeyScheduleRequest.Headers.TryGetValues("X-API-Key", out IEnumerable<string>? apiKeys)
+					|| !apiKeys.SequenceEqual(["test-key"])
+					|| apiKeyScheduleRequest.Headers.Referrer is not null
+					|| apiKeyScheduleRequest.Headers.Contains("Origin"))
+				{
+					return 89;
+				}
+			}
+
+			using (HttpRequestMessage untrustedScheduleRequest =
+				BossScheduleService.CreateRequestForTest(
+					new Uri("https://example.com/schedule"),
+					apiKey: "must-not-leak",
+					useAuthorizedWebsiteHeaders: true))
+			{
+				if (untrustedScheduleRequest.Headers.Contains("X-API-Key")
+					|| untrustedScheduleRequest.Headers.Referrer is not null
+					|| untrustedScheduleRequest.Headers.Contains("Origin"))
+				{
+					return 92;
+				}
+			}
+
+			bool rejectedIncompleteSchedule = false;
+			try
+			{
+				BossScheduleService.ParseAndNormalizeForTest(
+					bossScheduleFixture.Replace("\"Sunday\"", "\"NotSunday\"", StringComparison.Ordinal),
+					bossScheduleFetchedAt);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedIncompleteSchedule = true;
+			}
+			if (!rejectedIncompleteSchedule)
+			{
+				return 83;
+			}
+
+			bool rejectedInvalidScheduleTime = false;
+			try
+			{
+				BossScheduleService.ParseAndNormalizeForTest(
+					bossScheduleFixture.Replace("\"18:30\"", "\"25:30\"", StringComparison.Ordinal),
+					bossScheduleFetchedAt);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedInvalidScheduleTime = true;
+			}
+			if (!rejectedInvalidScheduleTime)
+			{
+				return 84;
+			}
+
+			string[] bossScheduleDays =
+			[
+				"Monday",
+				"Tuesday",
+				"Wednesday",
+				"Thursday",
+				"Friday",
+				"Saturday",
+				"Sunday"
+			];
+			string emptyBossScheduleFixture = JsonSerializer.Serialize(
+				bossScheduleDays.ToDictionary(
+					day => day,
+					_ => new[]
+					{
+						new { time = "00:15", bosses = Array.Empty<string>() },
+						new { time = "12:00", bosses = Array.Empty<string>() }
+					}));
+			bool rejectedEmptySchedule = false;
+			try
+			{
+				BossScheduleService.ParseAndNormalizeForTest(
+					emptyBossScheduleFixture,
+					bossScheduleFetchedAt);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedEmptySchedule = true;
+			}
+			if (!rejectedEmptySchedule)
+			{
+				return 90;
+			}
+
+			JsonSerializerOptions bossScheduleJsonOptions = new()
+			{
+				PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+				PropertyNameCaseInsensitive = true
+			};
+			await AtomicFile.WriteAllTextAsync(
+				statePaths.BossScheduleCachePath,
+				JsonSerializer.Serialize(bossSchedule, bossScheduleJsonOptions),
+				CancellationToken.None);
+			await AtomicFile.WriteAllTextAsync(
+				statePaths.BossScheduleCachePath,
+				JsonSerializer.Serialize(bossSchedule, bossScheduleJsonOptions),
+				CancellationToken.None);
+			BossScheduleSnapshot invalidPrimary = bossSchedule with { SchemaVersion = 99 };
+			await File.WriteAllTextAsync(
+				statePaths.BossScheduleCachePath,
+				JsonSerializer.Serialize(invalidPrimary, bossScheduleJsonOptions),
+				CancellationToken.None);
+			using (BossScheduleService bossScheduleService = new(statePaths, logger))
+			{
+				JsonElement cachedScheduleDashboard = JsonSerializer.SerializeToElement(
+					await bossScheduleService.InitializeAsync(CancellationToken.None),
+					bossScheduleJsonOptions);
+				if (cachedScheduleDashboard.GetProperty("status").GetString() != "CACHED"
+					|| cachedScheduleDashboard.GetProperty("sourceTimeZone").GetString() != "Europe/Berlin"
+					|| cachedScheduleDashboard.GetProperty("schedule").GetProperty("Monday").GetArrayLength() != 2)
+				{
+					return 85;
+				}
 			}
 
 			JsonElement firstSessions = JsonSerializer.SerializeToElement(new[]
@@ -847,6 +1300,63 @@ internal static class Program
 			catch
 			{
 			}
+		}
+	}
+
+	private sealed class AnalyticsMarketStubHandler : HttpMessageHandler
+	{
+		private readonly HashSet<long> invalidItemIds;
+		private int requestCount;
+
+		public AnalyticsMarketStubHandler(long invalidItemId)
+			: this([invalidItemId])
+		{
+		}
+
+		public AnalyticsMarketStubHandler(IEnumerable<long> invalidItemIds)
+		{
+			this.invalidItemIds = invalidItemIds.ToHashSet();
+		}
+
+		public int RequestCount => Volatile.Read(ref requestCount);
+
+		protected override async Task<HttpResponseMessage> SendAsync(
+			HttpRequestMessage request,
+			CancellationToken cancellationToken)
+		{
+			Interlocked.Increment(ref requestCount);
+			string body = request.Content == null
+				? "[]"
+				: await request.Content.ReadAsStringAsync(cancellationToken);
+			long[] ids = JsonSerializer.Deserialize<long[]>(body) ?? Array.Empty<long>();
+			if (ids.Any(invalidItemIds.Contains))
+			{
+				return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+				{
+					ReasonPhrase = "Internal Server Error",
+					Content = new StringContent(
+						"""{"status":500,"message":"One or more requests returned invalid data.","code":103}""",
+						Encoding.UTF8,
+						"application/json")
+				};
+			}
+
+			string json = JsonSerializer.Serialize(ids.Select(id => new
+			{
+				name = $"Test Item {id}",
+				id,
+				sid = 0,
+				minEnhance = 0,
+				maxEnhance = 0,
+				basePrice = 1_000_000L + id,
+				currentStock = 0,
+				totalTrades = 10_000L + id,
+				lastSoldPrice = 1_000_000L + id
+			}));
+			return new HttpResponseMessage(HttpStatusCode.OK)
+			{
+				Content = new StringContent(json, Encoding.UTF8, "application/json")
+			};
 		}
 	}
 

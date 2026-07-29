@@ -4,7 +4,7 @@ namespace BlackSpiritHub;
 
 internal sealed record MarketSettings(string Region, int IntervalMinutes)
 {
-	public static MarketSettings Default { get; } = new MarketSettings("eu", 1440);
+	public static MarketSettings Default { get; } = new MarketSettings("eu", 360);
 
 	[CompilerGenerated]
 	private MarketSettings(MarketSettings original)

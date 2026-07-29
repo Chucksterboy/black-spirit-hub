@@ -20,6 +20,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		"coupon_settings.json",
 		"events_cache.json",
 		"events_cache.backup.json",
+		"boss_schedule_cache.json",
 		"portrait-replacer-settings.json",
 		"font-changer-settings.json",
 		"app-behavior-settings.json",
@@ -34,6 +35,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	public string CouponIconsPath => Path.Combine(Root, "data", "icons", "coupons");
 	public string EventsCachePath => Path.Combine(Root, "events_cache.json");
 	public string EventsBackupCachePath => Path.Combine(Root, "events_cache.backup.json");
+	public string BossScheduleCachePath => Path.Combine(Root, "boss_schedule_cache.json");
 	public string ThemeAssetsPath => Path.Combine(Root, "ThemeAssets");
 	public string MasteryIconsPath => Path.Combine(Root, "Assets", "MasteryIcons");
 	public string FontGuidePath => Path.Combine(Root, "Assets", "FontGuide");

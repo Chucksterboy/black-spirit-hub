@@ -11,13 +11,17 @@ internal sealed class MarketAnalyticsService : IDisposable
 {
 	public const int DefaultOutfitsPerScan = 100;
 
-	public static readonly TimeSpan DefaultCollectorInterval = TimeSpan.FromHours(24);
+	public static readonly TimeSpan DefaultCollectorInterval = TimeSpan.FromHours(6);
+	public static readonly TimeSpan DefaultDetailCollectorInterval = TimeSpan.FromHours(24);
 
 	private static readonly TimeSpan MarketSampleRetention = TimeSpan.FromDays(180);
+	private const int MinimumValidatedOutfitCatalogSize = 1000;
 
 	private readonly MarketDatabase database;
 
 	private readonly IMarketDataProvider provider;
+
+	private readonly GrindMarketPriceProvider bulkMarketProvider;
 
 	private readonly AppLogger logger;
 
@@ -45,7 +49,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 
 	public MarketSettings Settings => settings;
 
-	public string ProviderName => provider.Name;
+	public string ProviderName => $"{provider.Name} + Arsha bulk sales";
 
 	public event EventHandler? DataChanged;
 
@@ -56,13 +60,14 @@ internal sealed class MarketAnalyticsService : IDisposable
 		this.database = database;
 		this.provider = provider;
 		this.logger = logger;
+		bulkMarketProvider = new GrindMarketPriceProvider(logger);
 	}
 
 	public async Task InitializeAsync(CancellationToken cancellationToken, bool startForegroundUpdates = true)
 	{
 		await database.InitializeAsync(cancellationToken);
 		MarketSettings storedSettings = await database.GetSettingsAsync(cancellationToken);
-		settings = new MarketSettings("eu", 1440);
+		settings = MarketSettings.Default;
 		if (!string.Equals(storedSettings.Region, "eu", StringComparison.OrdinalIgnoreCase)
 			|| storedSettings.IntervalMinutes != settings.IntervalMinutes)
 		{
@@ -199,14 +204,24 @@ internal sealed class MarketAnalyticsService : IDisposable
 			foreach (string region in new[] { "eu" })
 			{
 				DateTimeOffset? latest = await database.GetLatestMarketSampleUtcAsync(region, cancellationToken);
-				bool isDue = await database.IsMarketRefreshDueAsync(region, maximumAge, cancellationToken);
-				if (!isDue)
+				bool trackedItemsDue = await database.IsTrackedItemRefreshDueAsync(region, maximumAge, cancellationToken);
+				bool bulkSalesDue = await database.IsOutfitBulkRefreshDueAsync(region, maximumAge, cancellationToken);
+				bool outfitDetailsDue = await database.IsOutfitDetailRefreshDueAsync(region, DefaultDetailCollectorInterval, cancellationToken);
+				if (!trackedItemsDue && !bulkSalesDue && !outfitDetailsDue)
 				{
-					this.StatusChanged?.Invoke(this, $"{region.ToUpperInvariant()} market samples are fresh. Last sample: {latest.Value.LocalDateTime:g}.");
+					string latestLabel = latest.HasValue ? latest.Value.LocalDateTime.ToString("g") : "not available";
+					this.StatusChanged?.Invoke(this, $"{region.ToUpperInvariant()} market samples are fresh. Last sample: {latestLabel}.");
 					continue;
 				}
 				this.StatusChanged?.Invoke(this, $"{region.ToUpperInvariant()} market samples are due ({reason}). Collecting now...");
-				await RefreshRegionAsync(region, DefaultOutfitsPerScan, cancellationToken);
+				await RefreshRegionAsync(
+					region,
+					DefaultOutfitsPerScan,
+					trackedItemsDue,
+					bulkSalesDue,
+					outfitDetailsDue,
+					maximumAge,
+					cancellationToken);
 				refreshedAny = true;
 			}
 			if (!refreshedAny)
@@ -233,11 +248,36 @@ internal sealed class MarketAnalyticsService : IDisposable
 		}
 	}
 
-	private async Task RefreshRegionAsync(string region, int outfitBatchSize, CancellationToken cancellationToken)
+	private async Task RefreshRegionAsync(
+		string region,
+		int outfitBatchSize,
+		bool refreshTrackedItems,
+		bool refreshBulkSales,
+		bool refreshOutfitDetails,
+		TimeSpan bulkMaximumAge,
+		CancellationToken cancellationToken)
 	{
 		region = NormalizeRegion(region);
+		if (refreshTrackedItems)
+		{
+			await RefreshTrackedItemsAsync(region, cancellationToken);
+		}
+		if (refreshBulkSales || refreshOutfitDetails)
+		{
+			await RefreshOutfitsForRegionAsync(
+				region,
+				outfitBatchSize,
+				refreshBulkSales,
+				refreshOutfitDetails,
+				bulkMaximumAge,
+				cancellationToken);
+		}
+	}
+
+	private async Task RefreshTrackedItemsAsync(string region, CancellationToken cancellationToken)
+	{
 		IReadOnlyList<TrackedItem> trackedItems = await database.GetTrackedItemsAsync(region, cancellationToken);
-		this.StatusChanged?.Invoke(this, trackedItems.Count == 0 ? $"Updating {region.ToUpperInvariant()} outfit samples..." : $"Updating {trackedItems.Count} tracked {region.ToUpperInvariant()} item sample(s)...");
+		this.StatusChanged?.Invoke(this, $"Updating {trackedItems.Count} tracked {region.ToUpperInvariant()} item sample(s)...");
 		IEnumerable<IGrouping<long, TrackedItem>> groups = from x in trackedItems
 			group x by x.ItemId;
 		int completed = 0;
@@ -263,7 +303,8 @@ internal sealed class MarketAnalyticsService : IDisposable
 			{
 				try
 				{
-					MarketItem variant = variants.FirstOrDefault((MarketItem x) => x.Enhancement == tracked.Enhancement) ?? throw new InvalidDataException("The tracked enhancement is no longer available.");
+					MarketItem variant = variants.FirstOrDefault(item => item.Enhancement == tracked.Enhancement)
+						?? throw new InvalidDataException("The tracked enhancement is no longer available.");
 					MarketSnapshot snapshot = await provider.GetSnapshotAsync(tracked.ItemId, tracked.Enhancement, region, cancellationToken);
 					await database.SaveSnapshotAsync(tracked, variant, snapshot, cancellationToken);
 					completed++;
@@ -272,39 +313,36 @@ internal sealed class MarketAnalyticsService : IDisposable
 				{
 					throw;
 				}
-				catch (Exception exception2)
+				catch (Exception exception)
 				{
 					failures++;
-					logger.Error($"Could not update {region.ToUpperInvariant()} item {tracked.ItemId} enhancement {tracked.Enhancement}.", exception2);
+					logger.Error($"Could not update {region.ToUpperInvariant()} item {tracked.ItemId} enhancement {tracked.Enhancement}.", exception);
 				}
 			}
 		}
 		if (trackedItems.Count > 0)
 		{
-			this.StatusChanged?.Invoke(this, failures == 0 ? $"{region.ToUpperInvariant()} tracked item samples refreshed." : $"{region.ToUpperInvariant()} tracked samples: {completed} refreshed, {failures} failed.");
+			this.StatusChanged?.Invoke(this, failures == 0
+				? $"{region.ToUpperInvariant()} tracked item samples refreshed."
+				: $"{region.ToUpperInvariant()} tracked samples: {completed} refreshed, {failures} failed.");
 		}
-		await RefreshOutfitsForRegionAsync(region, outfitBatchSize, cancellationToken);
 	}
 
-	private async Task RefreshOutfitsForRegionAsync(string region, int batchSize, CancellationToken cancellationToken)
+	private async Task RefreshOutfitsForRegionAsync(
+		string region,
+		int batchSize,
+		bool refreshBulkSales,
+		bool refreshDetails,
+		TimeSpan bulkMaximumAge,
+		CancellationToken cancellationToken)
 	{
-		this.StatusChanged?.Invoke(this, $"Syncing {region.ToUpperInvariant()} outfit samples...");
-		await SyncOutfitCatalogAsync(region, cancellationToken);
-		IReadOnlyList<MarketItem> readOnlyList = await database.GetOutfitsDueAsync(region, Math.Clamp(batchSize, 1, DefaultOutfitsPerScan), cancellationToken);
-		int completed = 0;
-		int failures = 0;
-		int consecutiveFailures = 0;
-		foreach (MarketItem item in readOnlyList)
+		Exception? catalogSyncError = null;
+		if (refreshDetails)
 		{
+			this.StatusChanged?.Invoke(this, $"Syncing {region.ToUpperInvariant()} outfit catalog...");
 			try
 			{
-				IReadOnlyList<MarketItem> source = await provider.GetVariantsAsync(item.ItemId, region, cancellationToken);
-				MarketItem variant = source.FirstOrDefault((MarketItem x) => x.Enhancement == 0) ?? source.First();
-				MarketSnapshot snapshot = await provider.GetSnapshotAsync(item.ItemId, variant.Enhancement, region, cancellationToken);
-				await database.SaveOutfitDetailAsync(item, variant, snapshot, region, cancellationToken);
-				completed++;
-				consecutiveFailures = 0;
-				await Task.Delay(100, cancellationToken);
+				await SyncOutfitCatalogAsync(region, cancellationToken);
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -312,28 +350,120 @@ internal sealed class MarketAnalyticsService : IDisposable
 			}
 			catch (Exception exception)
 			{
-				failures++;
-				consecutiveFailures++;
-				if (consecutiveFailures >= 3)
+				catalogSyncError = exception;
+				logger.Warn($"{region.ToUpperInvariant()} outfit catalog sync failed; using the cached catalog for sales collection. {exception.Message}");
+			}
+		}
+
+		IReadOnlyList<MarketItem> catalog = await database.GetOutfitCatalogAsync(region, cancellationToken);
+		if (catalog.Count == 0)
+		{
+			throw new InvalidDataException("The outfit catalog is unavailable and there is no cached catalog to use.", catalogSyncError);
+		}
+
+		int bulkSamples = 0;
+		int bulkRequested = 0;
+		if (refreshBulkSales)
+		{
+			IReadOnlyList<MarketItem> pendingCatalog = await database.GetOutfitCatalogDueForBulkAsync(
+				region,
+				bulkMaximumAge,
+				cancellationToken);
+			bulkRequested = pendingCatalog.Count;
+			if (pendingCatalog.Count == 0)
+			{
+				logger.Info($"{region.ToUpperInvariant()} bulk outfit sales collection found no pending catalog items.");
+			}
+			else
+			{
+				this.StatusChanged?.Invoke(this, $"Collecting lifetime sales for {pendingCatalog.Count:N0} pending {region.ToUpperInvariant()} outfits...");
+				GrindMarketPriceResponse bulkResponse = await bulkMarketProvider.GetAnalyticsPricesAsync(
+					pendingCatalog.Select(item => item.ItemId),
+					region,
+					cancellationToken);
+				bulkSamples = await database.SaveOutfitBulkSamplesAsync(bulkResponse.Prices, region, cancellationToken);
+				if (bulkSamples == 0)
 				{
-					logger.Warn($"{region.ToUpperInvariant()} outfit scan paused after {consecutiveFailures} consecutive provider failures. Cached data remains available. Last error: {exception.Message}");
-					break;
+					logger.Warn($"{region.ToUpperInvariant()} bulk outfit sales collection returned no usable samples. {bulkResponse.Message}");
+				}
+				else
+				{
+					logger.Info($"{region.ToUpperInvariant()} bulk outfit sales collection saved {bulkSamples:N0}/{pendingCatalog.Count:N0} pending samples ({catalog.Count:N0} catalog items).");
 				}
 			}
 		}
+
+		int completed = 0;
+		int failures = 0;
+		if (refreshDetails && catalogSyncError == null)
+		{
+			IReadOnlyList<MarketItem> dueItems = await database.GetOutfitsDueAsync(
+				region,
+				Math.Clamp(batchSize, 1, DefaultOutfitsPerScan),
+				cancellationToken);
+			int consecutiveFailures = 0;
+			foreach (MarketItem item in dueItems)
+			{
+				try
+				{
+					IReadOnlyList<MarketItem> variants = await provider.GetVariantsAsync(item.ItemId, region, cancellationToken);
+					MarketItem variant = variants.FirstOrDefault(candidate => candidate.Enhancement == 0) ?? variants.First();
+					MarketSnapshot snapshot = await provider.GetSnapshotAsync(item.ItemId, variant.Enhancement, region, cancellationToken);
+					await database.SaveOutfitDetailAsync(item, variant, snapshot, region, cancellationToken);
+					completed++;
+					consecutiveFailures = 0;
+					await Task.Delay(100, cancellationToken);
+				}
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+				{
+					throw;
+				}
+				catch (Exception exception)
+				{
+					failures++;
+					consecutiveFailures++;
+					if (consecutiveFailures >= 3)
+					{
+						logger.Warn($"{region.ToUpperInvariant()} outfit detail scan paused after {consecutiveFailures} consecutive provider failures. Cached preorder data remains available. Last error: {exception.Message}");
+						break;
+					}
+				}
+			}
+		}
+
 		OutfitReport outfitReport = await database.GetOutfitReportAsync(region, cancellationToken);
 		CacheOutfitReport(region, outfitReport);
-		this.StatusChanged?.Invoke(this, $"{region.ToUpperInvariant()} outfit scan updated {completed} item(s), {failures} failed. Coverage: {outfitReport.DetailedCount:N0}/{outfitReport.CatalogCount:N0}.");
+		List<string> summary = new();
+		if (refreshBulkSales)
+		{
+			summary.Add($"sales {bulkSamples:N0}/{bulkRequested:N0} pending sampled");
+		}
+		if (refreshDetails)
+		{
+			summary.Add(catalogSyncError == null
+				? $"details {completed} updated, {failures} failed"
+				: "details deferred until the catalog provider recovers");
+		}
+		this.StatusChanged?.Invoke(this, $"{region.ToUpperInvariant()} outfit {string.Join("; ", summary)}. Coverage: {outfitReport.DetailedCount:N0}/{outfitReport.CatalogCount:N0}.");
 	}
 
 	private async Task SyncOutfitCatalogAsync(string region, CancellationToken cancellationToken)
 	{
-		MarketItem[] catalog = (from x in (await provider.GetCategoryAsync(55, 1, region, cancellationToken)).Concat(await provider.GetCategoryAsync(55, 2, region, cancellationToken))
+		IReadOnlyList<MarketItem> categoryOne = await provider.GetCategoryAsync(55, 1, region, cancellationToken);
+		IReadOnlyList<MarketItem> categoryTwo = await provider.GetCategoryAsync(55, 2, region, cancellationToken);
+		MarketItem[] catalog = (from x in categoryOne.Concat(categoryTwo)
 			group x by x.ItemId into x
 			select x.First()).ToArray();
-		await database.SyncOutfitCatalogAsync(catalog, region, cancellationToken);
+		if (categoryOne.Count == 0 || categoryTwo.Count == 0 || catalog.Length < MinimumValidatedOutfitCatalogSize)
+		{
+			throw new InvalidDataException(
+				$"The outfit provider returned an incomplete catalog ({categoryOne.Count:N0} + {categoryTwo.Count:N0}, {catalog.Length:N0} unique).");
+		}
+		int removed = await database.SyncOutfitCatalogAsync(catalog, region, cancellationToken, removeMissing: true);
 		InvalidateOutfitReport(region);
-		this.StatusChanged?.Invoke(this, $"{catalog.Length:N0} outfits loaded for {region.ToUpperInvariant()}.");
+		this.StatusChanged?.Invoke(this, removed > 0
+			? $"{catalog.Length:N0} outfits loaded for {region.ToUpperInvariant()}; {removed:N0} retired catalog row(s) removed."
+			: $"{catalog.Length:N0} outfits loaded for {region.ToUpperInvariant()}.");
 		this.DataChanged?.Invoke(this, EventArgs.Empty);
 	}
 
@@ -428,6 +558,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 		updateLock.Dispose();
 		shutdown.Dispose();
 		processUpdateLock.Dispose();
+		bulkMarketProvider.Dispose();
 		if (provider is IDisposable disposableProvider)
 		{
 			disposableProvider.Dispose();

@@ -594,6 +594,7 @@ internal sealed class InstallerForm : Form
 		"Assets/AppIcon/app-icon.ico",
 		"Assets/AppIcon/app-icon.png",
 		"Assets/AppIcon/app-icon-ui.png",
+		"Assets/Alarm.mp3",
 		"Assets/GrindTracker/grind-spots.js"
 	};
 
@@ -1090,7 +1091,7 @@ internal sealed class InstallerForm : Form
 <Task version=""1.4"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
   <RegistrationInfo>
     <Author>Black Spirit Hub</Author>
-    <Description>Keeps Black Spirit Hub EU market analytics samples fresh once per day.</Description>
+    <Description>Keeps Black Spirit Hub EU market analytics samples fresh every six hours.</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -1098,7 +1099,7 @@ internal sealed class InstallerForm : Form
     </LogonTrigger>
     <TimeTrigger>
       <Repetition>
-        <Interval>PT24H</Interval>
+        <Interval>PT6H</Interval>
         <StopAtDurationEnd>false</StopAtDurationEnd>
       </Repetition>
       <StartBoundary>" + SecurityElement.Escape(startBoundary) + @"</StartBoundary>

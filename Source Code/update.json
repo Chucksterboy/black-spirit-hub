@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.25",
+    "version":  "v0.9.26",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.25/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "A7C40502655527DF3EA0E5FFAFCD45BA935008B9BB4C2F2EAB7489E4BFC5DE26",
-    "notes":  "Adds complete Edania origin coverage to the Trade Distance Calculator, including Frozen Halo, while preserving the existing distance formula and sell destinations."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.26/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "339B918E4FE7C38F26DFD28AAC1911932E9521AB91EA24BBEAA3D8B3EDEC7B70",
+    "notes":  "Adds startup-synced and cached EU boss schedules with dynamic future event-boss support, repairs boss alert TTS and Alarm.mp3 delivery and testing, restores resilient Market Analytics sampling and 24-hour sales, and fixes dashboard lead-time selector clipping."
 }

@@ -62,6 +62,10 @@ internal sealed class CalculatorForm : Form
 	[DllImport("winmm.dll", CharSet = CharSet.Unicode)]
 	private static extern int mciSendString(string command, StringBuilder? returnValue, int returnLength, IntPtr callback);
 
+	[DllImport("winmm.dll", CharSet = CharSet.Unicode)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool mciGetErrorString(int errorCode, StringBuilder errorText, int errorTextLength);
+
 	[DllImport("user32.dll", SetLastError = true)]
 	[return: MarshalAs(UnmanagedType.Bool)]
 	private static extern bool DestroyIcon(IntPtr hIcon);
@@ -120,6 +124,8 @@ internal sealed class CalculatorForm : Form
 
 	private readonly EventService eventService;
 
+	private readonly BossScheduleService bossScheduleService;
+
 	private readonly UpdateCheckerService updateCheckerService;
 
 	private readonly AppStateStore appStateStore;
@@ -145,6 +151,12 @@ internal sealed class CalculatorForm : Form
 	private bool forceCloseFromTray;
 
 	private int alarmPlayId;
+
+	private string? activeAlarmAlias;
+
+	private System.Windows.Forms.Timer? alarmCleanupTimer;
+
+	private readonly SemaphoreSlim speechGate = new(1, 1);
 
 	private ITaskbarList3? taskbarList;
 
@@ -176,6 +188,7 @@ internal sealed class CalculatorForm : Form
 		fontChangerService = new FontChangerService(paths);
 		couponService = new CouponService(paths, logger);
 		eventService = new EventService(paths, logger);
+		bossScheduleService = new BossScheduleService(paths, logger);
 		updateCheckerService = new UpdateCheckerService(logger);
 		appStateStore = new AppStateStore(paths, logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
@@ -351,9 +364,10 @@ internal sealed class CalculatorForm : Form
 			trayIcon.BalloonTipIcon = ToolTipIcon.Info;
 			if (!TrySetTrayVisible(true))
 			{
-				return;
+				throw new InvalidOperationException("The system-tray notification icon is unavailable.");
 			}
 			trayIcon.ShowBalloonTip(8000);
+			logger.Info($"Desktop notification requested: {safeTitle}");
 			if (wasHidden && Visible)
 			{
 				System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer { Interval = 9000 };
@@ -372,6 +386,7 @@ internal sealed class CalculatorForm : Form
 		catch (Exception ex)
 		{
 			logger.Warn("Could not show desktop notification: " + ex.Message);
+			throw new InvalidOperationException("Windows could not show the desktop notification.", ex);
 		}
 	}
 
@@ -539,65 +554,169 @@ internal sealed class CalculatorForm : Form
 		graphics.DrawEllipse(border, bounds.X, bounds.Y, bounds.Width, bounds.Height);
 	}
 
-	private void PlayAlarmSound()
+	private object PlayAlarmSound()
 	{
 		string alarmPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Alarm.mp3");
 		if (!File.Exists(alarmPath))
 		{
-			logger.Warn("Alarm.mp3 was not found at " + alarmPath);
+			throw new FileNotFoundException("Alarm.mp3 is missing from the application installation.", alarmPath);
+		}
+
+		StopAlarmSound();
+		string alias = "bdoAlarm" + Interlocked.Increment(ref alarmPlayId).ToString(System.Globalization.CultureInfo.InvariantCulture);
+		string safePath = alarmPath.Replace("\"", "");
+		try
+		{
+			SendMciCommand($"open \"{safePath}\" type mpegvideo alias {alias}");
+			StringBuilder lengthText = new StringBuilder(32);
+			SendMciCommand($"status {alias} length", lengthText);
+			int durationMilliseconds = int.TryParse(
+				lengthText.ToString(),
+				System.Globalization.NumberStyles.Integer,
+				System.Globalization.CultureInfo.InvariantCulture,
+				out int parsedDuration)
+					? parsedDuration
+					: 3000;
+			SendMciCommand($"play {alias} from 0");
+			StringBuilder modeText = new StringBuilder(32);
+			SendMciCommand($"status {alias} mode", modeText);
+			if (!string.Equals(modeText.ToString().Trim(), "playing", StringComparison.OrdinalIgnoreCase))
+			{
+				throw new InvalidOperationException("Windows opened Alarm.mp3 but did not start playback.");
+			}
+
+			activeAlarmAlias = alias;
+			alarmCleanupTimer = new System.Windows.Forms.Timer
+			{
+				Interval = Math.Clamp(durationMilliseconds + 1000, 1500, 60000)
+			};
+			alarmCleanupTimer.Tick += (_, _) => StopAlarmSound();
+			alarmCleanupTimer.Start();
+			logger.Info($"Alarm playback started ({durationMilliseconds} ms).");
+			return new
+			{
+				played = true,
+				fileName = "Alarm.mp3",
+				durationMilliseconds
+			};
+		}
+		catch
+		{
+			mciSendString($"close {alias}", null, 0, IntPtr.Zero);
+			throw;
+		}
+	}
+
+	private void StopAlarmSound()
+	{
+		alarmCleanupTimer?.Stop();
+		alarmCleanupTimer?.Dispose();
+		alarmCleanupTimer = null;
+		if (string.IsNullOrWhiteSpace(activeAlarmAlias))
+		{
 			return;
 		}
 
-		string alias = "bdoAlarm" + Interlocked.Increment(ref alarmPlayId).ToString(System.Globalization.CultureInfo.InvariantCulture);
-		string safePath = alarmPath.Replace("\"", "");
-		mciSendString($"open \"{safePath}\" type mpegvideo alias {alias}", null, 0, IntPtr.Zero);
-		mciSendString($"play {alias} notify", null, 0, IntPtr.Zero);
-		System.Windows.Forms.Timer cleanupTimer = new System.Windows.Forms.Timer { Interval = 30000 };
-		cleanupTimer.Tick += delegate
+		string alias = activeAlarmAlias;
+		activeAlarmAlias = null;
+		int result = mciSendString($"close {alias}", null, 0, IntPtr.Zero);
+		if (result != 0)
 		{
-			cleanupTimer.Stop();
-			cleanupTimer.Dispose();
-			mciSendString($"close {alias}", null, 0, IntPtr.Zero);
-		};
-		cleanupTimer.Start();
+			logger.Warn($"Could not close completed alarm playback: {GetMciErrorText(result)}");
+		}
 	}
 
-	private void SpeakText(string text)
+	private static void SendMciCommand(string command, StringBuilder? response = null)
+	{
+		int result = mciSendString(command, response, response?.Capacity ?? 0, IntPtr.Zero);
+		if (result != 0)
+		{
+			throw new InvalidOperationException($"Windows audio playback failed: {GetMciErrorText(result)}");
+		}
+	}
+
+	private static string GetMciErrorText(int errorCode)
+	{
+		StringBuilder errorText = new StringBuilder(256);
+		return mciGetErrorString(errorCode, errorText, errorText.Capacity)
+			? errorText.ToString()
+			: $"MCI error {errorCode}";
+	}
+
+	private async Task<object> SpeakTextAsync(string text, CancellationToken cancellationToken)
 	{
 		string safeText = string.IsNullOrWhiteSpace(text) ? "Black Spirit Hub alert." : text.Trim();
 		if (safeText.Length > 500)
 		{
 			safeText = safeText[..500];
 		}
-		_ = Task.Run(delegate
+
+		await speechGate.WaitAsync(cancellationToken);
+		try
 		{
-			object? voice = null;
-			try
+			TaskCompletionSource<object> completion = new(
+				TaskCreationOptions.RunContinuationsAsynchronously);
+			Thread speechThread = new Thread(() =>
 			{
-				Type? voiceType = Type.GetTypeFromProgID("SAPI.SpVoice");
-				if (voiceType == null)
+				object? voice = null;
+				try
 				{
-					throw new InvalidOperationException("Windows text to speech is not available.");
+					Type? voiceType = Type.GetTypeFromProgID("SAPI.SpVoice");
+					if (voiceType == null)
+					{
+						throw new InvalidOperationException("Windows text to speech is not available.");
+					}
+					voice = Activator.CreateInstance(voiceType);
+					if (voice is null)
+					{
+						throw new InvalidOperationException("Windows text to speech could not be started.");
+					}
+
+					voiceType.InvokeMember(
+						"Speak",
+						System.Reflection.BindingFlags.InvokeMethod,
+						null,
+						voice,
+						new object[] { safeText, 0 });
+					completion.TrySetResult(new
+					{
+						spoken = true,
+						characters = safeText.Length
+					});
 				}
-				voice = Activator.CreateInstance(voiceType);
-				if (voice is null)
+				catch (Exception ex)
 				{
-					throw new InvalidOperationException("Windows text to speech could not be started.");
+					completion.TrySetException(
+						new InvalidOperationException("Windows text to speech playback failed.", ex));
 				}
-				voiceType.InvokeMember("Speak", System.Reflection.BindingFlags.InvokeMethod, null, voice, [safeText, 1]);
-			}
-			catch (Exception ex)
+				finally
+				{
+					if (voice is not null && Marshal.IsComObject(voice))
+					{
+						Marshal.FinalReleaseComObject(voice);
+					}
+				}
+			})
 			{
-				logger.Error("Text to speech failed.", ex);
-			}
-			finally
-			{
-				if (voice is not null && Marshal.IsComObject(voice))
-				{
-					Marshal.FinalReleaseComObject(voice);
-				}
-			}
-		});
+				IsBackground = true,
+				Name = "Black Spirit Hub TTS"
+			};
+			speechThread.SetApartmentState(ApartmentState.STA);
+			speechThread.Start();
+
+			object result = await completion.Task.WaitAsync(cancellationToken);
+			logger.Info($"Text to speech playback completed ({safeText.Length} characters).");
+			return result;
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException)
+		{
+			logger.Error("Text to speech failed.", ex);
+			throw;
+		}
+		finally
+		{
+			speechGate.Release();
+		}
 	}
 
 	protected override CreateParams CreateParams
@@ -684,6 +803,7 @@ internal sealed class CalculatorForm : Form
 		try { grindMarketPriceProvider.Dispose(); } catch { }
 		try { couponService.Dispose(); } catch { }
 		try { eventService.Dispose(); } catch { }
+		try { bossScheduleService.Dispose(); } catch { }
 		try { updateCheckerService.Dispose(); } catch { }
 		TrySetTrayVisible(false);
 		try { trayIcon.Dispose(); } catch { }
@@ -693,6 +813,7 @@ internal sealed class CalculatorForm : Form
 		try { appIcon.Dispose(); } catch { }
 		try { backgroundNotificationTimer?.Stop(); } catch { }
 		try { backgroundNotificationTimer?.Dispose(); } catch { }
+		try { StopAlarmSound(); } catch { }
 		DisposeEventsBrowser();
 		lock (grindIconCacheSync)
 		{
@@ -1149,6 +1270,10 @@ internal sealed class CalculatorForm : Form
 		{
 			logger.Warn("Background notification tick was skipped: " + ex.Message);
 		}
+		catch (Exception ex)
+		{
+			logger.Error("Background notification tick failed.", ex);
+		}
 		finally
 		{
 			Volatile.Write(ref backgroundNotificationTickActive, 0);
@@ -1263,6 +1388,7 @@ internal sealed class CalculatorForm : Form
 			"selectGrindLootImage" or "scanGrindLootImage" => TimeSpan.FromMinutes(2),
 			"downloadAndInstallUpdate" => TimeSpan.FromMinutes(10),
 			"refreshEvents" or "initializeEvents" => TimeSpan.FromSeconds(105),
+			"refreshBossSchedule" => TimeSpan.FromSeconds(20),
 			_ => TimeSpan.FromSeconds(45)
 		};
 	}
@@ -1321,6 +1447,10 @@ internal sealed class CalculatorForm : Form
 			return await LoadEventsWithBrowserFallbackAsync(forceRefresh: false, cancellationToken);
 		case "refreshEvents":
 			return await LoadEventsWithBrowserFallbackAsync(forceRefresh: true, cancellationToken);
+		case "initializeBossSchedule":
+			return await bossScheduleService.InitializeAsync(cancellationToken);
+		case "refreshBossSchedule":
+			return await bossScheduleService.RefreshAsync(cancellationToken);
 		case "getAppVersion":
 			return new { version = AppVersion.Current };
 		case "loadGrindSessions":
@@ -1373,8 +1503,7 @@ internal sealed class CalculatorForm : Form
 			return new { shown = true };
 		}
 		case "playAlarmSound":
-			PlayAlarmSound();
-			return new { played = true };
+			return PlayAlarmSound();
 		case "selectGrindLootImage":
 			return await SelectGrindLootImageAsync(payload, cancellationToken);
 		case "scanGrindLootImage":
@@ -1384,8 +1513,7 @@ internal sealed class CalculatorForm : Form
 			string text = payload.TryGetProperty("text", out JsonElement textValue)
 				? textValue.GetString() ?? string.Empty
 				: string.Empty;
-			SpeakText(text);
-			return new { spoken = true };
+			return await SpeakTextAsync(text, cancellationToken);
 		}
 		case "getGrindMarketPrices":
 		{
