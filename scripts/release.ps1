@@ -99,6 +99,58 @@ function Replace-Text {
 	)
 }
 
+function Resolve-BdoAlertsReleaseCredential {
+	$variableName = "BLACK_SPIRIT_HUB_BDOALERTS_API_KEY"
+	$value = [Environment]::GetEnvironmentVariable($variableName, "Process")
+	if ([string]::IsNullOrWhiteSpace($value)) {
+		$value = [Environment]::GetEnvironmentVariable($variableName, "User")
+	}
+	$value = if ($null -eq $value) { "" } else { $value.Trim() }
+	if ($value -notmatch '^bdo_[A-Za-z0-9]{20,128}$') {
+		throw "A valid local BDO Alerts release credential is required. Configure it outside the repository before publishing."
+	}
+
+	[Environment]::SetEnvironmentVariable($variableName, $value, "Process")
+	return $value
+}
+
+function Assert-CredentialNotTracked {
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$RepoRoot,
+
+		[Parameter(Mandatory = $true)]
+		[string]$GitPath,
+
+		[Parameter(Mandatory = $true)]
+		[string]$Credential
+	)
+
+	$trackedFiles = & $GitPath -C $RepoRoot ls-files
+	if ($LASTEXITCODE -ne 0) {
+		throw "Could not inspect tracked files before release."
+	}
+
+	foreach ($relativePath in $trackedFiles) {
+		$path = Join-Path $RepoRoot $relativePath
+		if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
+			continue
+		}
+		$item = Get-Item -LiteralPath $path
+		if ($item.Length -gt 4MB) {
+			continue
+		}
+		try {
+			$text = [System.IO.File]::ReadAllText($path)
+			if ($text.IndexOf($Credential, [StringComparison]::Ordinal) -ge 0) {
+				throw "Release stopped because the BDO Alerts credential appears in a tracked source file."
+			}
+		}
+		catch [System.Text.DecoderFallbackException] {
+		}
+	}
+}
+
 function Assert-RunsWithoutDotnetRuntime {
 	param(
 		[Parameter(Mandatory = $true)]
@@ -211,6 +263,12 @@ $git = Resolve-ToolPath "git" @("$env:LOCALAPPDATA\GitHubDesktop\app-*\resources
 $gh = Resolve-ToolPath "gh" @("$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\gh.exe")
 
 Set-Location $repoRoot
+
+$bdoAlertsReleaseCredential = Resolve-BdoAlertsReleaseCredential
+Assert-CredentialNotTracked `
+	-RepoRoot $repoRoot `
+	-GitPath $git `
+	-Credential $bdoAlertsReleaseCredential
 
 Write-Host "Preparing Black Spirit Hub $versionTag"
 

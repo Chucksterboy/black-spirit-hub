@@ -43,6 +43,9 @@ const extractedCode = [
     /const HOME_DAYS = \[[^\r\n]+\];/,
     "the weekly day manifest"),
   requireMatch(
+    /const HOME_DAY_INDEX = \{[^\r\n]+\};/,
+    "the weekly day index"),
+  requireMatch(
     /const BUNDLED_HOME_BOSSES = \[[^\r\n]+\];/,
     "the bundled boss color manifest"),
   requireMatch(
@@ -53,15 +56,32 @@ const extractedCode = [
   extractFunction("zonedParts", "zonedOffsetMs"),
   extractFunction("zonedOffsetMs", "zonedTimeToDate"),
   extractFunction("zonedTimeToDate", "serverWeekMondayUtc"),
+  extractFunction("serverWeekMondayUtc", "serverDateFor"),
+  extractFunction("bossSpawnKey", "localScheduleContext"),
+  extractFunction("localScheduleContext", "bossScheduleMaterializationKey"),
+  extractFunction("bossScheduleMaterializationKey", "localDayName"),
   extractFunction("normalizeBossScheduleDashboard", "applyBossScheduleDashboard"),
-  "globalThis.bossScheduleTest = { bossEventColor, zonedTimeToDate, normalizeBossScheduleDashboard };"
+  "let homeBossScheduleState = { contentHash: 'test-content' };",
+  "let bossScheduleRenderState = { materializationKey: '', nextSpawnKey: '' };",
+  "let bossScheduleRenderCount = 0;",
+  "function renderBossSchedule(settings, now, next, context) { bossScheduleRenderCount += 1; bossScheduleRenderState = { materializationKey: bossScheduleMaterializationKey(settings, now, next, context), nextSpawnKey: bossSpawnKey(next) }; return true; }",
+  extractFunction("refreshBossScheduleIfNeeded", "renderBossToggles"),
+  "globalThis.bossScheduleTest = { bossEventColor, zonedTimeToDate, normalizeBossScheduleDashboard, bossSpawnKey, localScheduleContext, bossScheduleMaterializationKey, refreshBossScheduleIfNeeded, getBossScheduleRenderCount: () => bossScheduleRenderCount };"
 ].join("\n");
 
 const context = {};
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 
-const { bossEventColor, zonedTimeToDate, normalizeBossScheduleDashboard } = context.bossScheduleTest;
+const {
+  bossEventColor,
+  zonedTimeToDate,
+  normalizeBossScheduleDashboard,
+  bossSpawnKey,
+  bossScheduleMaterializationKey,
+  refreshBossScheduleIfNeeded,
+  getBossScheduleRenderCount
+} = context.bossScheduleTest;
 const days = [
   "Monday",
   "Tuesday",
@@ -112,6 +132,71 @@ if (!appScript.includes("function renderBossName(name)")
   || !appCss.includes(".bossName.boss-event")
   || !appCss.includes("--boss-event-color")) {
   throw new Error("The dynamic event-boss palette is no longer connected to schedule rendering and styling.");
+}
+if (!appScript.includes("refreshBossScheduleIfNeeded(settings,now,next)")
+  || !appScript.includes("bossScheduleRenderState={materializationKey:\"\",nextSpawnKey:\"\"}")
+  || !appScript.includes("cell.spawnKeys.has(nextKey)")) {
+  throw new Error("The active boss-cell refresh is no longer wired into the one-second Home timer path.");
+}
+if (!appScript.includes('title="${escapeHtml(name)}"')
+  || !appCss.includes("#homeView .bossScheduleCell>.bossName")
+  || !appCss.includes("overflow-wrap:anywhere")
+  || !appCss.includes("-webkit-line-clamp:3")) {
+  throw new Error("Long future boss names must remain contained and discoverable in fixed-width schedule cells.");
+}
+
+const nextA = {
+  date: new Date("2026-07-30T12:00:00.000Z"),
+  serverDay: "Thursday",
+  serverTime: "14:00",
+  bosses: ["Garmoth"]
+};
+const nextB = {
+  date: new Date("2026-07-30T14:00:00.000Z"),
+  serverDay: "Thursday",
+  serverTime: "16:00",
+  bosses: ["Sangoon", "Karanda"]
+};
+if (bossSpawnKey(nextA) === bossSpawnKey(nextB)
+  || bossSpawnKey(nextA) !== bossSpawnKey({ ...nextA })
+  || bossSpawnKey(null) !== "none") {
+  throw new Error("Next-spawn identity must be stable between ticks and change when the highlighted spawn changes.");
+}
+
+const serverSettings = { timeFormat: "12", showLocalTime: false };
+const localSettings = { timeFormat: "12", showLocalTime: true };
+const renderNow = new Date("2026-07-30T09:00:00.000Z");
+const baseContext = {
+  serverWeekMondayUtc: Date.UTC(2026, 6, 27),
+  timeZone: "Europe/Vienna",
+  localOffsetMinutes: -120,
+  serverOffsetMinutes: 120
+};
+const baseLocalKey = bossScheduleMaterializationKey(localSettings, renderNow, nextA, baseContext);
+const changedContexts = [
+  { ...baseContext, serverWeekMondayUtc: Date.UTC(2026, 7, 3) },
+  { ...baseContext, timeZone: "Europe/London" },
+  { ...baseContext, localOffsetMinutes: -60 },
+  { ...baseContext, serverOffsetMinutes: 60 }
+];
+if (changedContexts.some(value =>
+  bossScheduleMaterializationKey(localSettings, renderNow, nextA, value) === baseLocalKey)) {
+  throw new Error("Local schedule materialization must refresh across week, timezone, and DST offset boundaries.");
+}
+const baseServerKey = bossScheduleMaterializationKey(serverSettings, renderNow, nextA, baseContext);
+if (changedContexts.some(value =>
+  bossScheduleMaterializationKey(serverSettings, renderNow, nextA, value) !== baseServerKey)) {
+  throw new Error("Local timezone context must not force unnecessary server-time table rerenders.");
+}
+if (!refreshBossScheduleIfNeeded(localSettings, renderNow, nextA, baseContext)
+  || getBossScheduleRenderCount() !== 1
+  || refreshBossScheduleIfNeeded(localSettings, new Date(renderNow.getTime() + 1000), nextA, baseContext)
+  || getBossScheduleRenderCount() !== 1
+  || !refreshBossScheduleIfNeeded(localSettings, renderNow, nextB, baseContext)
+  || getBossScheduleRenderCount() !== 2
+  || !refreshBossScheduleIfNeeded(localSettings, renderNow, nextB, changedContexts[2])
+  || getBossScheduleRenderCount() !== 3) {
+  throw new Error("The schedule must rerender only when the next spawn or Local-time materialization context changes.");
 }
 
 const springGap = zonedTimeToDate("Europe/Berlin", 2026, 3, 29, 2, 0);

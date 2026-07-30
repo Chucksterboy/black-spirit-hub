@@ -40,8 +40,53 @@ internal static class Program
 			using CouponService service = new CouponService(testPaths, testLogger);
 			JsonElement dashboard = JsonSerializer.SerializeToElement(service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult());
 			JsonElement refresh = JsonSerializer.SerializeToElement(service.RefreshAsync(CancellationToken.None).GetAwaiter().GetResult());
+			string smokeMessage = refresh.TryGetProperty("message", out JsonElement messageValue)
+				? messageValue.GetString() ?? "" : "";
+			string smokeFailure = refresh.TryGetProperty("refreshDebug", out JsonElement debugValue)
+				&& debugValue.ValueKind == JsonValueKind.Object
+				&& debugValue.TryGetProperty("failureReason", out JsonElement failureValue)
+					? failureValue.GetString() ?? ""
+					: "";
+			Console.WriteLine(
+				$"Coupon smoke: status={refresh.GetProperty("status").GetString()}, "
+				+ $"count={refresh.GetProperty("coupons").GetArrayLength()}, "
+				+ $"message={smokeMessage}, "
+				+ $"failure={smokeFailure}");
 			using JsonDocument refreshedCache = JsonDocument.Parse(File.ReadAllText(testPaths.CouponsCachePath));
 			int cachedCouponCount = refreshedCache.RootElement.GetProperty("coupons").GetArrayLength();
+			string[] refreshedCodes = refresh
+				.GetProperty("coupons")
+				.EnumerateArray()
+				.Select(coupon =>
+				{
+					JsonElement code = coupon.TryGetProperty(
+						"code",
+						out JsonElement camelCaseCode)
+							? camelCaseCode
+							: coupon.GetProperty("Code");
+					return CouponService.CanonicalCouponCode(
+						code.GetString() ?? "");
+				})
+				.Where(code => code.Length > 0)
+				.ToArray();
+			HashSet<string> validatedCacheCodes = refreshedCache.RootElement
+				.GetProperty("naEuCouponCodes")
+				.EnumerateArray()
+				.Select(code => CouponService.CanonicalCouponCode(
+					code.GetString() ?? ""))
+				.Where(code => code.Length > 0)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			JsonElement liveDebug = refresh.GetProperty("refreshDebug");
+			JsonElement liveHttpStatus = liveDebug.TryGetProperty(
+				"httpStatus",
+				out JsonElement camelCaseHttpStatus)
+					? camelCaseHttpStatus
+					: liveDebug.GetProperty("HttpStatus");
+			JsonElement liveSourceUrl = liveDebug.TryGetProperty(
+				"sourceUrl",
+				out JsonElement camelCaseSourceUrl)
+					? camelCaseSourceUrl
+					: liveDebug.GetProperty("SourceUrl");
 			int result = dashboard.GetProperty("coupons").GetArrayLength() >= 3
 				&& dashboard.GetProperty("availableCount").GetInt32() >= 1
 				&& File.Exists(testPaths.CouponsCachePath)
@@ -49,7 +94,17 @@ internal static class Program
 				&& refresh.TryGetProperty("lastAttempt", out _)
 				&& refresh.TryGetProperty("refreshDebug", out _)
 				&& refresh.GetProperty("status").GetString() == "LIVE"
+				&& liveHttpStatus.GetInt32() is >= 200 and < 300
+				&& (liveSourceUrl.GetString() ?? "")
+					.Contains(
+						"api.bdoalerts.net/api/coupons",
+						StringComparison.OrdinalIgnoreCase)
+				&& refresh.GetProperty("regionScope").GetString() == "NA / EU"
 				&& refresh.GetProperty("coupons").GetArrayLength() == cachedCouponCount
+				&& refreshedCodes.Length == refreshedCodes
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.Count()
+				&& refreshedCodes.All(validatedCacheCodes.Contains)
 				&& cachedCouponCount >= 1 ? 0 : 41;
 			try { Directory.Delete(root, true); } catch { }
 			Environment.Exit(result);
@@ -912,6 +967,7 @@ internal static class Program
 				{
 				  "coupons": [
 				    { "code": "TYALLADVENTURERS", "is_expired": false },
+				    { "code": " tyal-ladv-entu-rers ", "is_expired": false },
 				    { "code": "BLACKDESERT2026", "is_expired": false },
 				    { "code": "PEARLABYSSGIFT", "is_expired": false },
 				    { "code": "WINDOWSREWARD26", "is_expired": false },
@@ -921,7 +977,16 @@ internal static class Program
 				    { "code": "UPDATEHISTORY26", "is_expired": false },
 				    { "code": "DOWNLOADGAME26", "is_expired": false },
 				    { "code": "1234567890123456", "is_expired": false },
-				    { "code": "ADVENTURER", "is_expired": false }
+				    { "code": "ADVENTURER", "is_expired": false },
+				    { "code": "EUONLY", "region": "EU", "platform": "PC", "is_expired": false },
+				    { "code": "GLOBALPC", "regions": ["global"], "platform": "PC", "is_expired": false },
+				    { "code": "MIXEDREGION", "regions": ["KR", "NA"], "platform": "Both", "is_expired": false },
+				    { "code": "LEGACYPC", "description": "PC", "is_expired": false },
+				    { "code": "KRONLY", "region": "KR", "platform": "PC", "is_expired": false },
+				    { "code": "CONSOLENA", "region": "NA", "platform": "Console", "is_expired": false },
+				    { "code": "UNKNOWNREGION", "region": "Moon", "platform": "PC", "is_expired": false },
+				    { "code": "DESCRIPTIONCONSOLE", "region": "EU", "description": "Console", "is_expired": false },
+				    { "code": "DESCRIPTIONCONSOLEPHRASE", "region": "NA", "description": "Console only", "is_expired": false }
 				  ]
 				}
 				""";
@@ -937,24 +1002,111 @@ internal static class Program
 				"UPDATEHISTORY26",
 				"DOWNLOADGAME26",
 				"1234567890123456",
-				"ADVENTURER"
+				"ADVENTURER",
+				"EUONLY",
+				"GLOBALPC",
+				"MIXEDREGION",
+				"LEGACYPC"
 			];
+			string[] expectedCanonicalCouponCodes = expectedCouponCodes
+				.Select(CouponService.CanonicalCouponCode)
+				.ToArray();
 			List<CouponEntry> parsedCoupons = CouponService.ParseBdoAlertsResponse(couponFeedJson);
 			if (parsedCoupons.Count != expectedCouponCodes.Length
-				|| !parsedCoupons.Select(coupon => coupon.Code).SequenceEqual(expectedCouponCodes))
+				|| !parsedCoupons
+					.Select(coupon => CouponService.CanonicalCouponCode(coupon.Code))
+					.SequenceEqual(expectedCanonicalCouponCodes)
+				|| parsedCoupons
+					.Select(coupon => CouponService.CanonicalCouponCode(coupon.Code))
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.Count() != parsedCoupons.Count)
 			{
-				return 63;
+				return 95;
+			}
+			HashSet<string> validatedNaEuCouponKeys =
+			[
+				CouponService.CanonicalCouponCode("TYALLADVENTURERS"),
+				CouponService.CanonicalCouponCode("BLACKDESERT2026")
+			];
+			HashSet<string> expectedStrictNaEuCodes = new(
+				[
+					"TYALLADVENTURERS",
+					"BLACKDESERT2026",
+					"EUONLY",
+					"GLOBALPC",
+					"MIXEDREGION"
+				],
+				StringComparer.OrdinalIgnoreCase);
+			HashSet<string> strictNaEuCodes = CouponService
+				.ParseBdoAlertsResponse(
+					couponFeedJson,
+					validatedNaEuCouponKeys)
+				.Select(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code))
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			if (!strictNaEuCodes.SetEquals(expectedStrictNaEuCodes))
+			{
+				return 94;
 			}
 
 			JsonSerializerOptions couponJsonOptions = new()
 			{
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 			};
+			CouponEntry trustedLegacyCoupon = parsedCoupons.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code)
+					== "TYALLADVENTURERS");
+			CouponEntry foreignLegacyCoupon = trustedLegacyCoupon with
+			{
+				Code = "KR-ONLY-LEGACY"
+			};
+			CouponCache legacyCache = new(
+				DateTimeOffset.UtcNow,
+				"Legacy cache regression",
+				[trustedLegacyCoupon, foreignLegacyCoupon],
+				null);
+			await File.WriteAllTextAsync(
+				statePaths.CouponsCachePath,
+				JsonSerializer.Serialize(legacyCache, couponJsonOptions),
+				CancellationToken.None);
+			using (CouponService legacyCouponService = new(statePaths, logger))
+			{
+				JsonElement migratedDashboard = JsonSerializer.SerializeToElement(
+					await legacyCouponService.InitializeAsync(CancellationToken.None),
+					couponJsonOptions);
+				string[] migratedCodes = migratedDashboard
+					.GetProperty("coupons")
+					.EnumerateArray()
+					.Select(coupon => CouponService.CanonicalCouponCode(
+						coupon.GetProperty("code").GetString() ?? ""))
+					.ToArray();
+				using JsonDocument migratedCache = JsonDocument.Parse(
+					await File.ReadAllTextAsync(
+						statePaths.CouponsCachePath,
+						CancellationToken.None));
+				string[] migratedVerifiedCodes = migratedCache.RootElement
+					.GetProperty("naEuCouponCodes")
+					.EnumerateArray()
+					.Select(code => CouponService.CanonicalCouponCode(
+						code.GetString() ?? ""))
+					.ToArray();
+				if (!migratedCodes.SequenceEqual(
+						["TYALLADVENTURERS"],
+						StringComparer.OrdinalIgnoreCase)
+					|| !migratedVerifiedCodes.SequenceEqual(
+						["TYALLADVENTURERS"],
+						StringComparer.OrdinalIgnoreCase))
+				{
+					return 97;
+				}
+			}
+
 			CouponCache passThroughCache = new(
 				DateTimeOffset.UtcNow,
 				"Structured feed regression",
 				parsedCoupons,
-				null);
+				null,
+				expectedCanonicalCouponCodes.ToList());
 			await File.WriteAllTextAsync(
 				statePaths.CouponsCachePath,
 				JsonSerializer.Serialize(passThroughCache, couponJsonOptions),
@@ -967,12 +1119,14 @@ internal static class Program
 				string[] dashboardCodes = couponDashboard
 					.GetProperty("coupons")
 					.EnumerateArray()
-					.Select(coupon => coupon.GetProperty("code").GetString() ?? "")
+					.Select(coupon => CouponService.CanonicalCouponCode(
+						coupon.GetProperty("code").GetString() ?? ""))
 					.ToArray();
-				if (!dashboardCodes.SequenceEqual(expectedCouponCodes, StringComparer.OrdinalIgnoreCase)
+				if (!dashboardCodes.SequenceEqual(expectedCanonicalCouponCodes, StringComparer.OrdinalIgnoreCase)
 					|| couponDashboard.GetProperty("totalCount").GetInt32() != expectedCouponCodes.Length
 					|| couponDashboard.GetProperty("availableCount").GetInt32() != expectedCouponCodes.Length - 1
-					|| couponDashboard.GetProperty("expiredCount").GetInt32() != 1)
+					|| couponDashboard.GetProperty("expiredCount").GetInt32() != 1
+					|| couponDashboard.GetProperty("regionScope").GetString() != "NA / EU")
 				{
 					return 64;
 				}
@@ -1014,6 +1168,25 @@ internal static class Program
 				|| !officialCouponCodes.SetEquals(expectedOfficialCouponCodes))
 			{
 				return 65;
+			}
+			List<CouponEntry> mergedDuplicateCoupon = CouponService.MergeCouponSources(
+				CouponService.ParseOfficialCouponPage(officialCouponSample)
+					.Where(coupon =>
+						CouponService.CanonicalCouponCode(coupon.Code)
+							== "TYALLADVENTURERS"),
+				parsedCoupons.Where(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code)
+						== "TYALLADVENTURERS"));
+			if (mergedDuplicateCoupon.Count != 1
+				|| CouponService.CanonicalCouponCode(
+					mergedDuplicateCoupon[0].Code) != "TYALLADVENTURERS"
+				|| mergedDuplicateCoupon[0].Source
+					!= "Official BDO + BDO Alerts"
+				|| mergedDuplicateCoupon[0].Rewards.Count != 1
+				|| mergedDuplicateCoupon[0].Rewards[0].ItemName
+					!= "Reward details available on BDO Alerts")
+			{
+				return 96;
 			}
 
 			const string bossScheduleFixture = """
@@ -1066,16 +1239,14 @@ internal static class Program
 				return 82;
 			}
 
-			using (HttpRequestMessage authorizedScheduleRequest =
+			using (HttpRequestMessage unconfiguredScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
 					new Uri(BossScheduleService.DefaultSourceUrl),
-					apiKey: null,
-					useAuthorizedWebsiteHeaders: true))
+					apiKey: null))
 			{
-				if (authorizedScheduleRequest.Headers.Referrer?.AbsoluteUri
-						!= BossScheduleService.AuthorizedWebsiteSchedulePage
-					|| !authorizedScheduleRequest.Headers.TryGetValues("Origin", out IEnumerable<string>? origins)
-					|| !origins.SequenceEqual([BossScheduleService.AuthorizedWebsiteOrigin]))
+				if (unconfiguredScheduleRequest.Headers.Contains("X-API-Key")
+					|| unconfiguredScheduleRequest.Headers.Referrer is not null
+					|| unconfiguredScheduleRequest.Headers.Contains("Origin"))
 				{
 					return 88;
 				}
@@ -1084,11 +1255,10 @@ internal static class Program
 			using (HttpRequestMessage apiKeyScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
 					new Uri(BossScheduleService.DefaultSourceUrl),
-					apiKey: "test-key",
-					useAuthorizedWebsiteHeaders: true))
+					apiKey: "bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 			{
 				if (!apiKeyScheduleRequest.Headers.TryGetValues("X-API-Key", out IEnumerable<string>? apiKeys)
-					|| !apiKeys.SequenceEqual(["test-key"])
+					|| !apiKeys.SequenceEqual(["bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"])
 					|| apiKeyScheduleRequest.Headers.Referrer is not null
 					|| apiKeyScheduleRequest.Headers.Contains("Origin"))
 				{
@@ -1099,14 +1269,29 @@ internal static class Program
 			using (HttpRequestMessage untrustedScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
 					new Uri("https://example.com/schedule"),
-					apiKey: "must-not-leak",
-					useAuthorizedWebsiteHeaders: true))
+					apiKey: "bdo_MUSTNOTLEAKABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 			{
 				if (untrustedScheduleRequest.Headers.Contains("X-API-Key")
 					|| untrustedScheduleRequest.Headers.Referrer is not null
 					|| untrustedScheduleRequest.Headers.Contains("Origin"))
 				{
 					return 92;
+				}
+			}
+
+			using (HttpRequestMessage apiKeyCouponRequest =
+				new(HttpMethod.Get, "https://api.bdoalerts.net/api/coupons"))
+			{
+				if (!BdoAlertsApiCredentials.TryApply(
+						apiKeyCouponRequest,
+						apiKeyCouponRequest.RequestUri!,
+						"bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+					|| !apiKeyCouponRequest.Headers.TryGetValues(
+						"X-API-Key",
+						out IEnumerable<string>? couponApiKeys)
+					|| !couponApiKeys.SequenceEqual(["bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"]))
+				{
+					return 93;
 				}
 			}
 

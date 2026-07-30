@@ -727,6 +727,12 @@ if (!(Test-Path -LiteralPath $bossScheduleSourcePath -PathType Leaf)) {
 	throw "The cached boss schedule service is missing."
 }
 $bossScheduleSource = Get-Content -LiteralPath $bossScheduleSourcePath -Raw
+$bdoAlertsCredentialsSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BdoAlertsApiCredentials.cs"
+if (!(Test-Path -LiteralPath $bdoAlertsCredentialsSourcePath -PathType Leaf)) {
+	throw "The shared BDO Alerts credential guard is missing."
+}
+$bdoAlertsCredentialsSource = Get-Content -LiteralPath $bdoAlertsCredentialsSourcePath -Raw
+$couponSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CouponService.cs") -Raw
 $installerSource = Get-Content -LiteralPath $nativeInstallerSourcePath -Raw
 $nativeInstallerBuildScript = Get-Content -LiteralPath $nativeInstallerBuildScriptPath -Raw
 $bossScheduleRefreshCallCount = [regex]::Matches($script, 'bridgeCall\("refreshBossSchedule"\)').Count
@@ -747,19 +753,43 @@ if ($calculatorSource -notmatch 'mciGetErrorString' -or
 	throw "Native Alarm.mp3 or TTS playback lost its completion and error-reporting safeguards."
 }
 if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
-	$bossScheduleSource -notmatch 'BLACK_SPIRIT_HUB_BDOALERTS_API_KEY' -or
 	$bossScheduleSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
 	$bossScheduleSource -notmatch 'Europe/Berlin' -or
 	$bossScheduleSource -notmatch 'MinimumWeeklySlots' -or
-	$bossScheduleSource -notmatch 'Temporary compatibility access explicitly approved by the BDO Alerts owner' -or
-	$bossScheduleSource -notmatch 'Headers\.Referrer = new Uri\(AuthorizedWebsiteSchedulePage\)' -or
-	$bossScheduleSource -notmatch 'TryAddWithoutValidation\("Origin", AuthorizedWebsiteOrigin\)' -or
+	$bossScheduleSource -notmatch 'BdoAlertsApiCredentials\.Resolve\(\)' -or
+	$bossScheduleSource -notmatch 'BdoAlertsApiCredentials\.TryApply\(request, source, apiKey\)' -or
 	$bossScheduleSource -notmatch 'IsBdoAlertsScheduleEndpoint\(source\)' -or
 	$bossScheduleSource -notmatch 'AllowAutoRedirect = false' -or
 	$bossScheduleSource -notmatch 'startupRefreshAttempted' -or
 	$bossScheduleSource -notmatch 'RefreshOnceAsync' -or
 	$bossScheduleSource -notmatch 'normalizedSlots\.Count\(slot => slot\.Bosses\.Count > 0\)') {
-	throw "Boss schedule synchronization lost its approved-access, validation, cache, or timezone safeguards."
+	throw "Boss schedule synchronization lost its authenticated-access, validation, cache, or timezone safeguards."
+}
+if ($bdoAlertsCredentialsSource -notmatch 'BLACK_SPIRIT_HUB_BDOALERTS_API_KEY' -or
+	$bdoAlertsCredentialsSource -notmatch 'AssemblyMetadataKey = "BdoAlertsApiKey"' -or
+	$bdoAlertsCredentialsSource -notmatch 'TryAddWithoutValidation\("X-API-Key", resolved\)' -or
+	$bdoAlertsCredentialsSource -notmatch '/api/boss-schedule/eu' -or
+	$bdoAlertsCredentialsSource -notmatch '/api/coupons' -or
+	$bdoAlertsCredentialsSource -notmatch 'endpoint\.Query\.Length != 0' -or
+	$bdoAlertsCredentialsSource -notmatch 'endpoint\.Fragment\.Length != 0') {
+	throw "The BDO Alerts credential resolver can leak credentials or no longer covers the required endpoints."
+}
+if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
+	$couponSource -notmatch 'AllowAutoRedirect = false' -or
+	$couponSource -notmatch 'bdoAlertsHttp\.SendAsync' -or
+	$couponSource -notmatch 'CanonicalCouponCode' -or
+	$couponSource -notmatch 'CouponAppliesToNaEu' -or
+	$couponSource -notmatch 'validatedNaEuCouponKeys' -or
+	$couponSource -notmatch 'NaEuCouponCodes' -or
+	$couponSource -notmatch 'ValidatedCachedCoupons' -or
+	$couponSource -notmatch 'TrustedBootstrapNaEuCouponCodes' -or
+	$couponSource -notmatch 'regionScope = "NA / EU"' -or
+	$script -notmatch 'function couponCodeKey\(code\)' -or
+	$html -notmatch 'id="couponRegionBadge"' -or
+	$css -notmatch '\.couponRegionBadge' -or
+	$couponSource -match 'DefaultRequestHeaders\.Referrer\s*=\s*new Uri\("https://bdoalerts\.net' -or
+	$couponSource -match 'DefaultRequestHeaders\.TryAddWithoutValidation\("Origin",\s*"https://bdoalerts\.net') {
+	throw "Coupon refresh lost its authenticated access, canonical deduplication, or NA/EU eligibility safeguards."
 }
 if ($script -notmatch 'let homeBossScheduleState=' -or
 	$script -notmatch 'normalizeBossScheduleDashboard' -or

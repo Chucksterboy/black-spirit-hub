@@ -38,4 +38,21 @@
       <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
     </ItemGroup>
   </Target>
+  <Target
+    Name="GenerateBdoAlertsApiKeyMetadata"
+    BeforeTargets="CoreCompile"
+    Condition="'$(BLACK_SPIRIT_HUB_BDOALERTS_API_KEY)' != ''">
+    <ItemGroup>
+      <BdoAlertsAssemblyMetadata Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BdoAlertsApiKey</_Parameter1>
+        <_Parameter2>$(BLACK_SPIRIT_HUB_BDOALERTS_API_KEY)</_Parameter2>
+      </BdoAlertsAssemblyMetadata>
+    </ItemGroup>
+    <WriteCodeFragment
+      Language="C#"
+      OutputFile="$(IntermediateOutputPath)BlackSpiritHub.BdoAlertsApiKey.g.cs"
+      AssemblyAttributes="@(BdoAlertsAssemblyMetadata)">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+    </WriteCodeFragment>
+  </Target>
 </Project>

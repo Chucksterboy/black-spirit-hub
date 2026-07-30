@@ -15,3 +15,12 @@ Installer/
 Black Spirit Hub/App Files/
 artifacts/
 preview-artifacts/
+
+# Local credentials and developer-only configuration
+.env
+.env.*
+!.env.example
+*.key
+*.secrets.*
+secrets*.json
+Directory.Build.local.props

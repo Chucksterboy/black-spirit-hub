@@ -29,10 +29,7 @@ internal sealed record BossScheduleSnapshot(
 internal sealed class BossScheduleService : IDisposable
 {
 	internal const string DefaultSourceUrl = "https://api.bdoalerts.net/api/boss-schedule/eu";
-	internal const string ApiKeyEnvironmentVariable = "BLACK_SPIRIT_HUB_BDOALERTS_API_KEY";
 	internal const string SourceUrlEnvironmentVariable = "BLACK_SPIRIT_HUB_BOSS_SCHEDULE_URL";
-	internal const string AuthorizedWebsiteOrigin = "https://bdoalerts.net";
-	internal const string AuthorizedWebsiteSchedulePage = "https://bdoalerts.net/timers/";
 
 	private const int CurrentSchemaVersion = 1;
 	private const int MaxResponseBytes = 512 * 1024;
@@ -91,7 +88,7 @@ internal sealed class BossScheduleService : IDisposable
 	public async Task<object> InitializeAsync(CancellationToken cancellationToken)
 	{
 		BossScheduleSnapshot? cached = await ReadValidCacheAsync(cancellationToken);
-		bool accessConfigured = TryResolveSource(out _, out _, out _, out string? accessMessage);
+		bool accessConfigured = TryResolveSource(out _, out _, out string? accessMessage);
 		return BuildDashboard(
 			cached,
 			cached is null ? "BUNDLED" : "CACHED",
@@ -136,7 +133,6 @@ internal sealed class BossScheduleService : IDisposable
 		if (!TryResolveSource(
 				out Uri? source,
 				out string? apiKey,
-				out bool useAuthorizedWebsiteHeaders,
 				out string? accessMessage))
 		{
 			logger.Warn("Boss schedule refresh skipped: " + accessMessage);
@@ -152,8 +148,7 @@ internal sealed class BossScheduleService : IDisposable
 			logger.Info($"Boss schedule refresh started from {source!.Host}.");
 			using HttpRequestMessage request = CreateRequest(
 				source!,
-				apiKey,
-				useAuthorizedWebsiteHeaders);
+				apiKey);
 
 			using HttpResponseMessage response = await http.SendAsync(
 				request,
@@ -219,34 +214,17 @@ internal sealed class BossScheduleService : IDisposable
 
 	internal static HttpRequestMessage CreateRequestForTest(
 		Uri source,
-		string? apiKey,
-		bool useAuthorizedWebsiteHeaders)
+		string? apiKey)
 	{
-		return CreateRequest(source, apiKey, useAuthorizedWebsiteHeaders);
+		return CreateRequest(source, apiKey);
 	}
 
 	private static HttpRequestMessage CreateRequest(
 		Uri source,
-		string? apiKey,
-		bool useAuthorizedWebsiteHeaders)
+		string? apiKey)
 	{
 		HttpRequestMessage request = new(HttpMethod.Get, source);
-		if (!string.IsNullOrWhiteSpace(apiKey)
-			&& IsBdoAlertsScheduleEndpoint(source))
-		{
-			request.Headers.TryAddWithoutValidation("X-API-Key", apiKey);
-			return request;
-		}
-
-		if (useAuthorizedWebsiteHeaders
-			&& IsBdoAlertsScheduleEndpoint(source))
-		{
-			// Temporary compatibility access explicitly approved by the BDO Alerts owner.
-			// Remove these headers once the application's API key is issued.
-			request.Headers.Referrer = new Uri(AuthorizedWebsiteSchedulePage);
-			request.Headers.TryAddWithoutValidation("Origin", AuthorizedWebsiteOrigin);
-		}
-
+		BdoAlertsApiCredentials.TryApply(request, source, apiKey);
 		return request;
 	}
 
@@ -503,12 +481,10 @@ internal sealed class BossScheduleService : IDisposable
 	private static bool TryResolveSource(
 		out Uri? source,
 		out string? apiKey,
-		out bool useAuthorizedWebsiteHeaders,
 		out string? message)
 	{
 		string configuredUrl = Environment.GetEnvironmentVariable(SourceUrlEnvironmentVariable)?.Trim() ?? string.Empty;
 		string sourceUrl = configuredUrl.Length == 0 ? DefaultSourceUrl : configuredUrl;
-		useAuthorizedWebsiteHeaders = false;
 		if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out source)
 			|| source.Scheme != Uri.UriSchemeHttps)
 		{
@@ -517,7 +493,6 @@ internal sealed class BossScheduleService : IDisposable
 			return false;
 		}
 
-		string? configuredApiKey = Environment.GetEnvironmentVariable(ApiKeyEnvironmentVariable)?.Trim();
 		bool isBdoAlertsHost = source.Host.Equals(
 			"api.bdoalerts.net",
 			StringComparison.OrdinalIgnoreCase);
@@ -529,10 +504,13 @@ internal sealed class BossScheduleService : IDisposable
 			return false;
 		}
 
-		apiKey = isBdoAlertsScheduleEndpoint ? configuredApiKey : null;
+		apiKey = isBdoAlertsScheduleEndpoint
+			? BdoAlertsApiCredentials.Resolve()
+			: null;
 		if (isBdoAlertsScheduleEndpoint && string.IsNullOrWhiteSpace(apiKey))
 		{
-			useAuthorizedWebsiteHeaders = true;
+			message = "Boss schedule sync requires configured BDO Alerts API access.";
+			return false;
 		}
 
 		message = null;
