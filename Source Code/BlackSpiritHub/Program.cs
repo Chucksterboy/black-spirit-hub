@@ -1049,6 +1049,113 @@ internal static class Program
 				return 94;
 			}
 
+			const string structuredCouponFeedJson = """
+				{
+				  "coupons": [
+				    {
+				      "code": "TYALLADVENTURERS",
+				      "region": "NAEU",
+				      "platform": "PC",
+				      "is_expired": false,
+				      "rewards_structured": {
+				        "items": [
+				          { "name": "Choose Your Transcendent Hammer Box", "quantity": 4 },
+				          { "name": "Cron Stone", "quantity": 20000 },
+				          { "name": "Advice of Valks (+400)", "quantity": 1 }
+				        ]
+				      }
+				    }
+				  ]
+				}
+				""";
+			List<CouponReward> structuredRewards = CouponService
+				.ParseBdoAlertsResponse(
+					structuredCouponFeedJson,
+					validatedNaEuCouponKeys)
+				.Single()
+				.Rewards;
+			if (structuredRewards.Count != 3
+				|| structuredRewards[0].ItemName !=
+					"Choose Your Transcendent Hammer Box"
+				|| structuredRewards[0].Quantity != 4
+				|| structuredRewards[1].ItemName != "Cron Stone"
+				|| structuredRewards[1].Quantity != 20000
+				|| structuredRewards[2].ItemName != "Advice of Valks (+400)")
+			{
+				return 98;
+			}
+
+			string codexAutocompleteFixture = "\uFEFF" + """
+				[
+				  {
+				    "value": 830399,
+				    "name": "Rare Enhancement Help Kit V",
+				    "link_type": "item",
+				    "icon": "new_icon/03_etc/00830399.webp",
+				    "icon_path": "items",
+				    "object_type": "Item"
+				  },
+				  {
+				    "value": 830301,
+				    "name": "[Event] Enhancement Help Kit V",
+				    "link_type": "item",
+				    "icon": "new_icon/03_etc/00830301.webp",
+				    "icon_path": "items",
+				    "object_type": "Item"
+				  }
+				]
+				""";
+			BdoCodexItemIconMatch? exactCodexMatch =
+				BdoCodexItemIconResolver.ParseExactMatchForTest(
+					"  Enhancement   Help Kit V ",
+					codexAutocompleteFixture);
+			BdoCodexItemIconMatch? fuzzyCodexMatch =
+				BdoCodexItemIconResolver.ParseExactMatchForTest(
+					"Enhancement Help Kit V x5",
+					codexAutocompleteFixture);
+			const string maliciousCodexFixture = """
+				[
+				  {
+				    "value": 830301,
+				    "name": "[Event] Enhancement Help Kit V",
+				    "link_type": "item",
+				    "icon": "../private/00830301.webp",
+				    "icon_path": "items",
+				    "object_type": "Item"
+				  }
+				]
+				""";
+			if (exactCodexMatch?.ItemId != 830301
+				|| exactCodexMatch.IconUrl !=
+					"https://bdocodex.com/items/new_icon/03_etc/00830301.webp"
+				|| exactCodexMatch.IconFileName !=
+					"bdocodex-830301.webp"
+				|| fuzzyCodexMatch is not null
+				|| BdoCodexItemIconResolver.ParseExactMatchForTest(
+					"Enhancement Help Kit V",
+					maliciousCodexFixture) is not null
+				|| BdoCodexItemIconResolver.NormalizeItemNameForTest(
+					"[Event]  Enhancement Help Kit V")
+					!= "ENHANCEMENT HELP KIT V")
+			{
+				return 99;
+			}
+			if (!CouponService.HasExpectedImageSignatureForTest(
+					Encoding.ASCII.GetBytes("RIFF0000WEBP"),
+					".webp")
+				|| CouponService.HasExpectedImageSignatureForTest(
+					Encoding.ASCII.GetBytes("<html>not an image</html>"),
+					".webp")
+				|| !CouponService.HasExpectedImageSignatureForTest(
+					[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+					".png")
+				|| !CouponService.HasExpectedImageSignatureForTest(
+					[0xFF, 0xD8, 0xFF, 0xE0],
+					".jpg"))
+			{
+				return 100;
+			}
+
 			JsonSerializerOptions couponJsonOptions = new()
 			{
 				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -1069,6 +1176,10 @@ internal static class Program
 				statePaths.CouponsCachePath,
 				JsonSerializer.Serialize(legacyCache, couponJsonOptions),
 				CancellationToken.None);
+			await File.WriteAllTextAsync(
+				statePaths.CouponItemIconsPath,
+				"""{"schemaVersion":1,"items":null}""",
+				CancellationToken.None);
 			using (CouponService legacyCouponService = new(statePaths, logger))
 			{
 				JsonElement migratedDashboard = JsonSerializer.SerializeToElement(
@@ -1084,6 +1195,10 @@ internal static class Program
 					await File.ReadAllTextAsync(
 						statePaths.CouponsCachePath,
 						CancellationToken.None));
+				using JsonDocument repairedIconCache = JsonDocument.Parse(
+					await File.ReadAllTextAsync(
+						statePaths.CouponItemIconsPath,
+						CancellationToken.None));
 				string[] migratedVerifiedCodes = migratedCache.RootElement
 					.GetProperty("naEuCouponCodes")
 					.EnumerateArray()
@@ -1095,7 +1210,10 @@ internal static class Program
 						StringComparer.OrdinalIgnoreCase)
 					|| !migratedVerifiedCodes.SequenceEqual(
 						["TYALLADVENTURERS"],
-						StringComparer.OrdinalIgnoreCase))
+						StringComparer.OrdinalIgnoreCase)
+					|| repairedIconCache.RootElement
+						.GetProperty("items")
+						.ValueKind != JsonValueKind.Object)
 				{
 					return 97;
 				}

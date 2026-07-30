@@ -2074,6 +2074,7 @@ internal sealed class CalculatorForm : Form
 			"payment.naeu.playblackdesert.com",
 			"www.naeu.playblackdesert.com",
 			"blackdesert.pearlabyss.com",
+			"bdocodex.com",
 			"ko-fi.com",
 			"github.com"
 		];

@@ -88,6 +88,7 @@ internal sealed class CouponService : IDisposable
 	private readonly HttpClient http;
 	private readonly HttpClient officialHttp;
 	private readonly HttpClient bdoAlertsHttp;
+	private readonly BdoCodexItemIconResolver itemIconResolver;
 	private readonly Dictionary<string, (DateTime LastWriteUtc, long Length, string DataUrl)> iconDataCache = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -100,7 +101,10 @@ internal sealed class CouponService : IDisposable
 	{
 		this.paths = paths;
 		this.logger = logger;
-		http = new HttpClient
+		http = new HttpClient(new HttpClientHandler
+		{
+			AllowAutoRedirect = false
+		})
 		{
 			Timeout = TimeSpan.FromSeconds(20),
 			MaxResponseContentBufferSize = MaxResponseBytes
@@ -129,6 +133,7 @@ internal sealed class CouponService : IDisposable
 		};
 		bdoAlertsHttp.DefaultRequestHeaders.UserAgent.ParseAdd(
 			"Black-Spirit-Hub/" + AppVersion.Current.TrimStart('v', 'V'));
+		itemIconResolver = new BdoCodexItemIconResolver(paths, logger);
 	}
 
 	public async Task<object> InitializeAsync(CancellationToken cancellationToken)
@@ -136,7 +141,19 @@ internal sealed class CouponService : IDisposable
 		await EnsureSeedCacheAsync(cancellationToken);
 		CouponCache? cache = await ReadJsonAsync<CouponCache>(paths.CouponsCachePath, cancellationToken);
 		if (cache != null)
-			await CacheIconsAsync(ValidatedCachedCoupons(cache), cancellationToken);
+		{
+			List<CouponEntry> cachedCoupons = ValidatedCachedCoupons(cache);
+			List<CouponEntry> resolvedCoupons = await itemIconResolver.ResolveAsync(
+				cachedCoupons,
+				cancellationToken,
+				allowNetwork: false);
+			if (!CouponEntriesEquivalent(resolvedCoupons, cachedCoupons))
+			{
+				cache = cache with { Coupons = resolvedCoupons };
+				await WriteJsonAsync(paths.CouponsCachePath, cache, cancellationToken);
+			}
+			await CacheIconsAsync(resolvedCoupons, cancellationToken);
+		}
 		return await BuildDashboardAsync("CACHED", null, cancellationToken);
 	}
 
@@ -219,6 +236,9 @@ internal sealed class CouponService : IDisposable
 						FilterCouponsByKeys(
 							existingCache?.Coupons ?? [],
 							validatedNaEuCouponKeys));
+					merged = await itemIconResolver.ResolveAsync(
+						merged,
+						cancellationToken);
 					int officialIcons = await CacheIconsAsync(
 						merged,
 						cancellationToken);
@@ -282,6 +302,9 @@ internal sealed class CouponService : IDisposable
 						FilterCouponsByKeys(
 							existingCache?.Coupons ?? [],
 							validatedNaEuCouponKeys));
+					merged = await itemIconResolver.ResolveAsync(
+						merged,
+						cancellationToken);
 					int officialIcons = await CacheIconsAsync(merged, cancellationToken);
 					CouponCache officialCache = new(
 						DateTimeOffset.UtcNow,
@@ -321,6 +344,9 @@ internal sealed class CouponService : IDisposable
 						: "No NA/EU PC coupon entries could be read from the live sources.");
 			}
 
+			coupons = await itemIconResolver.ResolveAsync(
+				coupons,
+				cancellationToken);
 			int icons = await CacheIconsAsync(coupons, cancellationToken);
 			CouponCache cache = new(
 				DateTimeOffset.UtcNow,
@@ -384,7 +410,9 @@ internal sealed class CouponService : IDisposable
 			{
 				r.ItemName,
 				r.Quantity,
-				icon = ReadIconDataUrl(r.IconFileName)
+				icon = ReadIconDataUrl(r.IconFileName),
+				r.IconSource,
+				r.IconSourceUrl
 			})
 		}).ToArray();
 		return new
@@ -854,14 +882,14 @@ internal sealed class CouponService : IDisposable
 	{
 		string key = itemName.ToLowerInvariant();
 		if (key.Contains("cron stone")) return ("https://assets.garmoth.com/img/new_icon/03_etc/00016080.webp", "00016080.webp");
-		if (key.Contains("resplendent oasis box")) return ("https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp");
-		if (key.Contains("transcendent hammer")) return ("https://assets.garmoth.com/img/new_icon/09_cash/00046991.webp", "00046991.webp");
+		if (key.Contains("resplendent oasis box")) return ("https://assets.garmoth.com/img/new_icon/09_cash/00046991.webp", "00046991.webp");
+		if (key.Contains("transcendent hammer")) return ("https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp");
 		if (key.Contains("+400")) return ("https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000400_11.webp", "00000400_11.webp");
 		if (key.Contains("+350")) return ("https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000350_11.webp", "00000350_11.webp");
 		if (key.Contains("+300")) return ("https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000300_11.webp", "00000300_11.webp");
 		if (key.Contains("+250")) return ("https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000250_11.webp", "00000250_11.webp");
 		if (key.Contains("weapon exchange coupon")) return ("https://assets.garmoth.com/img/new_icon/09_cash/00290007.webp", "00290007.webp");
-		if (key.Contains("j's special scroll")) return ("https://assets.garmoth.com/img/new_icon/03_etc/08_potion/00000771.webp", "00000771.webp");
+		if (key.Contains("j's special scroll")) return ("https://assets.garmoth.com/img/new_icon/09_cash/000175722.webp", "000175722.webp");
 		return ("", "");
 	}
 
@@ -872,9 +900,17 @@ internal sealed class CouponService : IDisposable
 		{
 			if (string.IsNullOrWhiteSpace(reward.IconUrl) || string.IsNullOrWhiteSpace(reward.IconFileName))
 				continue;
-			if (!Uri.TryCreate(reward.IconUrl, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("assets.garmoth.com", StringComparison.OrdinalIgnoreCase))
+			if (!TryValidateIconUri(reward.IconUrl, out Uri? uri))
 				continue;
-			string target = Path.Combine(paths.CouponIconsPath, Path.GetFileName(reward.IconFileName));
+			string safeFileName = Path.GetFileName(reward.IconFileName);
+			if (safeFileName.Length == 0
+				|| !safeFileName.Equals(
+					reward.IconFileName,
+					StringComparison.Ordinal))
+			{
+				continue;
+			}
+			string target = Path.Combine(paths.CouponIconsPath, safeFileName);
 			if (File.Exists(target))
 			{
 				count++;
@@ -883,16 +919,40 @@ internal sealed class CouponService : IDisposable
 			try
 			{
 				using HttpRequestMessage request = new(HttpMethod.Get, uri);
-				request.Headers.Referrer = new Uri("https://garmoth.com/coupons");
+				request.Headers.Referrer = uri.Host.Equals(
+					"bdocodex.com",
+					StringComparison.OrdinalIgnoreCase)
+						? new Uri("https://bdocodex.com/")
+						: new Uri("https://garmoth.com/coupons");
 				request.Headers.Accept.ParseAdd("image/avif,image/webp,image/png,image/*");
-				using HttpResponseMessage response = await http.SendAsync(request, cancellationToken);
+				using HttpResponseMessage response = await http.SendAsync(
+					request,
+					HttpCompletionOption.ResponseHeadersRead,
+					cancellationToken);
 				response.EnsureSuccessStatusCode();
-				byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-				if (bytes.Length is > 0 and < 2_000_000)
+				string? mediaType = response.Content.Headers.ContentType?.MediaType;
+				if (!string.IsNullOrWhiteSpace(mediaType)
+					&& !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+					&& !mediaType.Equals(
+						"application/octet-stream",
+						StringComparison.OrdinalIgnoreCase))
 				{
-					await File.WriteAllBytesAsync(target, bytes, cancellationToken);
-					count++;
+					throw new InvalidDataException(
+						$"Unexpected coupon icon content type '{mediaType}'.");
 				}
+				byte[] bytes = await ReadLimitedIconBytesAsync(
+					response.Content,
+					2_000_000,
+					cancellationToken);
+				if (!HasExpectedImageSignature(
+						bytes,
+						Path.GetExtension(target)))
+				{
+					throw new InvalidDataException(
+						"Coupon icon content did not match its image format.");
+				}
+				await File.WriteAllBytesAsync(target, bytes, cancellationToken);
+				count++;
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -904,6 +964,144 @@ internal sealed class CouponService : IDisposable
 			}
 		}
 		return count;
+	}
+
+	private static async Task<byte[]> ReadLimitedIconBytesAsync(
+		HttpContent content,
+		int maximumBytes,
+		CancellationToken cancellationToken)
+	{
+		if (content.Headers.ContentLength is long contentLength
+			&& (contentLength <= 0 || contentLength > maximumBytes))
+		{
+			throw new InvalidDataException(
+				"Coupon icon exceeded the download size limit.");
+		}
+		await using Stream source = await content.ReadAsStreamAsync(cancellationToken);
+		using MemoryStream destination = new();
+		byte[] buffer = new byte[16 * 1024];
+		while (true)
+		{
+			int read = await source.ReadAsync(buffer, cancellationToken);
+			if (read == 0)
+				break;
+			if (destination.Length + read > maximumBytes)
+				throw new InvalidDataException(
+					"Coupon icon exceeded the download size limit.");
+			await destination.WriteAsync(
+				buffer.AsMemory(0, read),
+				cancellationToken);
+		}
+		if (destination.Length == 0)
+			throw new InvalidDataException("Coupon icon response was empty.");
+		return destination.ToArray();
+	}
+
+	private static bool HasExpectedImageSignature(
+		ReadOnlySpan<byte> bytes,
+		string extension)
+	{
+		if (extension.Equals(".webp", StringComparison.OrdinalIgnoreCase))
+		{
+			return bytes.Length >= 12
+				&& bytes[..4].SequenceEqual("RIFF"u8)
+				&& bytes.Slice(8, 4).SequenceEqual("WEBP"u8);
+		}
+		if (extension.Equals(".png", StringComparison.OrdinalIgnoreCase))
+		{
+			ReadOnlySpan<byte> pngSignature =
+				[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+			return bytes.Length >= pngSignature.Length
+				&& bytes[..pngSignature.Length].SequenceEqual(pngSignature);
+		}
+		if (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+			|| extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
+		{
+			return bytes.Length >= 3
+				&& bytes[0] == 0xFF
+				&& bytes[1] == 0xD8
+				&& bytes[2] == 0xFF;
+		}
+		return false;
+	}
+
+	internal static bool HasExpectedImageSignatureForTest(
+		byte[] bytes,
+		string extension)
+	{
+		return HasExpectedImageSignature(bytes, extension);
+	}
+
+	private static bool CouponEntriesEquivalent(
+		IReadOnlyList<CouponEntry> first,
+		IReadOnlyList<CouponEntry> second)
+	{
+		if (first.Count != second.Count)
+			return false;
+		for (int couponIndex = 0; couponIndex < first.Count; couponIndex++)
+		{
+			CouponEntry left = first[couponIndex];
+			CouponEntry right = second[couponIndex];
+			if (left.Code != right.Code
+				|| left.AddedUtc != right.AddedUtc
+				|| left.AddedText != right.AddedText
+				|| left.ExpiryUtc != right.ExpiryUtc
+				|| left.ExpiryText != right.ExpiryText
+				|| left.IsExpired != right.IsExpired
+				|| left.Source != right.Source
+				|| left.Rewards.Count != right.Rewards.Count)
+			{
+				return false;
+			}
+			for (int rewardIndex = 0;
+				rewardIndex < left.Rewards.Count;
+				rewardIndex++)
+			{
+				CouponReward leftReward = left.Rewards[rewardIndex];
+				CouponReward rightReward = right.Rewards[rewardIndex];
+				if (leftReward != rightReward)
+					return false;
+			}
+		}
+		return true;
+	}
+
+	private static bool TryValidateIconUri(string iconUrl, out Uri? uri)
+	{
+		uri = null;
+		if (!Uri.TryCreate(iconUrl, UriKind.Absolute, out Uri? candidate)
+			|| candidate.Scheme != Uri.UriSchemeHttps
+			|| candidate.Query.Length != 0
+			|| candidate.Fragment.Length != 0)
+		{
+			return false;
+		}
+		bool trustedGarmoth =
+			candidate.Host.Equals(
+				"assets.garmoth.com",
+				StringComparison.OrdinalIgnoreCase)
+			&& candidate.AbsolutePath.StartsWith(
+				"/img/new_icon/",
+				StringComparison.OrdinalIgnoreCase);
+		bool trustedBdoCodex =
+			candidate.Host.Equals(
+				"bdocodex.com",
+				StringComparison.OrdinalIgnoreCase)
+			&& candidate.AbsolutePath.StartsWith(
+				"/items/new_icon/",
+				StringComparison.OrdinalIgnoreCase);
+		if (!trustedGarmoth && !trustedBdoCodex)
+			return false;
+		string extension = Path.GetExtension(candidate.AbsolutePath);
+		if (!extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+			&& !extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+			&& !extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+			&& !extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
+		{
+			return false;
+		}
+		uri = candidate;
+		return true;
 	}
 
 	private string ReadIconDataUrl(string fileName)
@@ -990,6 +1188,7 @@ internal sealed class CouponService : IDisposable
 
 	public void Dispose()
 	{
+		itemIconResolver.Dispose();
 		bdoAlertsHttp.Dispose();
 		officialHttp.Dispose();
 		http.Dispose();
@@ -997,7 +1196,11 @@ internal sealed class CouponService : IDisposable
 }
 
 internal sealed record CouponSettings(bool ShowAvailableOnly, bool ShowExpired, string Search, string Status);
-internal sealed record CouponReward(string ItemName, int Quantity, string IconUrl, string IconFileName);
+internal sealed record CouponReward(string ItemName, int Quantity, string IconUrl, string IconFileName)
+{
+	public string IconSource { get; init; } = "";
+	public string IconSourceUrl { get; init; } = "";
+}
 internal sealed record CouponEntry(string Code, DateTimeOffset? AddedUtc, string AddedText, DateTimeOffset? ExpiryUtc, string ExpiryText, bool IsExpired, List<CouponReward> Rewards, string Source);
 internal sealed record CouponCache(
 	DateTimeOffset LastRefreshed,

@@ -32,6 +32,7 @@ $nativeInstallerBuildScriptPath = Join-Path $repoRoot "scripts\build-native-inst
 $nativeInstallerSourcePath = Join-Path $sourceRoot "InstallerSource\InnoSetup\BlackSpiritHub.iss"
 $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
+$couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
@@ -733,6 +734,11 @@ if (!(Test-Path -LiteralPath $bdoAlertsCredentialsSourcePath -PathType Leaf)) {
 }
 $bdoAlertsCredentialsSource = Get-Content -LiteralPath $bdoAlertsCredentialsSourcePath -Raw
 $couponSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CouponService.cs") -Raw
+$couponIconResolverSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BdoCodexItemIconResolver.cs"
+if (!(Test-Path -LiteralPath $couponIconResolverSourcePath -PathType Leaf)) {
+	throw "The exact coupon item icon resolver is missing."
+}
+$couponIconResolverSource = Get-Content -LiteralPath $couponIconResolverSourcePath -Raw
 $installerSource = Get-Content -LiteralPath $nativeInstallerSourcePath -Raw
 $nativeInstallerBuildScript = Get-Content -LiteralPath $nativeInstallerBuildScriptPath -Raw
 $bossScheduleRefreshCallCount = [regex]::Matches($script, 'bridgeCall\("refreshBossSchedule"\)').Count
@@ -783,10 +789,28 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'NaEuCouponCodes' -or
 	$couponSource -notmatch 'ValidatedCachedCoupons' -or
 	$couponSource -notmatch 'TrustedBootstrapNaEuCouponCodes' -or
+	$couponSource -notmatch 'itemIconResolver\.ResolveAsync' -or
+	$couponSource -notmatch 'allowNetwork: false' -or
+	$couponSource -notmatch 'TryValidateIconUri' -or
+	$couponSource -notmatch 'http = new HttpClient\(new HttpClientHandler' -or
+	$couponSource -notmatch 'HttpCompletionOption\.ResponseHeadersRead' -or
+	$couponSource -notmatch 'ReadLimitedIconBytesAsync' -or
+	$couponSource -notmatch 'HasExpectedImageSignature' -or
+	$couponSource -notmatch '"/items/new_icon/"' -or
 	$couponSource -notmatch 'regionScope = "NA / EU"' -or
+	$couponIconResolverSource -notmatch 'https://bdocodex\.com/ac\.php' -or
+	$couponIconResolverSource -notmatch 'NormalizeForMatch' -or
+	$couponIconResolverSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
+	$couponIconResolverSource -notmatch 'MissingEntryTtl' -or
+	$couponIconResolverSource -notmatch 'Timeout = TimeSpan\.FromSeconds\(5\)' -or
+	$couponIconResolverSource -notmatch 'transient lookup failure' -or
+	$couponIconResolverSource -notmatch 'path\.Contains\("\.\."' -or
 	$script -notmatch 'function couponCodeKey\(code\)' -or
+	$script -notmatch 'function couponRewardListHtml\(rewards\)' -or
+	$script -notmatch 'data-coupon-rewards-toggle' -or
 	$html -notmatch 'id="couponRegionBadge"' -or
 	$css -notmatch '\.couponRegionBadge' -or
+	$css -notmatch '\.couponRewardList\[hidden\]\{display:none\}' -or
 	$couponSource -match 'DefaultRequestHeaders\.Referrer\s*=\s*new Uri\("https://bdoalerts\.net' -or
 	$couponSource -match 'DefaultRequestHeaders\.TryAddWithoutValidation\("Origin",\s*"https://bdoalerts\.net') {
 	throw "Coupon refresh lost its authenticated access, canonical deduplication, or NA/EU eligibility safeguards."
@@ -808,6 +832,9 @@ if (!(Test-Path -LiteralPath $bossScheduleJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $bossAlertsJsTestPath -PathType Leaf)) {
 	throw "The executable boss alert JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $couponJsTestPath -PathType Leaf)) {
+	throw "The executable coupon JavaScript regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -817,6 +844,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $bossAlertsJsTestPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "Boss alert JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $couponJsTestPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Coupon JavaScript regression tests failed."
 	}
 }
 else {

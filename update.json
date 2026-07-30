@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.29",
+    "version":  "v0.9.30",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.29/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "D6AB3AA57987A00B794BE5E4082E1595297098C624BDF8D4578B319142309DC4",
-    "notes":  "Authenticated BDO Alerts schedule and coupon sync; NA/EU-only coupon validation with canonical duplicate removal and safe legacy-cache migration; boss schedule next-highlight, Local/DST refresh, and long event-boss name fixes."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.30/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "F7317EB893F5D702C053917595860CBE8FDE98B0DBA955600DAE199937488400",
+    "notes":  "Adds exact BDO Codex coupon reward icons with safe local caching, corrected fallback icons, and an expandable full reward list."
 }
