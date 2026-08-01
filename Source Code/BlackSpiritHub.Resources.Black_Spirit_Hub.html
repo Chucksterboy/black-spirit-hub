@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.30">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.31">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -35,7 +35,7 @@
     <button class="navButton" data-app-view="couponsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Coupons</span></button>
     <button class="navButton" data-app-view="settingsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Settings</span></button>
     <span class="navRowBreak" aria-hidden="true"></span>
-    <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Grind Tracker</span></button>
+    <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Grind Zones</span></button>
     <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Reset Timers</span></button>
     <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Events</span></button>
     <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Brackets</span></button>
@@ -572,89 +572,27 @@
 </section>
 
 <section id="grindTrackerView" class="appView">
-  <div class="grindShell" data-grind-screen="summary">
+  <div class="grindShell" data-grind-screen="spot">
     <header class="grindHeader">
       <div>
-        <h1>Grind Tracker</h1>
-        
+        <h1>Grind Zones</h1>
+        <p>Select a grind zone to preview every listed drop and its current market value.</p>
       </div>
       <div class="grindHeaderActions">
-        <div class="grindModeTabs" role="tablist" aria-label="Grind tracker grouping">
-          <button class="active" data-grind-mode="spot" type="button">Spot</button>
-          <button data-grind-mode="class" type="button">Class</button>
-          <button data-grind-mode="overtime" type="button">Overtime</button>
-        </div>
-        <button id="grindAddSession" class="grindAddButton" type="button">+ Add Session</button>
-        <button id="grindBackSummary" class="grindGhostButton grindBackButton" type="button">Back to Summary</button>
+        <button id="grindChangeZone" class="grindGhostButton grindBackButton" type="button">Choose Grind Zone</button>
       </div>
     </header>
-    <div class="grindRangeTabs" role="tablist" aria-label="Grind tracker date range">
-      <button class="active" data-grind-range="all" type="button">All</button>
-      <button data-grind-range="7" type="button">Past 7 Days</button>
-      <button data-grind-range="30" type="button">Past 30 Days</button>
-      <button data-grind-range="90" type="button">Past 90 Days</button>
-    </div>
-    <section class="grindSummaryGrid" aria-label="Grind tracker summary">
-      <article class="grindKpiCard" style="--kpi-color:#facc15"><span>Total Silver Earned</span><strong id="grindTotalSilver">0</strong><i class="grindKpiIcon">$</i></article>
-      <article class="grindKpiCard" style="--kpi-color:#38bdf8"><span>Average Silver an Hour</span><strong id="grindAverageHour">0</strong><i class="grindKpiIcon">/h</i></article>
-      <article class="grindKpiCard" style="--kpi-color:#cbd5e1"><span>Total Hours Grinded</span><strong id="grindTotalHours">0h</strong><i class="grindKpiIcon">h</i></article>
-    </section>
-    <section class="grindDashboardGrid" aria-label="Grind tracker charts">
-      <article class="grindPanel">
-        <div class="grindPanelHead"><h2>Total Hours</h2><small id="grindHoursSummary">No sessions yet</small></div>
-        <div class="grindPanelBody grindHoursLayout">
-          <div id="grindHoursLegend" class="grindLegend"></div>
-          <div id="grindHoursDonut" class="grindDonut" data-label="0h"></div>
-        </div>
-      </article>
-      <article class="grindPanel">
-        <div class="grindPanelHead"><h2>Total Silver</h2><small id="grindSilverSummary">By spot</small></div>
-        <div id="grindSilverBars" class="grindPanelBody grindBarList"></div>
-      </article>
-      <article class="grindPanel">
-        <div class="grindPanelHead"><h2>Silver an Hour</h2><small id="grindHourlySummary">Best average</small></div>
-        <div id="grindHourlyBars" class="grindPanelBody grindBarList"></div>
-      </article>
-      <article class="grindPanel">
-        <div class="grindPanelHead"><h2>Recent Sessions</h2><small id="grindRecentSummary">Latest captures</small></div>
-        <div id="grindRecentSessions" class="grindPanelBody grindRecentList"></div>
-      </article>
-    </section>
     <section class="grindLowerGrid">
       <article id="grindSpotDetail" class="grindSpotDetail">
-        <div class="grindEmpty">Choose a grind zone to see its drops and sessions.</div>
-      </article>
-      <article id="grindSessionPanel" class="grindSessionPanel">
-        <div class="grindPanelHead"><h2 id="grindFormTitle">Add Session</h2><small>Session review</small></div>
-        <form id="grindSessionForm" class="grindForm">
-          <input id="grindSessionId" type="hidden">
-          <div class="grindImageActions">
-            <button id="grindStartSession" class="grindSaveButton" type="button">Add Image</button>
-            <span id="grindDraftStatus" class="grindCaptureStatus">Add a loot screenshot to scan, or enter counts manually.</span>
-          </div>
-          <div id="grindImagePreview" class="grindImagePreview" aria-live="polite"></div>
-          <div class="grindFormGrid">
-            <div class="grindField grindBoxField grindFull"><label for="grindFormSpotSearch">Grind zone</label><input id="grindFormSpotSearch" class="grindSpotSearchInput" type="search" placeholder="Search zone, region, or trash loot..." autocomplete="off"><select id="grindFormSpot" required></select></div>
-            <div class="grindField grindBoxField grindTimePair"><label>Duration</label><div><input id="grindFormHours" type="number" min="0" step="1" placeholder="Hours" required><input id="grindFormMinutes" type="number" min="0" max="59" step="1" placeholder="Mins" required></div></div>
-            <div class="grindField grindBoxField grindClassField"><label for="grindClassButton">Class</label><select id="grindFormClass" hidden><option value="">Select class</option></select><div id="grindClassPicker" class="grindClassPicker"><button id="grindClassButton" class="grindClassButton" type="button" aria-haspopup="listbox" aria-expanded="false"></button><div id="grindClassMenu" class="grindClassMenu" role="listbox" hidden></div></div></div>
-            <div class="grindField grindBoxField"><label for="grindFormDropRate">Total drop rate</label><input id="grindFormDropRate" type="number" min="0" step="1" placeholder="e.g. 250"></div>
-            <div class="grindField grindBoxField"><label>Agris</label><div class="grindSegmented" role="group" aria-label="Agris used"><button class="active" data-grind-agris="off" type="button">Off</button><button data-grind-agris="on" type="button">On</button></div><input id="grindFormAgris" type="checkbox" hidden></div>
-            <div class="grindField grindBuffField grindFull"><label>Session modifiers</label><div id="grindBuffPicker" class="grindBuffPicker" role="group" aria-label="Session modifiers used"></div></div>
-            <div class="grindField grindFull"><label>Loot review</label><div id="grindLootInputs" class="grindLootInputGrid"></div></div>
-          </div>
-          <div class="grindFormActions">
-            <button id="grindCancelEdit" class="grindGhostButton" type="button">Cancel Edit</button>
-            <button class="grindSaveButton" type="submit">Save Session</button>
-          </div>
-        </form>
+        <div class="grindEmpty">Choose a grind zone to see every listed drop.</div>
       </article>
     </section>
     <div id="grindSpotPicker" class="grindPickerOverlay" hidden>
       <div class="grindPickerModal" role="dialog" aria-modal="true" aria-labelledby="grindPickerTitle">
         <div class="grindPanelHead">
           <div>
-            <h2 id="grindPickerTitle">Pick spot</h2>
-            <p>Choose the grind zone before starting review.</p>
+            <h2 id="grindPickerTitle">Choose a Grind Zone</h2>
+            <p>Select a zone to preview every item that drops there.</p>
           </div>
           <button id="grindSpotPickerClose" class="grindIconButton" type="button" aria-label="Close grind spot picker">X</button>
         </div>
@@ -918,24 +856,13 @@
   </div>
 </section>
 
-<div id="appConfirmOverlay" class="appConfirmOverlay" hidden>
-  <section class="appConfirmDialog" role="alertdialog" aria-modal="true" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmMessage">
-    <h2 id="appConfirmTitle">Confirm action</h2>
-    <p id="appConfirmMessage"></p>
-    <div class="appConfirmActions">
-      <button id="appConfirmCancel" type="button">Cancel</button>
-      <button id="appConfirmAccept" class="danger" type="button">Delete</button>
-    </div>
-  </section>
-</div>
-
 <footer class="appStatusBar">
   <span class="statusLeft"><span class="statusReady">Ready</span><button class="supportHeart" type="button" data-open-url="https://ko-fi.com/chucksterboy" aria-label="Support Me" title="Support Me" data-tooltip="Support Me"><svg class="supportHeartGlyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg><span class="supportHeartLabel">Support Me</span></button></span>
   <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.30"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.30"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.31"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.31"></script>
 
 </body>
 </html>

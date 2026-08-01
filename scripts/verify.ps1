@@ -33,6 +33,7 @@ $nativeInstallerSourcePath = Join-Path $sourceRoot "InstallerSource\InnoSetup\Bl
 $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
+$grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
@@ -433,6 +434,36 @@ $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
 
+if ($html -notmatch 'data-app-view="grindTrackerView"[^>]*>.*?<span class="navLabel">Grind Zones</span>' -or
+	$html -notmatch '<h1>Grind Zones</h1>' -or
+	$html -notmatch 'id="grindChangeZone"[^>]*>Choose Grind Zone</button>' -or
+	$html -notmatch 'id="grindPickerTitle">Choose a Grind Zone</h2>') {
+	throw "The Grind Zones direct-selection labels or change-zone control are missing."
+}
+if ($html -match 'grindSummaryGrid|grindDashboardGrid|grindBackSummary|grindStartSession|grindDraftStatus|grindImagePreview|grindSessionPanel|grindSessionForm' -or
+	$script -match 'selectGrindLootImage|scanGrindLootImage|grindSetImagePreview|grindBindImageDrop|grindApplyScreenshotLootText|grindSetScreen\(|loadGrindSessions|saveGrindSessions|grindTrackerSessionsRecovery|grindSaveForm|Saved sessions at this spot') {
+	throw "The retired Grind Tracker dashboard, OCR workflow, or manual-session UI was reintroduced."
+}
+if ($script -notmatch '(?s)function initializeGrindTracker\(\).*?grindRender\(\);\s*grindOpenSpotPicker\(\);' -or
+	$script -notmatch 'function grindRender\(\)\{grindRenderSpotDetail\(\);' -or
+	$script -notmatch 'persistSetting\("grindTrackerSelectedSpot",id\)' -or
+	$script -notmatch 'grindEnsureMarketPricesForSpot\(id\)' -or
+	$script -notmatch 'bridgeCall\("getGrindMarketPrices"' -or
+	$script -notmatch '\(spot\.drops\|\|\[\]\)\.map\(drop=>.*?grindDropPriceLine\(drop\)') {
+	throw "The Grind Zones picker-to-preview flow or preserved market-price pipeline is incomplete."
+}
+if ($script -notmatch 'ccs:\["knockdown","bound"\].*?Sycraia Crystal - Adamantine.*?bdfoundry-15742\.png.*?Ancient Magic Crystal of Nature - Adamantine.*?bdfoundry-ancient-nature\.webp' -or
+	$script -notmatch 'ccs:\["knockback","float"\].*?Sycraia Crystal - Fighting Spirit.*?bdfoundry-15743\.png.*?Ancient Magic Crystal of Nature - Fighting Spirit.*?bdfoundry-ancient-nature\.webp' -or
+	$script -notmatch 'ccs:\["stun","stiffness","freeze"\].*?Sycraia Crystal - Giant.*?bdfoundry-15744\.png.*?Ancient Magic Crystal of Nature - Giant.*?bdfoundry-ancient-nature\.webp' -or
+	$script -notmatch 'function grindResistanceRecommendations\(spot\)\{const ccs=new Set\(grindSpotCcs\(spot\)\);return grindResistanceCrystalGroups\.filter\(group=>group\.ccs\.some\(cc=>ccs\.has\(cc\)\)\)\}' -or
+	$script -notmatch 'Recommended Resistance Crystals' -or
+	$script -notmatch 'No specific resistance crystal required' -or
+	$script -notmatch 'grindLootGrid.*?grindRenderResistancePanel\(spot\)' -or
+	$css -notmatch '\.grindResistancePanel\{' -or
+	$css -notmatch '\.grindResistanceCard\{') {
+	throw "The Grind Zones CC-to-resistance recommendation panel is incomplete."
+}
+
 $nodeAssignment = [regex]::Match(
 	$script,
 	'(?s)^const NODES = (\[.*?\]);\r?\nconst TRADE_MANAGERS'
@@ -683,6 +714,28 @@ if ($missingReferencedAssets) {
 	throw "Missing class or modifier icons: $($missingReferencedAssets -join ', ')"
 }
 
+$resistanceCrystalAssets = [ordered]@{
+	"Assets/GrindTracker/icons-clean/bdfoundry-15742.png" = "C0F4FE7BB839A245336E00C3E2CB8884360A262440BD715642DC90EB5B5BCB10"
+	"Assets/GrindTracker/icons-clean/bdfoundry-15743.png" = "E65C44FC8D7FBA25D01CFB926A97914852163CEEC3DAD551FDECFC5DECA6CAC1"
+	"Assets/GrindTracker/icons-clean/bdfoundry-15744.png" = "BBE13532FFF03E8AE57DFF397ACCFED0C90FDB328CDF2414C393270252DC777E"
+	"Assets/GrindTracker/icons-clean/bdfoundry-ancient-nature.webp" = "955193F5342F9AFD3583633A7DB6303FC5317F85C501A75BF01E73EF0B62623E"
+}
+$invalidResistanceCrystalAssets = foreach ($assetPath in $resistanceCrystalAssets.Keys) {
+	$absoluteAssetPath = Join-Path $sourceRoot ($assetPath -replace '/', '\')
+	if (!(Test-Path -LiteralPath $absoluteAssetPath -PathType Leaf) -or
+		(Get-Item -LiteralPath $absoluteAssetPath).Length -lt 1000) {
+		$assetPath
+		continue
+	}
+	$actualHash = (Get-FileHash -LiteralPath $absoluteAssetPath -Algorithm SHA256).Hash
+	if ($actualHash -ne $resistanceCrystalAssets[$assetPath]) {
+		$assetPath
+	}
+}
+if ($invalidResistanceCrystalAssets) {
+	throw "Missing, modified, or invalid BDO Foundry resistance-crystal icons: $($invalidResistanceCrystalAssets -join ', ')"
+}
+
 $homeTimerIconCount = [regex]::Matches($html, 'class="homeTimerIcon"[^>]*>\s*<svg\b').Count
 $resetTimerIconCount = [regex]::Matches($script, '(?m)^\s{2}(?:daily|imperial|bsa|agris|barter|trading):''<svg\b').Count
 if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 6 -or $script -match 'icon:\s*"\?"') {
@@ -722,7 +775,18 @@ if ($unusedFunctions) {
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 $programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
+if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*bool assetsReady') {
+	throw "GrindTracker assets must self-heal before the version-stamp early return."
+}
+if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore' -or
+	$programSource -match 'AppStateStore' -or
+	(Test-Path -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\AppStateStore.cs"))) {
+	throw "The retired native Grind Tracker session store was reintroduced."
+}
 $marketCollectorTaskSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketCollectorTaskManager.cs") -Raw
+if ($calculatorSource -match 'Windows\.Media\.Ocr|OcrEngine|selectGrindLootImage|scanGrindLootImage|GrindLootImageMatch|MaxGrindImageBytes') {
+	throw "Native Grind screenshot/OCR code was reintroduced."
+}
 $bossScheduleSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BossScheduleService.cs"
 if (!(Test-Path -LiteralPath $bossScheduleSourcePath -PathType Leaf)) {
 	throw "The cached boss schedule service is missing."
@@ -835,6 +899,9 @@ if (!(Test-Path -LiteralPath $bossAlertsJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $couponJsTestPath -PathType Leaf)) {
 	throw "The executable coupon JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
+	throw "The executable Grind Zones resistance recommendation regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -849,9 +916,13 @@ if ($nodeCommand) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "Coupon JavaScript regression tests failed."
 	}
+	& $nodeCommand.Source $grindResistanceJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Grind Zones resistance recommendation JavaScript regression tests failed."
+	}
 }
 else {
-	Write-Host "Node.js was not found; executable boss schedule and alert JavaScript checks were skipped."
+	Write-Host "Node.js was not found; executable UI JavaScript regression checks were skipped."
 }
 if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px;width:172px;max-width:none;\s*\}' -or
 	$css -notmatch 'body\[data-style\]:not\(\[data-style="custom"\]\) #bossLeadTime\{' -or
@@ -948,10 +1019,6 @@ if ($missingHostCommands) {
 if ($unusedHostCommands) {
 	throw "Host bridge handlers without JavaScript callers: $($unusedHostCommands -join ', ')"
 }
-if ($script -notmatch 'blackSpiritHub\.grindTrackerSessionsRecovery' -or
-	$script -match 'localStorage\.setItem\("grindTrackerSessionsRecovery"') {
-	throw "Grind Tracker emergency recovery is not using the namespaced storage key."
-}
 if ($script -notmatch 'migratePreviousSettingNamespace\(\)' -or
 	$script -notmatch 'localStorage\.removeItem\(previousKey\)') {
 	throw "The one-time browser setting migration is missing."
@@ -963,7 +1030,7 @@ if ($node) {
 	if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax validation failed." }
 }
 
-$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows10.0.19041.0\Black Spirit Hub.dll"
+$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows\Black Spirit Hub.dll"
 & $dotnet $appDll --offline-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "Offline application smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --product-migration-smoke-test

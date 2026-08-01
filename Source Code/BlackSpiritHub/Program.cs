@@ -677,6 +677,12 @@ internal static class Program
 		CopyDirectoryIfPresent(
 			Path.Combine(baseDirectory, "Assets", "AppIcon"),
 			Path.Combine(paths.Root, "Assets", "AppIcon"));
+		// Grind data and artwork can change between builds that share an app version.
+		// Keep this comparatively small feature folder content-aware so the WebView
+		// never serves stale or missing icons from its per-user runtime directory.
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "Assets", "GrindTracker"),
+			Path.Combine(paths.Root, "Assets", "GrindTracker"));
 
 		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
 			&& Directory.Exists(paths.ThemeAssetsPath)
@@ -962,7 +968,6 @@ internal static class Program
 
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
 			statePaths.EnsureDirectories();
-			AppStateStore stateStore = new(statePaths, logger);
 			const string couponFeedJson = """
 				{
 				  "coupons": [
@@ -1510,26 +1515,6 @@ internal static class Program
 				}
 			}
 
-			JsonElement firstSessions = JsonSerializer.SerializeToElement(new[]
-			{
-				new { id = "session-backup", spotId = "test-spot", minutes = 60 }
-			});
-			JsonElement secondSessions = JsonSerializer.SerializeToElement(new[]
-			{
-				new { id = "session-current", spotId = "test-spot", minutes = 90 }
-			});
-			await stateStore.SaveGrindSessionsAsync(firstSessions, CancellationToken.None);
-			await stateStore.SaveGrindSessionsAsync(secondSessions, CancellationToken.None);
-			await File.WriteAllTextAsync(statePaths.GrindSessionsPath, "{not valid json", CancellationToken.None);
-
-			JsonElement recoveredSessions = await stateStore.LoadGrindSessionsAsync(CancellationToken.None);
-			if (recoveredSessions.GetArrayLength() != 1
-				|| recoveredSessions[0].GetProperty("id").GetString() != "session-backup")
-			{
-				return 54;
-			}
-			JsonElement persistedRecovery = JsonSerializer.Deserialize<JsonElement>(
-				await File.ReadAllTextAsync(statePaths.GrindSessionsPath, CancellationToken.None));
 			EventService.EventDateRange? twitchRange = EventService.FindLikelyEventRange(
 				"Twitch Drops July 26, 2026 (Sun) 00:30 UTC - July 29, 2026 (Wed) 12:00 UTC",
 				new DateTimeOffset(2026, 7, 30, 8, 0, 0, TimeSpan.Zero));
@@ -1624,8 +1609,7 @@ internal static class Program
 				return 62;
 			}
 
-			return persistedRecovery.GetArrayLength() == 1
-				&& persistedRecovery[0].GetProperty("id").GetString() == "session-backup" ? 0 : 55;
+			return 0;
 		}
 		catch (Exception exception)
 		{

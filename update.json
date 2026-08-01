@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.30",
+    "version":  "v0.9.31",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.30/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "F7317EB893F5D702C053917595860CBE8FDE98B0DBA955600DAE199937488400",
-    "notes":  "Adds exact BDO Codex coupon reward icons with safe local caching, corrected fallback icons, and an expandable full reward list."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.31/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "904EFDEFEC2F981626039D6F0AE165A01D44D5B494F0D152DF1FBC242853F93E",
+    "notes":  "Grind Zones overhaul: select a zone immediately, preview its current market-valued drops, and see crowd-control-aware resistance crystal recommendations. Removes the retired OCR and session workflow, adds correct BDO Foundry crystal artwork, and fixes same-version GrindTracker asset caching."
 }
