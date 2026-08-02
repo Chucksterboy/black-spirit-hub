@@ -39,6 +39,10 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 	private static readonly TimeSpan BatchSpacing = TimeSpan.FromMilliseconds(200);
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
 	private const int AnalyticsBatchItemCount = 250;
+	private const int OutfitMainCategory = 55;
+	private const int MinimumValidatedOutfitCategoryOneCount = 450;
+	private const int MinimumValidatedOutfitCategoryTwoCount = 950;
+	private const int MinimumValidatedOutfitCategoryCount = 1500;
 	private const int InteractiveBatchAttempts = 2;
 	private const int AnalyticsBatchAttempts = 2;
 	private const int AnalyticsRecoveryRequestBudget = 128;
@@ -161,6 +165,68 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		return CreateResponse(ids, normalizedRegion, captured, provider, prices);
 	}
 
+	public async Task<GrindMarketPriceResponse> GetOutfitAnalyticsPricesAsync(
+		IEnumerable<long> itemIds,
+		string region,
+		CancellationToken cancellationToken)
+	{
+		string normalizedRegion = NormalizeRegion(region);
+		long[] ids = NormalizeItemIds(itemIds);
+		DateTimeOffset captured = DateTimeOffset.UtcNow;
+		string provider = "Arsha GetWorldMarketList";
+
+		if (ids.Length == 0)
+		{
+			return EmptyResponse(normalizedRegion, captured, provider);
+		}
+
+		HashSet<long> requestedIds = ids.ToHashSet();
+		Dictionary<long, GrindMarketPrice> allCategoryPricesById = new();
+		Dictionary<long, GrindMarketPrice> pricesById = new();
+		bool completeCategorySnapshot = true;
+		foreach (int subCategory in new[] { 1, 2 })
+		{
+			try
+			{
+				IReadOnlyList<GrindMarketPrice> categoryPrices = await FetchArshaCategoryListAsync(
+					OutfitMainCategory,
+					subCategory,
+					normalizedRegion,
+					captured,
+					cancellationToken);
+				foreach (GrindMarketPrice price in categoryPrices)
+				{
+					allCategoryPricesById[price.ItemId] = price;
+					if (requestedIds.Contains(price.ItemId)
+						&& price.TradeCount is >= 0)
+					{
+						pricesById[price.ItemId] = price;
+					}
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				completeCategorySnapshot = false;
+				logger.Warn($"Arsha GetWorldMarketList {normalizedRegion.ToUpperInvariant()} outfit category {subCategory} failed: {ex.Message}");
+			}
+		}
+
+		if (!completeCategorySnapshot
+			|| allCategoryPricesById.Count < MinimumValidatedOutfitCategoryCount)
+		{
+			logger.Warn($"Arsha GetWorldMarketList {normalizedRegion.ToUpperInvariant()} outfit snapshot was incomplete ({allCategoryPricesById.Count.ToString(CultureInfo.InvariantCulture)} unique items); no partial sales snapshot will be saved.");
+			return CreateResponse(ids, normalizedRegion, captured, provider, Array.Empty<GrindMarketPrice>());
+		}
+
+		IReadOnlyList<GrindMarketPrice> prices = pricesById.Values.OrderBy(price => price.ItemId).ToArray();
+		logger.Info($"Arsha GetWorldMarketList {normalizedRegion.ToUpperInvariant()} returned {prices.Count.ToString(CultureInfo.InvariantCulture)}/{ids.Length.ToString(CultureInfo.InvariantCulture)} requested outfit sales totals in two cached category requests.");
+		return CreateResponse(ids, normalizedRegion, captured, provider, prices);
+	}
+
 	private static long[] NormalizeItemIds(IEnumerable<long> itemIds)
 	{
 		return itemIds.Where(id => id > 0).Distinct().OrderBy(id => id).ToArray();
@@ -232,6 +298,57 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		}
 
 		throw new InvalidDataException("Arsha GetWorldMarketSubList did not return a usable response.");
+	}
+
+	private async Task<IReadOnlyList<GrindMarketPrice>> FetchArshaCategoryListAsync(
+		int mainCategory,
+		int subCategory,
+		string region,
+		DateTimeOffset captured,
+		CancellationToken cancellationToken)
+	{
+		for (int attempt = 1; attempt <= AnalyticsBatchAttempts; attempt++)
+		{
+			try
+			{
+				using HttpRequestMessage request = new(
+					HttpMethod.Get,
+					$"https://api.arsha.io/v2/{region}/GetWorldMarketList?mainCategory={mainCategory.ToString(CultureInfo.InvariantCulture)}&subCategory={subCategory.ToString(CultureInfo.InvariantCulture)}&lang=en");
+				using JsonDocument document = await SendJsonAsync(request, cancellationToken);
+				MarketSubListEntry[] entries = ParseSubList(document.RootElement, 0)
+					.Where(entry => entry.ItemId > 0
+						&& entry.TradeCount is >= 0
+						&& entry.MainCategory == mainCategory
+						&& entry.SubCategory == subCategory)
+					.GroupBy(entry => entry.ItemId)
+					.Select(group => group.First())
+					.OrderBy(entry => entry.ItemId)
+					.ToArray();
+				int minimumCount = subCategory == 1
+					? MinimumValidatedOutfitCategoryOneCount
+					: MinimumValidatedOutfitCategoryTwoCount;
+				if (entries.Length < minimumCount)
+				{
+					throw new InvalidDataException(
+						$"Arsha GetWorldMarketList returned an incomplete or mislabelled outfit category {subCategory} response ({entries.Length.ToString(CultureInfo.InvariantCulture)} valid items).");
+				}
+				return entries
+					.Select(entry => ToPrice(entry, null, "arsha-category-cache", captured))
+					.ToArray();
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (attempt < AnalyticsBatchAttempts && (IsEndpointUnavailable(ex) || ex is InvalidDataException))
+			{
+				TimeSpan delay = TimeSpan.FromMilliseconds(400);
+				logger.Warn($"Arsha GetWorldMarketList {region.ToUpperInvariant()} outfit category {subCategory} retrying after upstream failure: {ex.Message}");
+				await Task.Delay(delay, cancellationToken);
+			}
+		}
+
+		throw new InvalidDataException($"Arsha GetWorldMarketList did not return a usable outfit category {subCategory} response.");
 	}
 
 	private async Task<IReadOnlyList<GrindMarketPrice>> FetchAnalyticsBatchAsync(
@@ -411,7 +528,7 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 				long? stock = TryParseLong(parts.ElementAtOrDefault(4));
 				long? tradeCount = TryParseLong(parts.ElementAtOrDefault(5));
 				long? lastSold = TryParseLong(parts.ElementAtOrDefault(8));
-				entries.Add(new MarketSubListEntry(itemId, enhancement, "", null, basePrice, lastSold, stock, tradeCount));
+				entries.Add(new MarketSubListEntry(itemId, enhancement, "", null, basePrice, lastSold, stock, tradeCount, null, null));
 			}
 		}
 
@@ -492,7 +609,9 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		long? basePrice = GetLong(item, "basePrice", "currentPrice", "price", "minPrice");
 		long? lastSoldPrice = GetLong(item, "lastSoldPrice", "lastPrice");
 		long? tradeCount = GetLong(item, "totalTrades", "tradeCount");
-		return new MarketSubListEntry(itemId, enhancement, name, lowest, basePrice, lastSoldPrice, stock, tradeCount);
+		int? mainCategory = (int?)GetLong(item, "mainCategory", "main_category");
+		int? subCategory = (int?)GetLong(item, "subCategory", "sub_category");
+		return new MarketSubListEntry(itemId, enhancement, name, lowest, basePrice, lastSoldPrice, stock, tradeCount, mainCategory, subCategory);
 	}
 
 	private static bool IsEndpointUnavailable(Exception ex)
@@ -611,7 +730,9 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		long? BasePrice,
 		long? LastSoldPrice,
 		long? Stock,
-		long? TradeCount);
+		long? TradeCount,
+		int? MainCategory,
+		int? SubCategory);
 
 	private sealed class AnalyticsRecoveryContext
 	{

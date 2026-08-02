@@ -49,7 +49,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 
 	public MarketSettings Settings => settings;
 
-	public string ProviderName => $"{provider.Name} + Arsha bulk sales";
+	public string ProviderName => $"{provider.Name} + Arsha category sales";
 
 	public event EventHandler? DataChanged;
 
@@ -377,7 +377,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 			else
 			{
 				this.StatusChanged?.Invoke(this, $"Collecting lifetime sales for {pendingCatalog.Count:N0} pending {region.ToUpperInvariant()} outfits...");
-				GrindMarketPriceResponse bulkResponse = await bulkMarketProvider.GetAnalyticsPricesAsync(
+				GrindMarketPriceResponse bulkResponse = await bulkMarketProvider.GetOutfitAnalyticsPricesAsync(
 					pendingCatalog.Select(item => item.ItemId),
 					region,
 					cancellationToken);

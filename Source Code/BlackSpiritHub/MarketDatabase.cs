@@ -274,13 +274,7 @@ SELECT
 			return true;
 		}
 
-		// A handful of catalog entries can be retired or temporarily unavailable
-		// upstream. Requiring 100% coverage would make the six-hour task run on
-		// every launch forever, while 95% still prevents a small partial response
-		// from masquerading as a successful sweep.
-		int allowedMissing = Math.Max(3, (int)Math.Ceiling(catalogCount * 0.05));
-		int requiredRecent = Math.Max(1, catalogCount - allowedMissing);
-		return recentCount < requiredRecent;
+		return recentCount < catalogCount;
 	}
 
 	public async Task<bool> IsOutfitDetailRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
@@ -741,6 +735,7 @@ WHERE item_id=$id AND region=$region;";
 		DateTimeOffset reportNow = DateTimeOffset.UtcNow;
 		List<(long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail)> catalog = new List<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>();
 		Dictionary<long, List<(DateTimeOffset Time, long Trades, long Preorders)>> samples = new Dictionary<long, List<(DateTimeOffset, long, long)>>();
+		Dictionary<long, long> latestPreorders = new Dictionary<long, long>();
 		OutfitReport result;
 		await using (SqliteConnection connection = await OpenAsync(cancellationToken))
 		{
@@ -757,7 +752,7 @@ WHERE item_id=$id AND region=$region;";
 			await using (SqliteCommand command = connection.CreateCommand())
 			{
 				command.CommandText = @"
-SELECT item_id,captured_utc,trade_count,preorder_count
+SELECT item_id,captured_utc,trade_count
 FROM outfit_snapshots
 WHERE region=$region
   AND trade_count IS NOT NULL
@@ -775,7 +770,25 @@ ORDER BY item_id,captured_utc;";
 					{
 						value = (samples[@int] = new List<(DateTimeOffset, long, long)>());
 					}
-					value.Add((DateTimeOffset.Parse(reader.GetString(1)), reader.GetInt64(2), reader.IsDBNull(3) ? 0 : reader.GetInt64(3)));
+					value.Add((DateTimeOffset.Parse(reader.GetString(1)), reader.GetInt64(2), 0));
+				}
+			}
+			await using (SqliteCommand command = connection.CreateCommand())
+			{
+				command.CommandText = @"
+SELECT item_id,preorder_count
+FROM (
+    SELECT item_id,preorder_count,
+           ROW_NUMBER() OVER(PARTITION BY item_id ORDER BY captured_utc DESC, snapshot_id DESC) AS row_number
+    FROM outfit_snapshots
+    WHERE region=$region AND preorder_count IS NOT NULL
+)
+WHERE row_number=1;";
+				command.Parameters.AddWithValue("$region", region);
+				await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+				while (await reader.ReadAsync(cancellationToken))
+				{
+					latestPreorders[reader.GetInt64(0)] = reader.GetInt64(1);
 				}
 			}
 			List<OutfitOpportunity> list2 = new List<OutfitOpportunity>();
@@ -791,17 +804,10 @@ ORDER BY item_id,captured_utc;";
 				long? num3 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(7.0), reportNow);
 				double? num4 = EstimateOutfitSalesPerDay(value2, num, num2, num3);
 				double? sevenDayChancePercent = null;
-				long? obj;
-				if (item2.Detail.HasValue && value2.Count != 0)
-				{
-					List<(DateTimeOffset, long, long)> list3 = value2;
-					obj = list3[list3.Count - 1].Item3;
-				}
-				else
-				{
-					obj = null;
-				}
-				long? preorderCount = obj;
+				long? preorderCount = item2.Detail.HasValue
+					&& latestPreorders.TryGetValue(item2.Id, out long latestPreorderCount)
+						? latestPreorderCount
+						: null;
 				long? obj2;
 				if (value2.Count != 0)
 				{

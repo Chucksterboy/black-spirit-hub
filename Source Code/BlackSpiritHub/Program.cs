@@ -775,13 +775,14 @@ internal static class Program
 			{
 				return 76;
 			}
-			MarketSnapshot outfitSnapshot = new(2_200_000_000, 0, 123, 7, 2_100_000_000, 2_200_000_000, 2_150_000_000, Array.Empty<ProviderHistoryPoint>());
-			await database.SaveOutfitDetailAsync(outfit, outfit, outfitSnapshot, "eu", CancellationToken.None);
+			MarketItem outfitDetailVariant = outfit with { TradeCount = 112 };
+			MarketSnapshot outfitSnapshot = new(2_200_000_000, 0, 112, 7, 2_100_000_000, 2_200_000_000, 2_150_000_000, Array.Empty<ProviderHistoryPoint>());
+			await database.SaveOutfitDetailAsync(outfit, outfitDetailVariant, outfitSnapshot, "eu", CancellationToken.None);
 			OutfitReport report = await database.GetOutfitReportAsync("eu", CancellationToken.None);
 			if (report.CatalogCount != 1
 				|| report.DetailedCount != 1
 				|| report.Opportunities.Count != 1
-				|| !report.Opportunities[0].Sales24Hours.HasValue
+				|| report.Opportunities[0].Sales24Hours != 12
 				|| report.Opportunities[0].PreorderCount != 7)
 			{
 				return 53;
@@ -917,10 +918,32 @@ internal static class Program
 				"eu",
 				TimeSpan.FromHours(6),
 				CancellationToken.None);
-			if (await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
+			if (!await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
 				|| fivePending.Count != 5)
 			{
 				return 86;
+			}
+			await database.SaveOutfitBulkSamplesAsync(
+				coverageCatalog.Skip(95)
+					.Select(item => currentOutfitSample with
+					{
+						ItemId = item.ItemId,
+						Name = item.Name,
+						Price = item.CurrentPrice,
+						BasePrice = item.CurrentPrice,
+						TradeCount = 1_000 + item.ItemId,
+						CapturedUtc = DateTimeOffset.UtcNow
+					})
+					.ToArray(),
+				"eu",
+				CancellationToken.None);
+			if (await database.IsOutfitBulkRefreshDueAsync("eu", TimeSpan.FromHours(6), CancellationToken.None)
+				|| (await database.GetOutfitCatalogDueForBulkAsync(
+					"eu",
+					TimeSpan.FromHours(6),
+					CancellationToken.None)).Count != 0)
+			{
+				return 89;
 			}
 
 			using (AnalyticsMarketStubHandler marketHandler = new(invalidItemId: 103))
@@ -963,6 +986,53 @@ internal static class Program
 					|| multiPoisonHandler.RequestCount > 40)
 				{
 					return 87;
+				}
+			}
+
+			using (OutfitCategoryMarketStubHandler outfitCategoryHandler = new())
+			using (GrindMarketPriceProvider outfitCategoryProvider = new(logger, outfitCategoryHandler))
+			{
+				long[] outfitIds = [201, 202, 1001, 1002];
+				GrindMarketPriceResponse categoryResponse = await outfitCategoryProvider.GetOutfitAnalyticsPricesAsync(
+					outfitIds,
+					"eu",
+					CancellationToken.None);
+				if (categoryResponse.Prices.Count != outfitIds.Length
+					|| categoryResponse.Missing.Count != 0
+					|| categoryResponse.Prices.Any(price => !price.TradeCount.HasValue)
+					|| outfitCategoryHandler.RequestCount != 2)
+				{
+					return 180;
+				}
+			}
+
+			using (OutfitCategoryMarketStubHandler truncatedOutfitCategoryHandler = new(truncateFirstCategory: true))
+			using (GrindMarketPriceProvider truncatedOutfitCategoryProvider = new(logger, truncatedOutfitCategoryHandler))
+			{
+				long[] outfitIds = [201, 202, 1001, 1002];
+				GrindMarketPriceResponse truncatedResponse = await truncatedOutfitCategoryProvider.GetOutfitAnalyticsPricesAsync(
+					outfitIds,
+					"eu",
+					CancellationToken.None);
+				if (truncatedResponse.Prices.Count != 0
+					|| !truncatedResponse.Missing.SequenceEqual(outfitIds))
+				{
+					return 181;
+				}
+			}
+
+			using (OutfitCategoryMarketStubHandler duplicatedOutfitCategoryHandler = new(wrongSecondCategory: true))
+			using (GrindMarketPriceProvider duplicatedOutfitCategoryProvider = new(logger, duplicatedOutfitCategoryHandler))
+			{
+				long[] outfitIds = [201, 202, 1001, 1002];
+				GrindMarketPriceResponse duplicatedResponse = await duplicatedOutfitCategoryProvider.GetOutfitAnalyticsPricesAsync(
+					outfitIds,
+					"eu",
+					CancellationToken.None);
+				if (duplicatedResponse.Prices.Count != 0
+					|| !duplicatedResponse.Missing.SequenceEqual(outfitIds))
+				{
+					return 182;
 				}
 			}
 
@@ -1686,6 +1756,53 @@ internal static class Program
 			{
 				Content = new StringContent(json, Encoding.UTF8, "application/json")
 			};
+		}
+	}
+
+	private sealed class OutfitCategoryMarketStubHandler : HttpMessageHandler
+	{
+		private readonly bool truncateFirstCategory;
+		private readonly bool wrongSecondCategory;
+		private int requestCount;
+
+		public OutfitCategoryMarketStubHandler(
+			bool truncateFirstCategory = false,
+			bool wrongSecondCategory = false)
+		{
+			this.truncateFirstCategory = truncateFirstCategory;
+			this.wrongSecondCategory = wrongSecondCategory;
+		}
+
+		public int RequestCount => Volatile.Read(ref requestCount);
+
+		protected override Task<HttpResponseMessage> SendAsync(
+			HttpRequestMessage request,
+			CancellationToken cancellationToken)
+		{
+			Interlocked.Increment(ref requestCount);
+			string query = request.RequestUri?.Query ?? string.Empty;
+			bool isFirstCategory = query.Contains("subCategory=1", StringComparison.OrdinalIgnoreCase);
+			int itemCount = isFirstCategory
+				? (truncateFirstCategory ? 100 : 500)
+				: 1000;
+			long[] ids = Enumerable.Range(isFirstCategory ? 201 : 1001, itemCount)
+				.Select(value => (long)value)
+				.ToArray();
+			int responseSubCategory = !isFirstCategory && wrongSecondCategory ? 1 : (isFirstCategory ? 1 : 2);
+			string json = JsonSerializer.Serialize(ids.Select(id => new
+			{
+				name = $"Test Outfit {id}",
+				id,
+				currentStock = 0,
+				totalTrades = 20_000L + id,
+				basePrice = 2_020_000_000L,
+				mainCategory = 55,
+				subCategory = responseSubCategory
+			}));
+			return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+			{
+				Content = new StringContent(json, Encoding.UTF8, "application/json")
+			});
 		}
 	}
 
