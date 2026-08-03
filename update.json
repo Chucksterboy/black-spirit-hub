@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.34",
+    "version":  "v0.9.35",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.34/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "C94A5210A59FB990EE674E9B95D8D4B339B0A6D16DCBCAC19E09722EAF67A9C8",
-    "notes":  "Keeps cached 24-hour, 3-day, and 7-day outfit sales visible during upstream market outages; marks stale analytics safely without using them for live recommendations; and improves Market Analytics sales-window and table-header colors."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.35/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "BF0795AF7612BEDFD31E4DA329DBD5BF6CAA57B1AB865F560600412E3B80AC5C",
+    "notes":  "Hides the Market Analytics scrollbar while preserving scrolling, and improves Top 3 outfit recommendations with sustained-sales thresholds, 12-snapshot coverage, freshness checks, and confidence-adjusted queue ranking."
 }

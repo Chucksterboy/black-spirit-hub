@@ -1500,9 +1500,17 @@
   .outfitTableWrap {
     max-height:650px;
     overflow:auto;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
     border:1px solid var(--border);
     border-radius:8px;
     background:var(--surface);
+  }
+
+  .outfitTableWrap::-webkit-scrollbar {
+    width:0;
+    height:0;
+    display:none;
   }
 
   .outfitTable { min-width:980px; }

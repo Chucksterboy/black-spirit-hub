@@ -587,6 +587,29 @@ if ($css -notmatch '(?s)html,\s*body\s*\{\s*scrollbar-width:\s*none;.*?-ms-overf
 	$css -match '(?s)(?:html|body)\s*\{[^}]*overflow-y:\s*hidden') {
 	throw "The root scrollbar must be visually hidden without disabling vertical scrolling."
 }
+if ($css -notmatch '(?s)\.outfitTableWrap\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-width:\s*none;[^}]*-ms-overflow-style:\s*none;' -or
+	$css -notmatch '(?s)\.outfitTableWrap::\-webkit-scrollbar\s*\{[^}]*display:\s*none;' -or
+	$css -match '(?s)\.outfitTableWrap\s*\{[^}]*overflow(?:-y)?:\s*hidden') {
+	throw "The outfit table scrollbar must be visually hidden without disabling table scrolling."
+}
+if ($script -notmatch '(?s)const\s+topThree\s*=\s*filtered\s*\.filter\(item\s*=>\s*item\.recommendationEligible\s*===\s*true\)\s*\.slice\(0,\s*3\)' -or
+	$script -match 'const\s+recommendationRank\s*=') {
+	throw "Top outfit cards must use only authoritative eligible backend recommendations without client-side fallback ranking."
+}
+if ($script -notmatch 'sampleReadyCount\s*=\s*filtered\.filter\(item\s*=>\s*item\.sampleCount\s*>=\s*12\)' -or
+	$script -notmatch 'outfits have 12\+ samples' -or
+	$script -match 'outfits have 5\+ samples') {
+	throw "Top outfit empty-state diagnostics must match the 12-sample recommendation requirement."
+}
+$marketDatabaseSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketDatabase.cs") -Raw
+if ($marketDatabaseSource -notmatch 'OutfitRecommendationMinimumSamples\s*=\s*12;' -or
+	$marketDatabaseSource -notmatch 'OutfitRecommendationActive24HourSales\s*=\s*10;' -or
+	$marketDatabaseSource -notmatch 'OutfitRecommendationActive3DaySales\s*=\s*20;' -or
+	$marketDatabaseSource -notmatch 'OutfitRecommendationActive7DaySales\s*=\s*40;' -or
+	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumActiveWindows\s*=\s*2;' -or
+	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumConfidence\s*=\s*0\.6;') {
+	throw "Top outfit recommendations must retain the minimum evidence and sales-volume gates."
+}
 
 $htmlIds = [regex]::Matches($html, '\bid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
 $duplicateIds = $htmlIds | Group-Object | Where-Object Count -gt 1

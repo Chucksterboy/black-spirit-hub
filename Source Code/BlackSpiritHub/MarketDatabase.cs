@@ -18,6 +18,13 @@ internal sealed class MarketDatabase
 	private static readonly TimeSpan OutfitSampleFreshness = TimeSpan.FromHours(12);
 	private static readonly TimeSpan OutfitClockSkewTolerance = TimeSpan.FromMinutes(5);
 	private static readonly TimeSpan OutfitBulkFreshnessGrace = TimeSpan.FromMinutes(30);
+	private const int OutfitRecommendationMinimumSamples = 12;
+	private const long OutfitRecommendationActive24HourSales = 10;
+	private const long OutfitRecommendationActive3DaySales = 20;
+	private const long OutfitRecommendationActive7DaySales = 40;
+	private const int OutfitRecommendationMinimumActiveWindows = 2;
+	private const double OutfitRecommendationMinimumConfidence = 0.6;
+	private static readonly TimeSpan OutfitRecommendationMaximumDetailAge = TimeSpan.FromDays(7);
 
 	private readonly string connectionString;
 
@@ -837,16 +844,30 @@ WHERE row_number=1;";
 					double num6 = (double)num3.Value / 7.0;
 					demandMomentumPercent = ((double)num.Value - num6) * 100.0 / num6;
 				}
-				bool flag = num >= 3 || num2 >= 8 || num3 >= 15;
-				bool flag2 = !num3.HasValue || num3 <= 2 || (num2.GetValueOrDefault() <= 2 && num.GetValueOrDefault() == 0);
-				bool flag3 = !salesDataStale && value2.Count >= 2 && num4.HasValue && num4.Value > 0.0 && sevenDayChancePercent.HasValue && (flag || preorderCount.GetValueOrDefault() > 0) && !flag2;
-				double num9 = Math.Min(1.0, Math.Sqrt(((double)(num3 ?? (long)Math.Round(num4.GetValueOrDefault() * 7.0))) / 30.0));
-				double num8 = CalculateOutfitConfidence(value2, item2.Detail, num, num2, num3);
-				double confidencePercent = num8 * 100.0;
-				double preorderPressure = Math.Min(1.0, Math.Log10((double)Math.Max(0L, preorderCount.GetValueOrDefault()) + 1.0) / 2.0);
-				double stockPressure = 1.0 - Math.Min(1.0, Math.Log10((double)Math.Max(1L, item2.Stock) + 1.0) / 3.0);
-				double liveSignal = 0.65 + preorderPressure * 0.25 + stockPressure * 0.1;
-				double score = (flag3 ? (sevenDayChancePercent.Value / 100.0 * num9 * num8 * liveSignal) : 0.0);
+				double volumeReliability = Math.Min(1.0, Math.Sqrt(((double)(num3 ?? (long)Math.Round(num4.GetValueOrDefault() * 7.0))) / 30.0));
+				double confidence = CalculateOutfitConfidence(value2, item2.Detail, num, num2, num3);
+				double confidencePercent = confidence * 100.0;
+				int activeSalesWindows =
+					(num.GetValueOrDefault() >= OutfitRecommendationActive24HourSales ? 1 : 0)
+					+ (num2.GetValueOrDefault() >= OutfitRecommendationActive3DaySales ? 1 : 0)
+					+ (num3.GetValueOrDefault() >= OutfitRecommendationActive7DaySales ? 1 : 0);
+				bool hasCurrentPreorderDetail =
+					item2.Detail.HasValue
+					&& item2.Detail.Value <= reportNow.Add(OutfitClockSkewTolerance)
+					&& reportNow - item2.Detail.Value <= OutfitRecommendationMaximumDetailAge;
+				bool flag3 =
+					!salesDataStale
+					&& hasCurrentPreorderDetail
+					&& value2.Count >= OutfitRecommendationMinimumSamples
+					&& confidence >= OutfitRecommendationMinimumConfidence
+					&& num4.HasValue
+					&& num4.Value > 0.0
+					&& sevenDayChancePercent.HasValue
+					&& preorderCount.GetValueOrDefault() > 0
+					&& activeSalesWindows >= OutfitRecommendationMinimumActiveWindows;
+				double score = flag3 && estimatedQueueDays.HasValue && estimatedQueueDays.Value > 0.0
+					? confidence * volumeReliability / estimatedQueueDays.Value
+					: 0.0;
 				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, value2.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
 			}
 			int num10 = catalog.Count<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>(delegate((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x)

@@ -964,6 +964,181 @@ internal static class Program
 				|| windowReport.LastSalesSampleUtc.Value < bulkCapturedUtc
 				|| windowReport.LastSalesSampleUtc.Value > DateTimeOffset.UtcNow.AddMinutes(1)) return 209;
 
+			MarketItem weakSignalOutfit = new(700_005, 0, "Weak Signal Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem preorderOnlySignalOutfit = new(700_006, 0, "Preorder Only Signal Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem strongPartialWindowOutfit = new(700_007, 0, "Strong Partial Window Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			await database.SyncOutfitCatalogAsync(
+				[weakSignalOutfit, preorderOnlySignalOutfit, strongPartialWindowOutfit],
+				"eu",
+				CancellationToken.None);
+			DateTimeOffset recommendationCapturedUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
+			(TimeSpan Age, long Trades)[] weakSignalSeries =
+			[
+				(TimeSpan.FromDays(7), 1_000),
+				(TimeSpan.FromDays(6), 1_000),
+				(TimeSpan.FromDays(5), 1_000),
+				(TimeSpan.FromDays(4), 1_000),
+				(TimeSpan.FromDays(3), 1_000),
+				(TimeSpan.FromDays(2), 1_000),
+				(TimeSpan.FromDays(1), 1_001),
+				(TimeSpan.FromDays(0.5), 1_002),
+				(TimeSpan.FromHours(6), 1_002),
+				(TimeSpan.FromHours(3), 1_003),
+				(TimeSpan.Zero, 1_004)
+			];
+			foreach ((TimeSpan age, long trades) in weakSignalSeries)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = weakSignalOutfit.ItemId,
+						Name = weakSignalOutfit.Name,
+						Price = weakSignalOutfit.CurrentPrice,
+						BasePrice = weakSignalOutfit.CurrentPrice,
+						TradeCount = trades,
+						CapturedUtc = recommendationCapturedUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			(TimeSpan Age, long Trades)[] preorderOnlySignalSeries =
+			[
+				(TimeSpan.FromDays(7), 1_000),
+				(TimeSpan.FromDays(6), 1_002),
+				(TimeSpan.FromDays(5), 1_004),
+				(TimeSpan.FromDays(4), 1_006),
+				(TimeSpan.FromDays(3), 1_008),
+				(TimeSpan.FromDays(2), 1_009),
+				(TimeSpan.FromDays(1), 1_011),
+				(TimeSpan.FromDays(0.5), 1_011),
+				(TimeSpan.FromHours(6), 1_011),
+				(TimeSpan.FromHours(3), 1_011),
+				(TimeSpan.Zero, 1_011)
+			];
+			foreach ((TimeSpan age, long trades) in preorderOnlySignalSeries)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = preorderOnlySignalOutfit.ItemId,
+						Name = preorderOnlySignalOutfit.Name,
+						Price = preorderOnlySignalOutfit.CurrentPrice,
+						BasePrice = preorderOnlySignalOutfit.CurrentPrice,
+						TradeCount = trades,
+						CapturedUtc = recommendationCapturedUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			(TimeSpan Age, long Trades)[] strongSignalSeries =
+			[
+				(TimeSpan.FromDays(4), 1_000),
+				(TimeSpan.FromDays(3.75), 1_020),
+				(TimeSpan.FromDays(3.5), 1_040),
+				(TimeSpan.FromDays(3), 1_080),
+				(TimeSpan.FromDays(2.25), 1_150),
+				(TimeSpan.FromDays(2), 1_200),
+				(TimeSpan.FromDays(1.75), 1_250),
+				(TimeSpan.FromDays(1), 1_300),
+				(TimeSpan.FromDays(0.5), 1_400),
+				(TimeSpan.Zero, 1_500)
+			];
+			foreach ((TimeSpan age, long trades) in strongSignalSeries)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = strongPartialWindowOutfit.ItemId,
+						Name = strongPartialWindowOutfit.Name,
+						Price = strongPartialWindowOutfit.CurrentPrice,
+						BasePrice = strongPartialWindowOutfit.CurrentPrice,
+						TradeCount = trades,
+						CapturedUtc = recommendationCapturedUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			await database.SaveOutfitDetailAsync(
+				weakSignalOutfit,
+				weakSignalOutfit with { TradeCount = 1_004 },
+				new MarketSnapshot(weakSignalOutfit.CurrentPrice, 0, 1_004, 6, weakSignalOutfit.CurrentPrice, weakSignalOutfit.CurrentPrice, weakSignalOutfit.CurrentPrice, Array.Empty<ProviderHistoryPoint>()),
+				"eu",
+				CancellationToken.None);
+			await database.SaveOutfitDetailAsync(
+				preorderOnlySignalOutfit,
+				preorderOnlySignalOutfit with { TradeCount = 1_011 },
+				new MarketSnapshot(preorderOnlySignalOutfit.CurrentPrice, 0, 1_011, 4, preorderOnlySignalOutfit.CurrentPrice, preorderOnlySignalOutfit.CurrentPrice, preorderOnlySignalOutfit.CurrentPrice, Array.Empty<ProviderHistoryPoint>()),
+				"eu",
+				CancellationToken.None);
+			await database.SaveOutfitDetailAsync(
+				strongPartialWindowOutfit,
+				strongPartialWindowOutfit with { TradeCount = 1_500 },
+				new MarketSnapshot(strongPartialWindowOutfit.CurrentPrice, 0, 1_500, 323, strongPartialWindowOutfit.CurrentPrice, strongPartialWindowOutfit.CurrentPrice, strongPartialWindowOutfit.CurrentPrice, Array.Empty<ProviderHistoryPoint>()),
+				"eu",
+				CancellationToken.None);
+			OutfitReport recommendationReport = await database.GetOutfitReportAsync("eu", CancellationToken.None);
+			OutfitOpportunity weakSignalResult = recommendationReport.Opportunities.Single(item => item.ItemId == weakSignalOutfit.ItemId);
+			OutfitOpportunity preorderOnlySignalResult = recommendationReport.Opportunities.Single(item => item.ItemId == preorderOnlySignalOutfit.ItemId);
+			OutfitOpportunity strongSignalResult = recommendationReport.Opportunities.Single(item => item.ItemId == strongPartialWindowOutfit.ItemId);
+			if (weakSignalResult.Sales24Hours != 3
+				|| weakSignalResult.Sales3Days != 4
+				|| weakSignalResult.Sales7Days != 4
+				|| weakSignalResult.SampleCount != 12) return 210;
+			if (weakSignalResult.RecommendationEligible) return 211;
+			if (preorderOnlySignalResult.Sales24Hours != 0
+				|| preorderOnlySignalResult.Sales3Days != 3
+				|| preorderOnlySignalResult.Sales7Days != 11
+				|| preorderOnlySignalResult.SampleCount != 12) return 212;
+			if (preorderOnlySignalResult.RecommendationEligible) return 213;
+			if (strongSignalResult.Sales24Hours != 200
+				|| strongSignalResult.Sales3Days != 420
+				|| strongSignalResult.Sales7Days.HasValue
+				|| strongSignalResult.SampleCount != 11) return 214;
+			if (strongSignalResult.RecommendationEligible) return 215;
+			await database.SaveOutfitBulkSamplesAsync(
+				[olderOutfitSample with
+				{
+					ItemId = strongPartialWindowOutfit.ItemId,
+					Name = strongPartialWindowOutfit.Name,
+					Price = strongPartialWindowOutfit.CurrentPrice,
+					BasePrice = strongPartialWindowOutfit.CurrentPrice,
+					TradeCount = 1_450,
+					CapturedUtc = recommendationCapturedUtc.Subtract(TimeSpan.FromDays(0.25))
+				}],
+				"eu",
+				CancellationToken.None);
+			strongSignalResult = (await database.GetOutfitReportAsync("eu", CancellationToken.None))
+				.Opportunities.Single(item => item.ItemId == strongPartialWindowOutfit.ItemId);
+			if (strongSignalResult.Sales24Hours != 200
+				|| strongSignalResult.Sales3Days != 420
+				|| strongSignalResult.Sales7Days.HasValue
+				|| strongSignalResult.SampleCount != 12
+				|| !strongSignalResult.RecommendationEligible) return 221;
+			if (strongSignalResult.Score <= weakSignalResult.Score
+				|| strongSignalResult.Score <= preorderOnlySignalResult.Score) return 216;
+			double strongVolumeReliability = Math.Min(
+				1.0,
+				Math.Sqrt((double)Math.Round(strongSignalResult.SalesPerDay.GetValueOrDefault() * 7.0) / 30.0));
+			double expectedStrongScore =
+				(strongSignalResult.ConfidencePercent / 100.0)
+				* strongVolumeReliability
+				/ strongSignalResult.EstimatedQueueDays.GetValueOrDefault();
+			if (Math.Abs(strongSignalResult.Score - expectedStrongScore) > 0.000000001) return 220;
+			await using (SqliteConnection staleDetailConnection = new($"Data Source={testDatabasePath}"))
+			{
+				await staleDetailConnection.OpenAsync();
+				await using SqliteCommand ageDetail = staleDetailConnection.CreateCommand();
+				ageDetail.CommandText = "UPDATE outfit_catalog SET last_detailed_utc=$stale WHERE item_id=$id AND region='eu';";
+				ageDetail.Parameters.AddWithValue("$stale", DateTimeOffset.UtcNow.AddDays(-8).ToString("O"));
+				ageDetail.Parameters.AddWithValue("$id", strongPartialWindowOutfit.ItemId);
+				if (await ageDetail.ExecuteNonQueryAsync() != 1) return 217;
+			}
+			OutfitOpportunity staleDetailSignalResult = (await database.GetOutfitReportAsync("eu", CancellationToken.None))
+				.Opportunities.Single(item => item.ItemId == strongPartialWindowOutfit.ItemId);
+			if (staleDetailSignalResult.RecommendationEligible) return 218;
+			if (staleDetailSignalResult.Sales24Hours != 200
+				|| staleDetailSignalResult.Sales3Days != 420) return 219;
+
 			MarketItem[] coverageCatalog = Enumerable.Range(0, 100)
 				.Select(index => new MarketItem(
 					710_000 + index,

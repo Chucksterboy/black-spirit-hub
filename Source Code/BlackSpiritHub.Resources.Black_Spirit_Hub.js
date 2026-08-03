@@ -2307,24 +2307,10 @@ function renderOutfitReport() {
     .replace(/\bberzerker\b/g, "berserker")
     .replace(/\bzerker\b/g, "berserker");
   const filtered = report.opportunities.filter(item => !filter || norm(item.name).includes(filter));
-  const recommendationRank = item => {
-    const chance = item.sevenDayChancePercent == null ? 0 : item.sevenDayChancePercent;
-    const preorder = item.preorderCount == null ? 0 : item.preorderCount;
-    const sales = item.sales7Days == null ? 0 : item.sales7Days;
-    const priceWeight = item.price ? Math.log10(Math.max(10, item.price)) : 0;
-    const stockPenalty = item.stock == null ? 0 : Math.min(5, Math.log10(Math.max(1, item.stock)));
-    return (item.score || 0) * 1000 + chance * 2 + Math.log10(preorder + 1) * 25 + sales * 4 + priceWeight * 3 - stockPenalty;
-  };
-  const topThree = [...filtered]
-    .filter(item => item.sampleCount > 0 || item.preorderCount != null || item.price > 0)
-    .sort((a,b) =>
-      (b.recommendationEligible === true) - (a.recommendationEligible === true) ||
-      recommendationRank(b) - recommendationRank(a) ||
-      (b.preorderCount || 0) - (a.preorderCount || 0) ||
-      (b.price || 0) - (a.price || 0) ||
-      a.name.localeCompare(b.name))
+  const topThree = filtered
+    .filter(item => item.recommendationEligible === true)
     .slice(0, 3);
-  const sampleReadyCount = filtered.filter(item => item.sampleCount >= 5).length;
+  const sampleReadyCount = filtered.filter(item => item.sampleCount >= 12).length;
   const windowReadyCount = filtered.filter(item =>
     item.sales24Hours != null &&
     item.sales3Days != null &&
@@ -2349,7 +2335,7 @@ function renderOutfitReport() {
     </article>`;
   }).join("") || `<div class="mustOrderCard">
     <strong>No active outfit recommendations yet</strong>
-    <span class="confidence">${fmtInt(sampleReadyCount)} outfits have 5+ samples | ${fmtInt(windowReadyCount)} have complete windows. Waiting for stronger ${selectedRegionLabel} sales movement.</span>
+    <span class="confidence">${fmtInt(sampleReadyCount)} outfits have 12+ samples | ${fmtInt(windowReadyCount)} have complete windows. Waiting for active preorders with enough recent ${selectedRegionLabel} sales evidence.</span>
   </div>`;
   const rows = filtered.slice(0, 500);
   marketEl.outfitRows.innerHTML = rows.map((item,index) => {
