@@ -202,6 +202,11 @@ internal static class Program
 			Environment.Exit(RunProductMigrationSmokeTest());
 			return;
 		}
+		if (args.Any((string a) => string.Equals(a, "--app-behavior-smoke-test", StringComparison.OrdinalIgnoreCase)))
+		{
+			Environment.Exit(RunAppBehaviorSmokeTest());
+			return;
+		}
 		bool runOnlineSmokeTest = args.Any((string a) => string.Equals(a, "--smoke-test", StringComparison.OrdinalIgnoreCase));
 		bool runOfflineSmokeTest = args.Any((string a) => string.Equals(a, "--offline-smoke-test", StringComparison.OrdinalIgnoreCase));
 		if (runOnlineSmokeTest || runOfflineSmokeTest)
@@ -372,6 +377,81 @@ internal static class Program
 		catch
 		{
 			return 73;
+		}
+		finally
+		{
+			try
+			{
+				if (Directory.Exists(root))
+				{
+					Directory.Delete(root, recursive: true);
+				}
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private static int RunAppBehaviorSmokeTest()
+	{
+		string root = Path.Combine(Path.GetTempPath(), $"black-spirit-hub-app-behavior-{Guid.NewGuid():N}");
+		try
+		{
+			AppPaths paths = AppPaths.CreateAt(root);
+			paths.EnsureDirectories();
+
+			AppBehaviorSettings defaults = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
+			if (!defaults.MinimizeToTray)
+			{
+				return 111;
+			}
+
+			AppBehaviorSettings.Save(paths, new AppBehaviorSettings(false));
+			AppBehaviorSettings disabled = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
+			if (disabled.MinimizeToTray)
+			{
+				return 112;
+			}
+
+			AppBehaviorSettings.Save(paths, new AppBehaviorSettings(true));
+			AppBehaviorSettings enabled = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
+			if (!enabled.MinimizeToTray)
+			{
+				return 113;
+			}
+
+			using JsonDocument validPayload = JsonDocument.Parse("{\"minimizeToTray\":false}");
+			if (CalculatorForm.ReadMinimizeToTraySetting(validPayload.RootElement))
+			{
+				return 114;
+			}
+
+			bool rejectedMissingValue = false;
+			try
+			{
+				using JsonDocument missingPayload = JsonDocument.Parse("{}");
+				CalculatorForm.ReadMinimizeToTraySetting(missingPayload.RootElement);
+			}
+			catch (InvalidOperationException)
+			{
+				rejectedMissingValue = true;
+			}
+			if (!rejectedMissingValue)
+			{
+				return 115;
+			}
+
+			bool closePolicyIsCorrect =
+				CalculatorForm.ShouldMinimizeToTrayOnClose(false, true, CloseReason.UserClosing)
+				&& !CalculatorForm.ShouldMinimizeToTrayOnClose(false, false, CloseReason.UserClosing)
+				&& !CalculatorForm.ShouldMinimizeToTrayOnClose(true, true, CloseReason.UserClosing)
+				&& !CalculatorForm.ShouldMinimizeToTrayOnClose(false, true, CloseReason.WindowsShutDown);
+			return closePolicyIsCorrect ? 0 : 116;
+		}
+		catch
+		{
+			return 117;
 		}
 		finally
 		{

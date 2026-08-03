@@ -339,6 +339,12 @@
     transform: translateX(22px);
   }
 
+  .switch input:disabled + .slider {
+    cursor:wait;
+    opacity:.48;
+    filter:saturate(.45);
+  }
+
   .bargainLine {
     margin-top:10px;
     font-size:12px;

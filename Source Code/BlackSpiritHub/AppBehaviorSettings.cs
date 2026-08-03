@@ -29,5 +29,11 @@ internal sealed record AppBehaviorSettings(bool MinimizeToTray)
 		await AtomicFile.WriteAllTextAsync(paths.AppBehaviorSettingsPath, JsonSerializer.Serialize(settings, JsonOptions), cancellationToken);
 		return settings;
 	}
+
+	public static AppBehaviorSettings Save(AppPaths paths, AppBehaviorSettings settings)
+	{
+		AtomicFile.WriteAllText(paths.AppBehaviorSettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
+		return settings;
+	}
 }
 

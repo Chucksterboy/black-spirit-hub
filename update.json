@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.32",
+    "version":  "v0.9.33",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.32/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "9C939108F3939F1DB9609259B494B217DE1334CB3B01BCFE3B44A6406D2F71A1",
-    "notes":  "Market Analytics sales-window reliability: replaces the failing per-item outfit sweep with two validated EU category snapshots covering the complete outfit catalog, rejects incomplete or mislabelled upstream responses, preserves compatible historical sales baselines, separates preorder detail data, and requires every outfit to receive a fresh sample. Restores dependable 24-hour and 3-day outfit sales data while accurate 7-day coverage continues filling."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.33/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "250CB62C02CC5C9FB2BB91A41EEB69EDA1B7B1C1C7B679904D66138E021E6E9A",
+    "notes":  "Adds Gavinya Coastal Cliff to Grind Zones with its complete loot table, official item icons, pricing, AP and DP caps, and resistance guidance. Fixes close-to-system-tray setting persistence and startup hydration."
 }

@@ -9,6 +9,55 @@ namespace BlackSpiritHub;
 
 internal static class AtomicFile
 {
+	public static void WriteAllText(string path, string contents)
+	{
+		string? directory = Path.GetDirectoryName(path);
+		if (!string.IsNullOrWhiteSpace(directory))
+		{
+			Directory.CreateDirectory(directory);
+		}
+
+		string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+		string backupPath = path + ".bak";
+		try
+		{
+			using (FileStream stream = new(
+				temporaryPath,
+				FileMode.CreateNew,
+				FileAccess.Write,
+				FileShare.None,
+				4096,
+				FileOptions.WriteThrough))
+			{
+				byte[] bytes = Encoding.UTF8.GetBytes(contents);
+				stream.Write(bytes, 0, bytes.Length);
+				stream.Flush(flushToDisk: true);
+			}
+
+			if (File.Exists(path))
+			{
+				File.Replace(temporaryPath, path, backupPath, ignoreMetadataErrors: true);
+			}
+			else
+			{
+				File.Move(temporaryPath, path);
+			}
+		}
+		finally
+		{
+			try
+			{
+				if (File.Exists(temporaryPath))
+				{
+					File.Delete(temporaryPath);
+				}
+			}
+			catch
+			{
+			}
+		}
+	}
+
 	public static async Task<T?> ReadJsonAsync<T>(
 		string path,
 		JsonSerializerOptions options,

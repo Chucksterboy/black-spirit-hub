@@ -310,9 +310,70 @@ appearanceEl.reduceMotion?.addEventListener("change", () => {
 });
 appearanceEl.toastEnabled?.addEventListener("change",()=>{const current=loadAppearance();applyAppearance({...current,toastEnabled:appearanceEl.toastEnabled.checked});if(appearanceEl.toastEnabled.checked)NotificationService.ShowInfo("Toast notifications are enabled.")});
 appearanceEl.toastDuration?.addEventListener("change",()=>{const current=loadAppearance();applyAppearance({...current,toastDuration:Number(appearanceEl.toastDuration.value)});NotificationService.ShowInfo(`Toast duration set to ${appearanceEl.toastDuration.value} seconds.`)});
-async function initializeAppBehaviorSettings(){try{const s=await bridgeCall("getAppBehaviorSettings");if(appearanceEl.minimizeToTray)appearanceEl.minimizeToTray.checked=s.minimizeToTray!==false;}catch{}}
-appearanceEl.minimizeToTray?.addEventListener("change",async()=>{try{await bridgeCall("saveAppBehaviorSettings",{minimizeToTray:appearanceEl.minimizeToTray.checked});NotificationService.ShowInfo(`Close button will ${appearanceEl.minimizeToTray.checked?"minimize to tray":"close the app"}.`,"App behavior saved");}catch(error){NotificationService.ShowError(error.message||"Could not save app behavior.")}});
-initializeAppBehaviorSettings();
+let appBehaviorSettingsLoaded=false;
+let appBehaviorSavedValue=null;
+let appBehaviorLoadPromise=null;
+let appBehaviorSaveInFlight=false;
+let appBehaviorShowLoadError=false;
+function requireAppBehaviorSettings(value){
+  if(typeof value?.minimizeToTray!=="boolean")throw new Error("The application returned an invalid close-button setting.");
+  return value;
+}
+function initializeAppBehaviorSettings({showError=false}={}){
+  const toggle=appearanceEl.minimizeToTray;
+  if(!toggle)return Promise.resolve(false);
+  if(showError)appBehaviorShowLoadError=true;
+  if(appBehaviorLoadPromise)return appBehaviorLoadPromise;
+  toggle.disabled=true;
+  toggle.closest(".switch")?.setAttribute("title","Loading close-button behavior");
+  appBehaviorLoadPromise=(async()=>{
+    try{
+      const settings=requireAppBehaviorSettings(await bridgeCall("getAppBehaviorSettings"));
+      appBehaviorSavedValue=settings.minimizeToTray;
+      toggle.checked=settings.minimizeToTray;
+      appBehaviorSettingsLoaded=true;
+      toggle.closest(".switch")?.setAttribute("title","Minimize to system tray");
+      return true;
+    }catch(error){
+      appBehaviorSettingsLoaded=false;
+      toggle.closest(".switch")?.setAttribute("title","Close-button behavior is unavailable until the app reconnects");
+      console.warn("[AppBehavior] Could not load close-button behavior.",error);
+      if(appBehaviorShowLoadError)NotificationService.ShowError(error.message||"Could not load app behavior.","App behavior");
+      return false;
+    }finally{
+      toggle.disabled=!appBehaviorSettingsLoaded||appBehaviorSaveInFlight;
+    }
+  })().finally(()=>{appBehaviorLoadPromise=null;appBehaviorShowLoadError=false;});
+  return appBehaviorLoadPromise;
+}
+appearanceEl.minimizeToTray?.addEventListener("change",async()=>{
+  const toggle=appearanceEl.minimizeToTray;
+  if(!toggle||appBehaviorSaveInFlight)return;
+  const requestedValue=toggle.checked;
+  const previousValue=appBehaviorSavedValue;
+  appBehaviorSaveInFlight=true;
+  toggle.disabled=true;
+  toggle.closest(".switch")?.setAttribute("title","Saving close-button behavior");
+  try{
+    const settings=requireAppBehaviorSettings(await bridgeCall("saveAppBehaviorSettings",{minimizeToTray:requestedValue}));
+    appBehaviorSavedValue=settings.minimizeToTray;
+    toggle.checked=settings.minimizeToTray;
+    appBehaviorSettingsLoaded=true;
+    toggle.closest(".switch")?.setAttribute("title","Minimize to system tray");
+    NotificationService.ShowInfo(`Close button will ${settings.minimizeToTray?"minimize to tray":"close the app"}.`,"App behavior saved");
+  }catch(error){
+    console.warn("[AppBehavior] Could not save close-button behavior.",error);
+    const restored=await initializeAppBehaviorSettings();
+    if(!restored&&typeof previousValue==="boolean"){
+      appBehaviorSavedValue=previousValue;
+      toggle.checked=previousValue;
+    }
+    NotificationService.ShowError(error.message||"Could not save app behavior.","App behavior");
+  }finally{
+    appBehaviorSaveInFlight=false;
+    toggle.disabled=!appBehaviorSettingsLoaded;
+  }
+});
 
 appearanceEl.backgroundStrength?.addEventListener("input", () => {
   const current = loadAppearance();
@@ -1078,6 +1139,7 @@ window.chrome?.webview?.addEventListener("message", event => {
     initializeUpdateChecker();
   }
 });
+initializeAppBehaviorSettings();
 
 function setMarketStatus(message, isError = false) {
   marketEl.status.textContent = message;
@@ -1522,9 +1584,11 @@ const GRIND_FIXED_ITEM_PRICES={"5960":500,"44181":504,"44194":800,"44266":7500,"
 const GRIND_MARKET_ITEM_ID_OVERRIDES={"corrupted-gluttony-crystal":15741,"gluttony-crystal":821344,"edania-refined-essence-of-devouring":767338,"edania-refined-origin-of-hunger":767337,"edania-crimson-primordial-pigment-sovereign":767293,"edania-violet-primordial-pigment-sovereign":767294,"edania-violet-primordial-pigment-edana":767296,"edania-crimson-primordial-luster-sovereign":821341,"edania-violet-primordial-luster-sovereign":821342,"edania-violet-primordial-luster-edana":821343,"corrupt-oil-of-immortality":1178};
 Object.assign(GRIND_FIXED_ITEM_PRICES,{"44300":3000,"44322":1000,"44324":12000,"44425":1750,"44426":1925,"44427":1820,"44428":1890,"44429":2030,"44431":2100,"44432":2100,"44434":3150,"44435":2120,"44436":3000,"44437":3240,"44438":3600,"44439":3000,"44440":3445,"44442":4320,"44443":8800,"44494":9870,"faded-dark-energy":597680,"edania-primordial-fragment":30000000,"edania-won-crystal-of-ruin":5000000,"edania-bon-crystal-of-ruin":7000000,"edania-jin-crystal-of-ruin":8000000,"edania-han-crystal-of-ruin":10000000,"edania-won-crystal-of-dusky-ruin":500000000,"edania-bon-crystal-of-dusky-ruin":700000000,"edania-jin-crystal-of-dusky-ruin":800000000,"edania-han-crystal-of-dusky-ruin":1000000000});
 Object.assign(GRIND_FIXED_ITEM_PRICES,{"mossy-ancient-ruins-fragment":10000,"great-marnis-stone-forest-ronaros":2000000,"8126":3000000,"8133":10000000,"15668":1000000,"6393":100000,"6399":100000,"6400":100000,"8124":3000000,"8129":3000000,"8135":100000,"8145":100000,"40968":100000,"44243":30000,"44284":30000,"44350":50000,"44383":1000000,"44405":100000,"65770":30000,"65780":30000,"721002":3000,"721044":30000000,"752023":51000,"757451":16400,"757452":18000,"757454":13200,"757455":14800,"757460":16000,"757470":17800,"757471":19400,"757473":16000,"820040":50000});
+Object.assign(GRIND_FIXED_ITEM_PRICES,{"767350":165508});
 delete GRIND_FIXED_ITEM_PRICES["5960"];
 Object.assign(GRIND_MARKET_ITEM_ID_OVERRIDES,{"edania-distorted-fragment-of-origin":821317,"edania-silent-fragment-of-origin":821318,"edania-crystallized-energy-of-endtimes":821252,"edania-distorted-crystal-of-origin":761802,"edania-silent-crystal-of-origin":761803,"edania-herald-s-crystal":821250,"edania-flawless-herald-s-crystal":821251,"imperfect-lightstone-of-earth":766105,"imperfect-lightstone-of-wind":766106,"sycraia-shard":821347});
 const GRIND_NO_VALUE_ITEM_IDS=new Set(["ancient-creatures-scale","edania-deboreka-accessories","any-artifact","faint-sycraia-s-memory","gentle-sycraia-s-memory","intense-sycraia-s-memory","radiant-sycraia-s-memory","sycraia-underwater-ruins-paint","al-yurads-ring-piece","marnis-research-box","sycrids-scale-piece","void-tainted-whispers","752530","66108","66106","66107","40760","65778","65331","65332","15713","8958","8956","8957","8959","40709","40758","66945","56335","56505","8428","44799","40708","40756","44501","40706","40762","40711","40752","65327","56284","45017","45013","45018","45014"]);
+GRIND_NO_VALUE_ITEM_IDS.add("761726");
 function grindNormalizeItemName(value){return String(value||"").toLowerCase().replace(/\[[^\]]+\]/g,"").replace(/[^a-z0-9]+/g," ").trim()}
 function grindAllDrops(){const map=new Map();GRIND_SPOTS.forEach(spot=>(spot.drops||[]).forEach(drop=>{if(!map.has(String(drop.id)))map.set(String(drop.id),drop)}));return[...map.values()]}
 function grindDropHasNoValue(drop){const id=String(drop?.id||""),name=String(drop?.name||"");return GRIND_NO_VALUE_ITEM_IDS.has(id)||/^event-/i.test(id)||/\[event\]/i.test(name)}
@@ -1689,6 +1753,8 @@ const grindResistanceCrystalGroups=[
 ];
 const grindSpotCcOverrides={"dark energy floodlands":["knockdown","bound"],"zephyros castle":["knockdown","bound"],"tenebraum castle":["knockdown","bound"],"orbita castle":["knockdown","bound"],"aetherion castle":["stun","stiffness","freeze"],"nymphamar castle":["stun","stiffness","freeze"],"stars end":["stiffness","stun","freeze"],"star s end":["stiffness","stun","freeze"],"sycraia abyssal ruins lower":["knockback","float"],"old sycraia lower":["knockdown","bound"],"hystria ruins":["knockback","float"],"aakman temple":["knockdown","bound"],"dehkia hystria ruins":["knockback","float"],"dehkia aakman temple":["knockdown","bound"],"dehkia cyclops land":["knockback","float"],"dehkia cadry ruins":["stun","stiffness","freeze"],"dehkia crescent shrine":["knockdown","bound"],"dehkia ash forest":["knockdown","bound"],"dehkia 2 ash forest":["knockdown","bound"],"dehkia tunkuta":["knockdown","bound"],"dehkia thornwood forest":["knockback","knockdown"],"dehkia olun s valley":["knockdown","bound"],"dehkia 2 olun s valley":["knockdown","bound"],"gyfin rhasia underground":["knockdown","bound"],"olun s valley":["knockdown","bound"],"crypt of resting thoughts":["stun","stiffness","freeze"],"orcs camp":["stun","stiffness","freeze"],"orc camp":["stun","stiffness","freeze"],"bloody monastery":["stun","stiffness","freeze"],"biraghi den":["stun","stiffness","freeze"],"swamp fogan habitat":["stun","stiffness","freeze"],"swamp naga habitat":["stun","stiffness","freeze"],"saunil camp":["knockdown","bound"],"centaurus herd":["knockdown","bound"],"cadry ruins":["stun","stiffness","freeze"],"crescent shrine":["knockdown","bound"],"bashim base":[],"desert naga temple":[],"tshira ruins":["knockdown","bound"],"roud sulfur mine":["knockback","float"],"pila ku jail":["knockdown","bound"],"basilisk den":["knockback","float"],"traitor s graveyard":[],"gahaz bandit s lair":["stun","stiffness","freeze"],"zephyros dark energy floodlands":["knockdown","bound"],"orbita dark energy floodlands":["knockdown","bound"],"great red sea dark energy floodlands":["knockdown","bound"]};
 const grindMaxCapOverrides={"stars end":[1950,800],"star s end":[1950,800],"zephyros castle":[2010,800],"sycraia abyssal ruins lower":[1935,800],"old sycraia lower":[800,290],"tenebraum castle":[1920,760],"dark energy floodlands":[1880,760],"orbita castle":[1800,740],"aetherion castle":[1595,615],"nymphamar castle":[1690,720],"elvia orzekea":[1595,700],"dehkia gyfin rhasia temple upper":[1680,715],"dehkia mirumok ruins":[1595,615],"dehkia 2 ash forest":[1540,540],"dehkia 2 olun s valley":[1490,540],"dokkebi forest":[1445,530],"fortunate golden pig cave":[1490,660],"unlucky golden pig cave":[1540,670],"yzrahid highlands":[1180,460],"quint hill":[1295,440],"hexe sanctuary":[1130,430],"dehkia thornwood forest":[1180,440],"dehkia cadry ruins":[1395,440],"dehkia cyclops land":[1180,440],"dehkia crescent shrine":[1350,440],"dehkia ash forest":[1350,440],"city of the dead":[1295,410],"dehkia tunkuta":[1180,440],"dehkia roud sulfur mine":[1130,440],"dehkia hystria ruins":[1130,440],"dehkia aakman temple":[1130,440],"dehkia pila ku jail":[1130,440],"sycraia abyssal ruins upper":[1130,440],"ash forest":[1130,430],"gyfin rhasia underground":[1030,410],"jade starlight forest":[950,370],"honglim base":[950,390],"crypt of resting thoughts":[1130,440],"olun s valley":[1030,410],"primal giant post":[1000,410],"swamp fogan habitat":[803,290],"winter tree fossil 280ap":[856,370],"winter tree fossil 280":[856,370],"orc camp":[856,350],"orcs camp":[856,350],"rhutum outstation":[835,380],"altar imp habitat":[753,280],"swamp naga habitat":[803,290],"saunil camp":[813,330],"biraghi den":[753,280],"murrowak s labyrinth":[856,370],"bloody monastery":[856,350],"tunkuta":[825,340],"sherekhan night":[480,170],"abandoned monastery":[856,370],"gyfin rhasia temple":[825,280],"crescent shrine":[245,125],"blood wolf settlement":[312,150],"thornwood forest":[756,280],"waragon nest":[250,160],"padix island":[825,340],"kratuga ancient ruins":[756,250],"vessel of inquisition pillars":[800,280],"castle ruins":[774,280],"polly s forest":[255,180],"mirumok ruins":[560,220],"fadus habitat":[280,140],"sherekhan day":[365,170],"vessel of inquisition":[800,280],"tooth fairy forest":[410,220],"centaurus herd":[312,145],"cadry ruins":[245,125],"gahaz bandit s lair":[245,140],"aakman temple":[600,250],"hystria ruins":[756,250],"protty cave":[280,145],"desert naga temple":[213,140],"bashim base":[213,140],"tshira ruins":[245,125],"roud sulfur mine":[365,180],"pila ku jail":[365,180],"basilisk den":[320,160],"traitor s graveyard":[255,250],"zephyros dark energy floodlands":[1880,760],"orbita dark energy floodlands":[1880,760],"great red sea dark energy floodlands":[1880,760]};
+grindSpotCcOverrides["gavinya coastal cliff"]=["knockdown","bound"];
+grindMaxCapOverrides["gavinya coastal cliff"]=[2020,820];
 function grindMonsterMeta(spot){const type=String(spot?.type||"normal").toLowerCase();const map={human:["Human","monster-human.png"],demi:["Demihuman","monster-demi.png"],kama:["Kama","monster-kama.png"],edania:["Edania","monster-edania.png"],normal:["Normal","monster-normal.png"]};const key=type in map?type:"normal",data=map[key];return{type:key,label:data[0],icon:`Assets/GrindTracker/icons-clean/${data[1]}`}}
 function grindSpotCcs(spot){const key=grindNormalizeName(spot?.name);if(Object.prototype.hasOwnProperty.call(grindSpotCcOverrides,key))return grindSpotCcOverrides[key];const type=String(spot?.type||"normal").toLowerCase();let effects=type==="human"?["stun","stiffness","freeze"]:type==="kama"?["knockdown","bound"]:type==="demi"?["knockdown","bound"]:type==="edania"?["knockdown","bound"]:["knockback","float"];return grindCcOrder.filter(item=>effects.includes(item))}
 grindSpotCcOverrides["dehkia thornwood forest"]=["knockback","float"];
@@ -1890,6 +1956,7 @@ function initializeAppView(viewId){
   if(viewId === "bracketsView") initializeBrackets();
   if(viewId === "masteryBracketsView") initializeMasteryBrackets();
   if(viewId === "lightstoneSetsView") initializeLightstoneSets();
+  if(viewId === "settingsView") initializeAppBehaviorSettings({showError:true});
 }
 function activateAppView(button){
   const targetId=button.dataset.appView,current=document.querySelector(".appView.active"),target=document.getElementById(targetId);

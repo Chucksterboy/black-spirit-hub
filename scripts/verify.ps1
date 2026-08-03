@@ -34,6 +34,7 @@ $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
+$appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
@@ -661,6 +662,69 @@ if ($duplicateSpotIds) {
 	throw "Duplicate grind-spot ids: $($duplicateSpotIds.Name -join ', ')"
 }
 
+$gavinyaSpots = @($grindSpots | Where-Object name -eq "Gavinya Coastal Cliff")
+if ($gavinyaSpots.Count -ne 1) {
+	throw "Gavinya Coastal Cliff must appear exactly once in the Grind Zones catalog."
+}
+$gavinya = $gavinyaSpots[0]
+if ([int]$gavinya.id -ne 916 -or
+	[string]$gavinya.zone -ne "Valencia" -or
+	[int]$gavinya.ap -ne 400 -or
+	[int]$gavinya.dp -ne 470 -or
+	[string]$gavinya.players -ne "1" -or
+	[string]$gavinya.type -ne "normal" -or
+	[int]$gavinya.spotType -ne 104 -or
+	[string]$gavinya.trashId -ne "767350" -or
+	[string]$gavinya.primaryTrash -ne "Sulfur Golem Fragment") {
+	throw "Gavinya Coastal Cliff metadata is missing or incorrect."
+}
+$expectedGavinyaDrops = @(
+	@("767350", "Sulfur Golem Fragment"),
+	@("821417", "Turquoise Primordial Luster - Sovereign"),
+	@("767341", "Turquoise Primordial Pigment - Sovereign"),
+	@("768160", "Sealed Black Magic Crystal"),
+	@("edania-refined-essence-of-devouring", "Refined Essence of Devouring"),
+	@("767342", "Turquoise Primordial Pigment - Edana"),
+	@("11882", "Deboreka Earring"),
+	@("980115", "Sulfur Golem Power Core"),
+	@("980116", "Sulfur Golem Power Core Fragment"),
+	@("821418", "Turquoise Primordial Luster - Edana"),
+	@("12094", "Deboreka Ring"),
+	@("12276", "Deboreka Belt"),
+	@("edania-refined-origin-of-hunger", "Refined Origin of Hunger"),
+	@("corrupt-oil-of-immortality", "Corrupt Oil of Immortality"),
+	@("edania-crimson-primordial-pigment-sovereign", "Crimson Primordial Pigment - Sovereign"),
+	@("edania-violet-primordial-pigment-edana", "Violet Primordial Pigment - Edana"),
+	@("11653", "Deboreka Necklace"),
+	@("721003", "Caphras Stone"),
+	@("edania-violet-primordial-luster-sovereign", "Violet Primordial Luster - Sovereign"),
+	@("edania-crimson-primordial-luster-sovereign", "Crimson Primordial Luster - Sovereign"),
+	@("721002", "Ancient Spirit Dust"),
+	@("edania-violet-primordial-luster-edana", "Violet Primordial Luster - Edana"),
+	@("16001", "Black Stone"),
+	@("761726", "Gavinya Coastal Cliff Paint"),
+	@("al-yurads-ring-piece", "Al Yurad's Ring Piece")
+)
+if ($gavinya.drops.Count -ne $expectedGavinyaDrops.Count) {
+	throw "Gavinya Coastal Cliff must contain exactly $($expectedGavinyaDrops.Count) drops."
+}
+for ($dropIndex = 0; $dropIndex -lt $expectedGavinyaDrops.Count; $dropIndex++) {
+	$expectedDrop = $expectedGavinyaDrops[$dropIndex]
+	$actualDrop = $gavinya.drops[$dropIndex]
+	if ([string]$actualDrop.id -ne $expectedDrop[0] -or
+		[string]$actualDrop.name -ne $expectedDrop[1]) {
+		throw "Gavinya Coastal Cliff drop $($dropIndex + 1) is out of order or incorrect."
+	}
+}
+if ($gavinya.drops[0].isTrash -ne $true -or
+	[string]$gavinya.icon -ne "Assets/GrindTracker/icons-clean/item-767350.png" -or
+	$script -notmatch 'Object\.assign\(GRIND_FIXED_ITEM_PRICES,\{"767350":165508\}\)' -or
+	$script -notmatch 'GRIND_NO_VALUE_ITEM_IDS\.add\("761726"\)' -or
+	$script -notmatch 'grindSpotCcOverrides\["gavinya coastal cliff"\]=\["knockdown","bound"\]' -or
+	$script -notmatch 'grindMaxCapOverrides\["gavinya coastal cliff"\]=\[2020,820\]') {
+	throw "Gavinya pricing, paint, CC, resistance, or maximum-stat mappings are incomplete."
+}
+
 $missingGrindAssets = [System.Collections.Generic.HashSet[string]]::new(
 	[System.StringComparer]::OrdinalIgnoreCase
 )
@@ -734,6 +798,27 @@ $invalidResistanceCrystalAssets = foreach ($assetPath in $resistanceCrystalAsset
 }
 if ($invalidResistanceCrystalAssets) {
 	throw "Missing, modified, or invalid BDO Foundry resistance-crystal icons: $($invalidResistanceCrystalAssets -join ', ')"
+}
+
+$gavinyaCodexAssets = [ordered]@{
+	"Assets/GrindTracker/icons-clean/item-761726.png" = "7F2B8E58C96565467267C7F2FA002703CF8A74D3A56BE7AC123098BCDE9787FC"
+	"Assets/GrindTracker/icons-clean/item-767341.png" = "89E8AF8DE240B90ED7E0992A50B294D39D4A598C8B38D2563D82C74EEBF78370"
+	"Assets/GrindTracker/icons-clean/item-767342.png" = "D6C1948CD7E10C70937E838F87DDC2EE2B01D13E070502ADFEF6639100D42E62"
+	"Assets/GrindTracker/icons-clean/item-767350.png" = "E9103A025BEB59BB975DB0A85EB6E41B86C7F9CCC76EB1A25C066F5E5F2145D8"
+	"Assets/GrindTracker/icons-clean/item-821417.png" = "38233DC15A2C751798139337EE75C51E44F4A0C0EB9E489E8AD1A13C72F2A2D1"
+	"Assets/GrindTracker/icons-clean/item-821418.png" = "1B74FCC8363D08C23914BED2D6DCF8C65FD02AF1A42D488CFF3CA609C4645DFD"
+	"Assets/GrindTracker/icons-clean/item-980115.png" = "F1AF78E710070DD40ADFD26A71DA3C1223A14BB3838DC94FCC624E7B8D8170F7"
+	"Assets/GrindTracker/icons-clean/item-980116.png" = "C87DDDE89823C5502A3D6DAE59708F7BC614481130CF6CDEB561AE6A1E8A1F60"
+}
+$invalidGavinyaCodexAssets = foreach ($assetPath in $gavinyaCodexAssets.Keys) {
+	$absoluteAssetPath = Join-Path $sourceRoot ($assetPath -replace '/', '\')
+	if (!(Test-Path -LiteralPath $absoluteAssetPath -PathType Leaf) -or
+		(Get-FileHash -LiteralPath $absoluteAssetPath -Algorithm SHA256).Hash -ne $gavinyaCodexAssets[$assetPath]) {
+		$assetPath
+	}
+}
+if ($invalidGavinyaCodexAssets) {
+	throw "Missing or modified Gavinya BDO Codex icons: $($invalidGavinyaCodexAssets -join ', ')"
 }
 
 $homeTimerIconCount = [regex]::Matches($html, 'class="homeTimerIcon"[^>]*>\s*<svg\b').Count
@@ -902,6 +987,9 @@ if (!(Test-Path -LiteralPath $couponJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
 	throw "The executable Grind Zones resistance recommendation regression test is missing."
 }
+if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
+	throw "The executable app-behavior JavaScript regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -919,6 +1007,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $grindResistanceJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
 		throw "Grind Zones resistance recommendation JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $appBehaviorJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "App behavior JavaScript regression tests failed."
 	}
 }
 else {
@@ -1024,6 +1116,27 @@ if ($script -notmatch 'migratePreviousSettingNamespace\(\)' -or
 	throw "The one-time browser setting migration is missing."
 }
 
+$appBehaviorStartupCalls = [regex]::Matches(
+	$script,
+	'(?m)^\s*initializeAppBehaviorSettings\(\);\s*$')
+$marketStateOffset = $script.IndexOf('const marketState =')
+$bridgeListenerOffset = $script.IndexOf('window.chrome?.webview?.addEventListener("message"')
+$appBehaviorStartupOffset = if ($appBehaviorStartupCalls.Count -eq 1) {
+	$appBehaviorStartupCalls[0].Index
+}
+else {
+	-1
+}
+if ($appBehaviorStartupCalls.Count -ne 1 -or
+	$marketStateOffset -lt 0 -or
+	$bridgeListenerOffset -lt 0 -or
+	$appBehaviorStartupOffset -le $marketStateOffset -or
+	$appBehaviorStartupOffset -le $bridgeListenerOffset -or
+	$html -match '<input[^>]+id="minimizeToTrayEnabled"[^>]+checked' -or
+	$html -notmatch '<input[^>]+id="minimizeToTrayEnabled"[^>]+disabled') {
+	throw "Close-to-tray UI hydration can run before the bridge is ready or show an unconfirmed default."
+}
+
 $node = Get-Command node -ErrorAction SilentlyContinue
 if ($node) {
 	& $node.Source --check $scriptPath
@@ -1035,5 +1148,7 @@ $appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows\Black Spirit Hub.dll
 if ($LASTEXITCODE -ne 0) { throw "Offline application smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --product-migration-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "Product data migration smoke test failed with exit code $LASTEXITCODE." }
+& $dotnet $appDll --app-behavior-smoke-test
+if ($LASTEXITCODE -ne 0) { throw "App behavior persistence smoke test failed with exit code $LASTEXITCODE." }
 
 Write-Host "Verification passed: build, offline smoke test, DOM wiring, data integrity, UI assets, performance budgets, cancellation, and duplicate-function checks."

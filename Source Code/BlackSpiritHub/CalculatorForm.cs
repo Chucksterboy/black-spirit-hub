@@ -769,7 +769,7 @@ internal sealed class CalculatorForm : Form
 
 	protected override void OnFormClosing(FormClosingEventArgs e)
 	{
-		if (!forceCloseFromTray && minimizeToTray && e.CloseReason == CloseReason.UserClosing)
+		if (ShouldMinimizeToTrayOnClose(forceCloseFromTray, minimizeToTray, e.CloseReason))
 		{
 			e.Cancel = true;
 			MinimizeToSystemTray();
@@ -780,6 +780,11 @@ internal sealed class CalculatorForm : Form
 		CancelActiveBridgeRequests();
 		lifetimeCancellation.Cancel();
 		base.OnFormClosing(e);
+	}
+
+	internal static bool ShouldMinimizeToTrayOnClose(bool forceClose, bool minimizeEnabled, CloseReason closeReason)
+	{
+		return !forceClose && minimizeEnabled && closeReason == CloseReason.UserClosing;
 	}
 
 	protected override void OnFormClosed(FormClosedEventArgs e)
@@ -1449,12 +1454,11 @@ internal sealed class CalculatorForm : Form
 			return new { count = Math.Max(0, count) };
 		}
 		case "getAppBehaviorSettings":
-			return await AppBehaviorSettings.LoadAsync(paths, cancellationToken);
+			return new AppBehaviorSettings(minimizeToTray);
 		case "saveAppBehaviorSettings":
 		{
-			JsonElement value;
-			bool enabled = !payload.TryGetProperty("minimizeToTray", out value) || value.GetBoolean();
-			AppBehaviorSettings settings = await AppBehaviorSettings.SaveAsync(paths, new AppBehaviorSettings(enabled), cancellationToken);
+			bool enabled = ReadMinimizeToTraySetting(payload);
+			AppBehaviorSettings settings = AppBehaviorSettings.Save(paths, new AppBehaviorSettings(enabled));
 			minimizeToTray = settings.MinimizeToTray;
 			return settings;
 		}
@@ -1625,6 +1629,17 @@ internal sealed class CalculatorForm : Form
 			}
 		}
 		}
+	}
+
+	internal static bool ReadMinimizeToTraySetting(JsonElement payload)
+	{
+		if (!payload.TryGetProperty("minimizeToTray", out JsonElement value)
+			|| (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False))
+		{
+			throw new InvalidOperationException("The close-button setting must include a Boolean minimizeToTray value.");
+		}
+
+		return value.GetBoolean();
 	}
 
 	private async Task<object> LoadEventsWithBrowserFallbackAsync(bool forceRefresh, CancellationToken cancellationToken)
