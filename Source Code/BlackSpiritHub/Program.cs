@@ -900,20 +900,38 @@ internal static class Program
 				TradeCount = 112,
 				CapturedUtc = bulkCapturedUtc
 			};
-			GrindMarketPrice staleBaseline = olderOutfitSample with
+			GrindMarketPrice staleSevenDayBaseline = olderOutfitSample with
 			{
 				ItemId = staleLatestOutfit.ItemId,
 				Name = staleLatestOutfit.Name,
 				TradeCount = 100,
-				CapturedUtc = bulkCapturedUtc.AddHours(-37)
+				CapturedUtc = bulkCapturedUtc.AddHours(-204)
 			};
-			GrindMarketPrice staleCurrent = staleBaseline with
+			GrindMarketPrice staleThreeDayBaseline = staleSevenDayBaseline with
 			{
-				TradeCount = 112,
-				CapturedUtc = bulkCapturedUtc.AddHours(-13)
+				TradeCount = 160,
+				CapturedUtc = bulkCapturedUtc.AddHours(-108)
+			};
+			GrindMarketPrice staleOneDayBaseline = staleSevenDayBaseline with
+			{
+				TradeCount = 188,
+				CapturedUtc = bulkCapturedUtc.AddHours(-60)
+			};
+			GrindMarketPrice staleCurrent = staleSevenDayBaseline with
+			{
+				TradeCount = 200,
+				CapturedUtc = bulkCapturedUtc.AddHours(-36)
 			};
 			await database.SaveOutfitBulkSamplesAsync(
-				[oldBaseline, nearBaseline, staleBaseline],
+				[oldBaseline, nearBaseline, staleSevenDayBaseline],
+				"eu",
+				CancellationToken.None);
+			await database.SaveOutfitBulkSamplesAsync(
+				[staleThreeDayBaseline],
+				"eu",
+				CancellationToken.None);
+			await database.SaveOutfitBulkSamplesAsync(
+				[staleOneDayBaseline],
 				"eu",
 				CancellationToken.None);
 			await database.SaveOutfitBulkSamplesAsync(
@@ -934,12 +952,17 @@ internal static class Program
 			{
 				return 78;
 			}
-			if (staleLatestResult.Sales24Hours.HasValue
-				|| staleLatestResult.Sales3Days.HasValue
-				|| staleLatestResult.Sales7Days.HasValue)
-			{
-				return 79;
-			}
+			if (staleLatestResult.Sales24Hours != 12) return 201;
+			if (staleLatestResult.Sales3Days != 40) return 202;
+			if (staleLatestResult.Sales7Days != 100) return 203;
+			if (staleLatestResult.LastSalesSampleUtc != staleCurrent.CapturedUtc) return 204;
+			if (!staleLatestResult.SalesDataStale) return 205;
+			if (staleLatestResult.RecommendationEligible) return 206;
+			if (nearBaselineResult.SalesDataStale) return 207;
+			if (windowReport.StaleSalesOutfitCount != 1) return 208;
+			if (!windowReport.LastSalesSampleUtc.HasValue
+				|| windowReport.LastSalesSampleUtc.Value < bulkCapturedUtc
+				|| windowReport.LastSalesSampleUtc.Value > DateTimeOffset.UtcNow.AddMinutes(1)) return 209;
 
 			MarketItem[] coverageCatalog = Enumerable.Range(0, 100)
 				.Select(index => new MarketItem(

@@ -14,7 +14,7 @@ internal sealed class MarketDatabase
 {
 	private const int CurrentSchemaVersion = 2;
 	private static readonly TimeSpan OutfitSampleRetention = TimeSpan.FromDays(32);
-	private static readonly TimeSpan OutfitReportHistory = TimeSpan.FromDays(8);
+	private static readonly TimeSpan OutfitReportHistory = OutfitSampleRetention;
 	private static readonly TimeSpan OutfitSampleFreshness = TimeSpan.FromHours(12);
 	private static readonly TimeSpan OutfitClockSkewTolerance = TimeSpan.FromMinutes(5);
 	private static readonly TimeSpan OutfitBulkFreshnessGrace = TimeSpan.FromMinutes(30);
@@ -799,6 +799,11 @@ WHERE row_number=1;";
 				{
 					value2 = new List<(DateTimeOffset, long, long)>();
 				}
+				DateTimeOffset? lastSalesSampleUtc = value2.Count == 0
+					? null
+					: value2[value2.Count - 1].Item1;
+				bool salesDataStale = lastSalesSampleUtc.HasValue
+					&& reportNow - lastSalesSampleUtc.Value > OutfitSampleFreshness;
 				long? num = CalculateOutfitSalesWindow(value2, TimeSpan.FromHours(24.0), reportNow);
 				long? num2 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(3.0), reportNow);
 				long? num3 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(7.0), reportNow);
@@ -834,7 +839,7 @@ WHERE row_number=1;";
 				}
 				bool flag = num >= 3 || num2 >= 8 || num3 >= 15;
 				bool flag2 = !num3.HasValue || num3 <= 2 || (num2.GetValueOrDefault() <= 2 && num.GetValueOrDefault() == 0);
-				bool flag3 = value2.Count >= 2 && num4.HasValue && num4.Value > 0.0 && sevenDayChancePercent.HasValue && (flag || preorderCount.GetValueOrDefault() > 0) && !flag2;
+				bool flag3 = !salesDataStale && value2.Count >= 2 && num4.HasValue && num4.Value > 0.0 && sevenDayChancePercent.HasValue && (flag || preorderCount.GetValueOrDefault() > 0) && !flag2;
 				double num9 = Math.Min(1.0, Math.Sqrt(((double)(num3 ?? (long)Math.Round(num4.GetValueOrDefault() * 7.0))) / 30.0));
 				double num8 = CalculateOutfitConfidence(value2, item2.Detail, num, num2, num3);
 				double confidencePercent = num8 * 100.0;
@@ -842,14 +847,19 @@ WHERE row_number=1;";
 				double stockPressure = 1.0 - Math.Min(1.0, Math.Log10((double)Math.Max(1L, item2.Stock) + 1.0) / 3.0);
 				double liveSignal = 0.65 + preorderPressure * 0.25 + stockPressure * 0.1;
 				double score = (flag3 ? (sevenDayChancePercent.Value / 100.0 * num9 * num8 * liveSignal) : 0.0);
-				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, value2.Count, item2.Detail));
+				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, value2.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
 			}
 			int num10 = catalog.Count<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>(delegate((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x)
 			{
 				DateTimeOffset? item = x.Detail;
 				return item.HasValue;
 			});
-			result = new OutfitReport(catalog.Count, num10, (catalog.Count == 0) ? 0.0 : ((double)num10 * 100.0 / (double)catalog.Count), (catalog.Count == 0) ? ((DateTimeOffset?)null) : new DateTimeOffset?(catalog.Max<(long, string, long, long, DateTimeOffset, DateTimeOffset?), DateTimeOffset>(((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x) => x.Sync)), (from x in list2
+			DateTimeOffset? latestSalesSampleUtc = list2
+				.Where(opportunity => opportunity.LastSalesSampleUtc.HasValue)
+				.Select(opportunity => opportunity.LastSalesSampleUtc)
+				.Max();
+			int staleSalesOutfitCount = list2.Count(opportunity => opportunity.SalesDataStale);
+			result = new OutfitReport(catalog.Count, num10, (catalog.Count == 0) ? 0.0 : ((double)num10 * 100.0 / (double)catalog.Count), (catalog.Count == 0) ? ((DateTimeOffset?)null) : new DateTimeOffset?(catalog.Max<(long, string, long, long, DateTimeOffset, DateTimeOffset?), DateTimeOffset>(((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x) => x.Sync)), latestSalesSampleUtc, staleSalesOutfitCount, (from x in list2
 				orderby x.Score descending, x.SalesPerDay ?? (-1.0) descending, x.PreorderCount ?? long.MaxValue, x.Name
 				select x).ToArray());
 		}
@@ -866,8 +876,7 @@ WHERE row_number=1;";
 			return null;
 		}
 		(DateTimeOffset Time, long Trades, long Preorders) last = samples[samples.Count - 1];
-		if (last.Time > now.Add(OutfitClockSkewTolerance)
-			|| now - last.Time > OutfitSampleFreshness)
+		if (last.Time > now.Add(OutfitClockSkewTolerance))
 		{
 			return null;
 		}

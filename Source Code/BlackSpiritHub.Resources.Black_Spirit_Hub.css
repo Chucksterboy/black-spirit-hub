@@ -1461,6 +1461,42 @@
 
   .coverageText { color:var(--muted); font-size:12px; }
 
+  .outfitCacheNote {
+    display:block;
+    margin-top:3px;
+    color:var(--ui-warning);
+    font-size:9px;
+    font-weight:750;
+  }
+
+  .outfitSalesValue {
+    font-weight:900;
+  }
+
+  .outfitSalesValue.salesWindow24h {
+    color:#38bdf8;
+    text-shadow:0 0 9px color-mix(in srgb,#38bdf8 24%,transparent);
+  }
+
+  .outfitSalesValue.salesWindow3d {
+    color:#c084fc;
+    text-shadow:0 0 9px color-mix(in srgb,#c084fc 22%,transparent);
+  }
+
+  .outfitSalesValue.salesWindow7d {
+    color:#4ade80;
+    text-shadow:0 0 9px color-mix(in srgb,#4ade80 22%,transparent);
+  }
+
+  .cachedSalesValue {
+    text-decoration:underline dotted color-mix(in srgb,currentColor 52%,transparent);
+    text-underline-offset:3px;
+  }
+
+  .outfitTable tbody tr.salesDataStale td {
+    background:color-mix(in srgb,var(--ui-warning) 2.5%,transparent);
+  }
+
   .outfitTableWrap {
     max-height:650px;
     overflow:auto;
@@ -2666,6 +2702,10 @@
   body[data-style] .appView :is(.hint,.muted,.coverageText,.marketStatus,.trackedItem span,.detailTitle p,.marketMetric span,.mustOrderStats span,.fontPresetTop span,.fontCustomMeta span,.fontUtilityCard p,.portraitStatus,.portraitFileMeta,.portraitPlaceholder,.portraitCropEditorHead span,.fontSectionHead p,.settingsCardIntro,.settingCopy span,.themeChoice span,.backgroundChoiceCopy span) { color:var(--muted) !important; }
   body[data-style] .appView :is(.panelTitle,.kpi .label,.mustOrderRank,.fontSidebar h3,.portraitCardHead strong) { color:var(--a1) !important; }
   body[data-style] .appView th { color:color-mix(in srgb,var(--text) 72%,var(--muted)) !important; }
+  body[data-style] .appView .outfitTable thead th {
+    color:#fb4d67 !important;
+    text-shadow:0 0 10px color-mix(in srgb,#fb4d67 28%,transparent) !important;
+  }
   body[data-style] .appView :is(.positive,.portraitStatus.positive,.fontStatus.positive,.confidence,.chanceExcellent,.chanceGood) { color:var(--ui-success) !important; }
   body[data-style] .appView :is(.negative,.portraitStatus.negative,.fontStatus.negative) { color:var(--ui-error) !important; }
   body[data-style] .appView :is(input,select,textarea,option) { color:var(--text) !important; }

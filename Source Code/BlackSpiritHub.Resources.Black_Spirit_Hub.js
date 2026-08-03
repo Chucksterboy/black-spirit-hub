@@ -2193,7 +2193,7 @@ async function loadMarketRegionState(region = getMarketRegion(), updateStatus = 
     clearMarketDetail();
     renderTrackedItems();
     renderOutfitReport();
-    if(updateStatus) setMarketStatus(`${selectedRegion.toUpperCase()} cached samples loaded.`);
+    if(updateStatus) setMarketStatus(outfitSalesStatusMessage(state.outfits, selectedRegion));
   } catch(error) {
     setMarketStatus(error.message, true);
   }
@@ -2238,6 +2238,65 @@ async function loadOutfitReport() {
   }
 }
 
+function formatMarketSampleTime(value) {
+  const timestamp = Date.parse(value || "");
+  if(!Number.isFinite(timestamp)) return "time unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    year:"numeric",
+    month:"short",
+    day:"numeric",
+    hour:"numeric",
+    minute:"2-digit"
+  }).format(new Date(timestamp));
+}
+
+function staleOutfitSalesSummary(report) {
+  const staleItems = Array.isArray(report?.opportunities)
+    ? report.opportunities.filter(item => item?.salesDataStale === true)
+    : [];
+  const timestamps = staleItems
+    .map(item => Date.parse(item.lastSalesSampleUtc || ""))
+    .filter(Number.isFinite)
+    .sort((a,b) => a - b);
+  const count = Number.isFinite(Number(report?.staleSalesOutfitCount))
+    ? Number(report.staleSalesOutfitCount)
+    : staleItems.length;
+  if(count <= 0) return null;
+  if(!timestamps.length) return { count, updatedLabel:"time unavailable" };
+  const first = formatMarketSampleTime(new Date(timestamps[0]).toISOString());
+  const last = formatMarketSampleTime(new Date(timestamps[timestamps.length - 1]).toISOString());
+  return { count, updatedLabel:first === last ? first : `${first} – ${last}` };
+}
+
+function outfitSalesStatusMessage(report, region = getMarketRegion()) {
+  const regionLabel = String(region || "eu").toUpperCase();
+  const stale = staleOutfitSalesSummary(report);
+  if(stale) {
+    return `${regionLabel} cached sales loaded for ${fmtInt(stale.count)} outfits. Last successful samples: ${stale.updatedLabel}.`;
+  }
+  if(report?.lastSalesSampleUtc) {
+    return `${regionLabel} sales loaded. Updated ${formatMarketSampleTime(report.lastSalesSampleUtc)}.`;
+  }
+  return `${regionLabel} catalog loaded. No sales samples are available yet.`;
+}
+
+function outfitSalesCacheMeta(item) {
+  if(item?.salesDataStale !== true) return null;
+  const updated = formatMarketSampleTime(item.lastSalesSampleUtc);
+  return {
+    label:`Cached sales · updated ${updated}`,
+    title:`Cached historical sales. Last successful sample: ${updated}.`
+  };
+}
+
+function outfitSalesValue(item, value, windowClass) {
+  if(value == null) return "-";
+  const cached = outfitSalesCacheMeta(item);
+  const classes = `outfitSalesValue ${windowClass}${cached ? " cachedSalesValue" : ""}`;
+  const title = cached ? ` title="${escapeHtml(cached.title)}"` : "";
+  return `<span class="${classes}"${title}>${fmtInt(value)}</span>`;
+}
+
 function renderOutfitReport() {
   const report = marketState.outfits;
   if(!report) return;
@@ -2272,16 +2331,20 @@ function renderOutfitReport() {
     item.sales7Days != null
   ).length;
   marketEl.topOutfitCards.innerHTML = topThree.map((item,index) => {
-    const signal = item.recommendationEligible ? "Strong preorder signal" : `Best available ${selectedRegionLabel} market signal`;
+    const cached = outfitSalesCacheMeta(item);
+    const signal = cached
+      ? `Cached ${selectedRegionLabel} market signal`
+      : item.recommendationEligible ? "Strong preorder signal" : `Best available ${selectedRegionLabel} market signal`;
+    const rankLabel = cached ? `Cached candidate #${index + 1}` : `Must order #${index + 1}`;
     return `<article class="mustOrderCard">
-      <div class="mustOrderRank">Must order #${index + 1}</div>
+      <div class="mustOrderRank">${rankLabel}</div>
       <h3>${escapeHtml(item.name)}</h3>
       <div class="mustOrderStats">
         <span>Recommendation<strong>${signal}</strong></span>
         <span>Price<strong>${fmtSilver(item.price)}</strong></span>
-        <span>24h / 3d / 7d<strong>${[item.sales24Hours,item.sales3Days,item.sales7Days].map(x => x == null ? "-" : fmtInt(x)).join(" / ")}</strong></span>
+        <span>24h / 3d / 7d<strong>${outfitSalesValue(item,item.sales24Hours,"salesWindow24h")} / ${outfitSalesValue(item,item.sales3Days,"salesWindow3d")} / ${outfitSalesValue(item,item.sales7Days,"salesWindow7d")}</strong></span>
         <span>Preorders<strong>${item.preorderCount == null ? "Scanning" : fmtInt(item.preorderCount)}</strong></span>
-        <span>Queue estimate<strong>${item.estimatedQueueDays == null ? "-" : item.estimatedQueueDays < 1 ? "< 1 day" : `${item.estimatedQueueDays.toFixed(1)} days`}</strong></span>
+        <span>${cached ? "Cached queue estimate" : "Queue estimate"}<strong>${item.estimatedQueueDays == null ? "-" : item.estimatedQueueDays < 1 ? "< 1 day" : `${item.estimatedQueueDays.toFixed(1)} days`}</strong></span>
       </div>
     </article>`;
   }).join("") || `<div class="mustOrderCard">
@@ -2290,16 +2353,20 @@ function renderOutfitReport() {
   </div>`;
   const rows = filtered.slice(0, 500);
   marketEl.outfitRows.innerHTML = rows.map((item,index) => {
+    const cached = outfitSalesCacheMeta(item);
     const queue = item.estimatedQueueDays == null ? "-" :
       item.estimatedQueueDays < 1 ? "< 1d" : `${item.estimatedQueueDays.toFixed(1)}d`;
     const momentum = item.demandMomentumPercent == null ? "" :
       `<span class="confidence">${item.demandMomentumPercent >= 0 ? "+" : ""}${item.demandMomentumPercent.toFixed(0)}% recent momentum</span>`;
-    return `<tr>
+    const cacheNote = cached
+      ? `<span class="outfitCacheNote" title="${escapeHtml(cached.title)}">${escapeHtml(cached.label)}</span>`
+      : "";
+    return `<tr${cached ? ` class="salesDataStale"` : ""}>
       <td>${index + 1}</td>
-      <td><strong>${escapeHtml(item.name)}</strong><span class="confidence">Item ${item.itemId}</span></td>
-      <td class="right mono">${item.sales24Hours == null ? "-" : fmtInt(item.sales24Hours)}</td>
-      <td class="right mono">${item.sales3Days == null ? "-" : fmtInt(item.sales3Days)}</td>
-      <td class="right mono">${item.sales7Days == null ? "-" : fmtInt(item.sales7Days)}</td>
+      <td><strong>${escapeHtml(item.name)}</strong><span class="confidence">Item ${item.itemId}</span>${cacheNote}</td>
+      <td class="right mono">${outfitSalesValue(item,item.sales24Hours,"salesWindow24h")}</td>
+      <td class="right mono">${outfitSalesValue(item,item.sales3Days,"salesWindow3d")}</td>
+      <td class="right mono">${outfitSalesValue(item,item.sales7Days,"salesWindow7d")}</td>
       <td class="right mono">${item.preorderCount == null ? "-" : fmtInt(item.preorderCount)}</td>
       <td class="right mono">${queue}${momentum}</td>
       <td class="right mono">${fmtSilver(item.price)}</td>

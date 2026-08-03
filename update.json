@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.33",
+    "version":  "v0.9.34",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.33/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "250CB62C02CC5C9FB2BB91A41EEB69EDA1B7B1C1C7B679904D66138E021E6E9A",
-    "notes":  "Adds Gavinya Coastal Cliff to Grind Zones with its complete loot table, official item icons, pricing, AP and DP caps, and resistance guidance. Fixes close-to-system-tray setting persistence and startup hydration."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.34/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "C94A5210A59FB990EE674E9B95D8D4B339B0A6D16DCBCAC19E09722EAF67A9C8",
+    "notes":  "Keeps cached 24-hour, 3-day, and 7-day outfit sales visible during upstream market outages; marks stale analytics safely without using them for live recommendations; and improves Market Analytics sales-window and table-header colors."
 }
