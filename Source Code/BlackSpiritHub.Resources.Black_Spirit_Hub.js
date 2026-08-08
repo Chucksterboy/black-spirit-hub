@@ -1577,7 +1577,7 @@ let grindPickerReturnFocus=null;
 const grindEl={spotDetail:document.getElementById("grindSpotDetail")};
 const GRIND_PRICE_REFRESH_MS=24*60*60*1000;
 const GRIND_PRICE_RETRY_MS=30*60*1000;
-const GRIND_PRICE_CACHE_VERSION=14;
+const GRIND_PRICE_CACHE_VERSION=15;
 const GRIND_PRICE_CHUNK_SIZE=80;
 const GRIND_PRICE_CHUNK_DELAY_MS=0;
 const GRIND_FIXED_ITEM_PRICES={"5960":500,"44181":504,"44194":800,"44266":7500,"44267":15000,"44304":50000,"44305":50000,"44306":50000,"44311":50000,"44378":2100,"44400":15500,"44411":35000,"44423":8000,"44446":15000,"44448":15000,"44450":38000,"44451":15000,"44454":18000,"44455":12000,"44456":107000,"44476":4520,"44477":1820,"44482":18500,"44484":16000,"44485":17000,"44486":18000,"44487":17500,"44488":16000,"44489":19000,"44490":20140,"44495":24350,"44496":5620,"44516":25120,"44518":52500,"44519":117700,"44520":39000,"44521":40000,"44522":32950,"44523":16990,"44524":38800,"44525":35880,"45981":16100,"56322":52500,"56323":117700,"56327":52571,"56328":20520,"56329":59415,"56334":96040,"56338":59415,"59797":18575,"59798":96750,"59799":20000,"59800":26190,"59801":17520,"59802":25207,"59826":4902,"59827":5960,"59828":57777,"59880":25190,"65328":35100,"65329":32900,"65330":45570,"65397":34270,"65398":31500,"65399":30900,"65400":32900,"dehkia-mirumok-tainted-wood-fragment":101500,"tainted-bronze-fragment":125900,"stars-end-corrupted-sanguine-crystal":155000,"sycraia-upper-destroyed-ancient-weapon-power-stone":2350,"sycraia-underwater-ancient-weapon-power-stone":18000,"hoof-of-forest-ronaros":13490,"edania-ancient-soldier-fragment":147630,"edania-lightlost-core":140600,"edania-chilled-soul-piece":105640,"edania-contaminated-coral-piece":116200,"edania-hardened-lava-chunk":126980,"edania-tainted-armor-fragment":100507,"origin-of-corruption":3000000000};
@@ -1585,6 +1585,7 @@ const GRIND_MARKET_ITEM_ID_OVERRIDES={"corrupted-gluttony-crystal":15741,"glutto
 Object.assign(GRIND_FIXED_ITEM_PRICES,{"44300":3000,"44322":1000,"44324":12000,"44425":1750,"44426":1925,"44427":1820,"44428":1890,"44429":2030,"44431":2100,"44432":2100,"44434":3150,"44435":2120,"44436":3000,"44437":3240,"44438":3600,"44439":3000,"44440":3445,"44442":4320,"44443":8800,"44494":9870,"faded-dark-energy":597680,"edania-primordial-fragment":30000000,"edania-won-crystal-of-ruin":5000000,"edania-bon-crystal-of-ruin":7000000,"edania-jin-crystal-of-ruin":8000000,"edania-han-crystal-of-ruin":10000000,"edania-won-crystal-of-dusky-ruin":500000000,"edania-bon-crystal-of-dusky-ruin":700000000,"edania-jin-crystal-of-dusky-ruin":800000000,"edania-han-crystal-of-dusky-ruin":1000000000});
 Object.assign(GRIND_FIXED_ITEM_PRICES,{"mossy-ancient-ruins-fragment":10000,"great-marnis-stone-forest-ronaros":2000000,"8126":3000000,"8133":10000000,"15668":1000000,"6393":100000,"6399":100000,"6400":100000,"8124":3000000,"8129":3000000,"8135":100000,"8145":100000,"40968":100000,"44243":30000,"44284":30000,"44350":50000,"44383":1000000,"44405":100000,"65770":30000,"65780":30000,"721002":3000,"721044":30000000,"752023":51000,"757451":16400,"757452":18000,"757454":13200,"757455":14800,"757460":16000,"757470":17800,"757471":19400,"757473":16000,"820040":50000});
 Object.assign(GRIND_FIXED_ITEM_PRICES,{"767350":165508});
+const GRIND_REFERENCE_FALLBACK_ITEM_PRICES={"980115":9350000000,"980116":93500000};
 delete GRIND_FIXED_ITEM_PRICES["5960"];
 Object.assign(GRIND_MARKET_ITEM_ID_OVERRIDES,{"edania-distorted-fragment-of-origin":821317,"edania-silent-fragment-of-origin":821318,"edania-crystallized-energy-of-endtimes":821252,"edania-distorted-crystal-of-origin":761802,"edania-silent-crystal-of-origin":761803,"edania-herald-s-crystal":821250,"edania-flawless-herald-s-crystal":821251,"imperfect-lightstone-of-earth":766105,"imperfect-lightstone-of-wind":766106,"sycraia-shard":821347});
 const GRIND_NO_VALUE_ITEM_IDS=new Set(["ancient-creatures-scale","edania-deboreka-accessories","any-artifact","faint-sycraia-s-memory","gentle-sycraia-s-memory","intense-sycraia-s-memory","radiant-sycraia-s-memory","sycraia-underwater-ruins-paint","al-yurads-ring-piece","marnis-research-box","sycrids-scale-piece","void-tainted-whispers","752530","66108","66106","66107","40760","65778","65331","65332","15713","8958","8956","8957","8959","40709","40758","66945","56335","56505","8428","44799","40708","40756","44501","40706","40762","40711","40752","65327","56284","45017","45013","45018","45014"]);
@@ -1597,16 +1598,16 @@ function grindMarketItemIds(){return[...new Set(grindAllDrops().map(grindDropMar
 function grindMarketDropsForSpot(spotId){const spot=grindSpotById(spotId);return(spot?.drops||[]).filter(drop=>grindDropMarketId(drop))}
 function grindMarketItemIdsForSpot(spotId){return[...new Set(grindMarketDropsForSpot(spotId).map(grindDropMarketId).filter(Boolean).map(Number))]}
 function grindEnsurePriceNameIndex(cache){if(!cache.priceNames||typeof cache.priceNames!=="object")cache.priceNames={};Object.values(cache.prices||{}).forEach(record=>{const key=grindNormalizeItemName(record?.name);if(key&&record?.itemId&&!cache.priceNames[key])cache.priceNames[key]=String(record.itemId)});return cache.priceNames}
-function grindRegionPriceCache(region=grindState.marketRegion){const cache=grindState.priceCache&&typeof grindState.priceCache==="object"?grindState.priceCache:{};const normalized="eu";if(cache.na)delete cache.na;if(!cache[normalized]||typeof cache[normalized]!=="object")cache[normalized]={updatedAt:"",attemptedAt:"",prices:{},priceNames:{},message:"",version:GRIND_PRICE_CACHE_VERSION};if(cache[normalized].version!==GRIND_PRICE_CACHE_VERSION){cache[normalized].attemptedAt="";cache[normalized].version=GRIND_PRICE_CACHE_VERSION}if(!cache[normalized].prices||typeof cache[normalized].prices!=="object")cache[normalized].prices={};grindEnsurePriceNameIndex(cache[normalized]);grindState.priceCache=cache;grindState.marketRegion="eu";return cache[normalized]}
+function grindRegionPriceCache(region=grindState.marketRegion){const cache=grindState.priceCache&&typeof grindState.priceCache==="object"?grindState.priceCache:{};const normalized="eu";if(cache.na)delete cache.na;if(!cache[normalized]||typeof cache[normalized]!=="object")cache[normalized]={updatedAt:"",attemptedAt:"",prices:{},priceNames:{},message:"",version:GRIND_PRICE_CACHE_VERSION};if(cache[normalized].version!==GRIND_PRICE_CACHE_VERSION){cache[normalized].updatedAt="";cache[normalized].attemptedAt="";cache[normalized].version=GRIND_PRICE_CACHE_VERSION}if(!cache[normalized].prices||typeof cache[normalized].prices!=="object")cache[normalized].prices={};grindEnsurePriceNameIndex(cache[normalized]);grindState.priceCache=cache;grindState.marketRegion="eu";return cache[normalized]}
 function grindPersistPriceCache(){persistSetting("grindTrackerMarketPriceCache",grindState.priceCache)}
 function grindCachedMarketPrice(id,region=grindState.marketRegion){const cache=grindRegionPriceCache(region);return cache.prices?.[String(id)]||null}
 function grindCachedMarketPriceByName(name,region=grindState.marketRegion){const cache=grindRegionPriceCache(region),key=grindNormalizeItemName(name),itemId=key?cache.priceNames?.[key]:"";return itemId?cache.prices?.[String(itemId)]||null:null}
-function grindPriceRecordForDrop(drop,region=grindState.marketRegion){const id=String(drop?.id||"");if(grindDropHasNoValue(drop))return null;if(Object.prototype.hasOwnProperty.call(GRIND_FIXED_ITEM_PRICES,id))return{itemId:id,price:Number(GRIND_FIXED_ITEM_PRICES[id])||0,source:"fixed-vendor",capturedUtc:"",region:"fixed"};const marketId=grindDropMarketId(drop),cached=marketId?grindCachedMarketPrice(marketId,region):null;if(cached&&Number(cached.price)>0)return cached;const byName=grindCachedMarketPriceByName(drop?.name,region);if(byName&&Number(byName.price)>0)return byName;return null}
+function grindPriceRecordForDrop(drop,region=grindState.marketRegion){const id=String(drop?.id||"");if(grindDropHasNoValue(drop))return null;if(Object.prototype.hasOwnProperty.call(GRIND_FIXED_ITEM_PRICES,id))return{itemId:id,price:Number(GRIND_FIXED_ITEM_PRICES[id])||0,source:"fixed-vendor",capturedUtc:"",region:"fixed"};const marketId=grindDropMarketId(drop),cached=marketId?grindCachedMarketPrice(marketId,region):null;if(cached&&Number(cached.price)>0)return cached;const byName=grindCachedMarketPriceByName(drop?.name,region);if(byName&&Number(byName.price)>0)return byName;if(Object.prototype.hasOwnProperty.call(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,id))return{itemId:id,price:Number(GRIND_REFERENCE_FALLBACK_ITEM_PRICES[id])||0,source:"reference-fallback",capturedUtc:"",region:"reference"};return null}
 function grindDropPriceText(drop){if(grindDropHasNoValue(drop))return"";const record=grindPriceRecordForDrop(drop);if(record&&Number(record.price)>0)return grindFormatSilver(record.price);return""}
 function grindDropPriceClass(drop){return grindPriceRecordForDrop(drop)?"grindPriceLine":"grindPriceLine pending"}
 function grindDropPriceLine(drop){if(grindDropHasNoValue(drop))return"";const text=grindDropPriceText(drop);return`<span class="${grindDropPriceClass(drop)}">${escapeHtml(text||"Price unavailable")}</span>`}
 function grindUpdateMarketRegionButtons(){grindState.marketRegion="eu";persistSetting("grindTrackerMarketRegion","eu");document.querySelectorAll("[data-grind-market-region]").forEach(button=>button.classList.toggle("active",(button.dataset.grindMarketRegion||"eu")==="eu"))}
-function grindPriceCacheFresh(region=grindState.marketRegion){const cache=grindRegionPriceCache(region),updated=Date.parse(cache.updatedAt||""),ids=grindMarketItemIds(),complete=ids.length>0&&ids.every(id=>Number(cache.prices?.[String(id)]?.price)>0);return complete&&Number.isFinite(updated)&&Date.now()-updated<GRIND_PRICE_REFRESH_MS}
+function grindPriceCacheFresh(region=grindState.marketRegion){const cache=grindRegionPriceCache(region),updated=Date.parse(cache.updatedAt||""),ids=grindMarketItemIds(),complete=ids.length>0&&ids.every(id=>Number(cache.prices?.[String(id)]?.price)>0||Object.prototype.hasOwnProperty.call(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String(id)));return complete&&Number.isFinite(updated)&&Date.now()-updated<GRIND_PRICE_REFRESH_MS}
 function grindPriceAttemptFresh(region=grindState.marketRegion){if(grindPriceCacheFresh(region))return true;const attempted=Date.parse(grindRegionPriceCache(region).attemptedAt||"");return Number.isFinite(attempted)&&Date.now()-attempted<GRIND_PRICE_RETRY_MS}
 function grindDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
@@ -1623,7 +1624,9 @@ async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
   grindPersistPriceCache();
 
   grindState.pricePromise=(async()=>{
-    let savedPrices=0,lastMessage="";
+    const everyMarketId=grindMarketItemIds(),isCompleteCatalogRefresh=ids.length===everyMarketId.length&&everyMarketId.every(id=>ids.includes(id));
+    const refreshedIds=new Set();
+    let savedPrices=0,lastMessage="",latestCapturedUtc="";
     try{
       for(let index=0;index<ids.length;index+=GRIND_PRICE_CHUNK_SIZE){
         const chunk=ids.slice(index,index+GRIND_PRICE_CHUNK_SIZE);
@@ -1631,7 +1634,8 @@ async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
           const data=await bridgeCall("getGrindMarketPrices",{region:requestedRegion,itemIds:chunk});
           const target=grindRegionPriceCache("eu"),returnedPrices=Array.isArray(data?.prices)?data.prices:[];
           returnedPrices.forEach(price=>{
-            if(!price?.itemId||!Number(price.price))return;
+            const returnedId=Number(price?.itemId);
+            if(!Number.isFinite(returnedId)||!chunk.includes(returnedId)||!Number(price.price))return;
             const record={
               itemId:String(price.itemId),
               enhancement:Number(price.enhancement)||0,
@@ -1647,11 +1651,12 @@ async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
               region:"eu"
             };
             savedPrices++;
+            refreshedIds.add(returnedId);
             target.prices[record.itemId]=record;
+            if(record.capturedUtc&&(!latestCapturedUtc||Date.parse(record.capturedUtc)>Date.parse(latestCapturedUtc)))latestCapturedUtc=record.capturedUtc;
             const nameKey=grindNormalizeItemName(record.name);
             if(nameKey)target.priceNames[nameKey]=record.itemId;
           });
-          if(data?.capturedUtc&&returnedPrices.length)target.updatedAt=data.capturedUtc;
           target.attemptedAt=new Date().toISOString();
           target.message=String(data?.message||"");
           lastMessage=target.message;
@@ -1666,7 +1671,7 @@ async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
         if(index+GRIND_PRICE_CHUNK_SIZE<ids.length&&GRIND_PRICE_CHUNK_DELAY_MS>0)await grindDelay(GRIND_PRICE_CHUNK_DELAY_MS);
       }
       const target=grindRegionPriceCache(requestedRegion);
-      if(savedPrices>0&&!target.updatedAt)target.updatedAt=new Date().toISOString();
+      if(isCompleteCatalogRefresh&&ids.every(id=>refreshedIds.has(id)||Object.prototype.hasOwnProperty.call(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String(id))))target.updatedAt=latestCapturedUtc||new Date().toISOString();
       target.attemptedAt=new Date().toISOString();
       if(!silent)NotificationService.ShowInfo(savedPrices?`Cached ${savedPrices} market price${savedPrices===1?"":"s"}.`:lastMessage||"Market refresh attempted. Cached and fixed values remain available.","Grind market prices");
       return target;
@@ -1688,7 +1693,7 @@ async function grindFetchMarketPrices(itemIds,{force=false,silent=true}={}){
 }
 function grindRefreshMarketPrices(options={}){const region="eu",next={...options};grindState.marketRegion="eu";if(next.silent===false&&!grindPriceCacheFresh(region))next.force=true;return grindFetchMarketPrices(grindMarketItemIds(),next)}
 function grindSchedulePriceRefresh(){clearInterval(grindState.priceTimer);grindState.priceTimer=setInterval(()=>grindRefreshMarketPrices({force:false,silent:true}),GRIND_PRICE_REFRESH_MS);if(!grindPriceAttemptFresh())setTimeout(()=>grindRefreshMarketPrices({force:false,silent:true}),900)}
-function grindEnsureMarketPricesForSpot(spotId){const ids=grindMarketItemIdsForSpot(spotId),missing=ids.filter(id=>!grindCachedMarketPrice(id));return missing.length?grindFetchMarketPrices(missing,{force:true,silent:true}):Promise.resolve(grindRegionPriceCache())}
+function grindEnsureMarketPricesForSpot(spotId){const ids=grindMarketItemIdsForSpot(spotId),missing=ids.filter(id=>!grindCachedMarketPrice(id)&&!Object.prototype.hasOwnProperty.call(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String(id)));return missing.length?grindFetchMarketPrices(missing,{force:true,silent:true}):Promise.resolve(grindRegionPriceCache())}
 function grindSpotById(id){return GRIND_SPOTS.find(spot=>String(spot.id)===String(id))||GRIND_SPOTS[0]||null}
 function grindFormatSilver(value){const n=Number(value)||0,abs=Math.abs(n),sign=n<0?"-":"";if(abs>=1e12)return`${sign}${(abs/1e12).toFixed(abs>=10e12?1:2)}T`;if(abs>=1e9)return`${sign}${(abs/1e9).toFixed(abs>=10e9?1:2)}B`;if(abs>=1e6)return`${sign}${(abs/1e6).toFixed(abs>=10e6?1:2)}M`;return`${sign}${Math.round(abs).toLocaleString()}`}
 function grindEmpty(message){return`<div class="grindEmpty">${escapeHtml(message)}</div>`}

@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.35",
+    "version":  "v0.9.36",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.35/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "BF0795AF7612BEDFD31E4DA329DBD5BF6CAA57B1AB865F560600412E3B80AC5C",
-    "notes":  "Hides the Market Analytics scrollbar while preserving scrolling, and improves Top 3 outfit recommendations with sustained-sales thresholds, 12-snapshot coverage, freshness checks, and confidence-adjusted queue ranking."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.36/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "26029483DDFD8D1294DE810E19BA47667705790DFD702BB0DE96EA096862DDE4",
+    "notes":  "Adds BDO Alerts Central Market prices for Grind Zones with the existing Arsha fallback, preserves complete price-cache freshness including Gavinya reference prices, and lowers default Alarm.mp3 and TTS volume to 50%."
 }

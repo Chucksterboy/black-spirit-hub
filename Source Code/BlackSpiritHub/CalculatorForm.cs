@@ -67,6 +67,12 @@ internal sealed class CalculatorForm : Form
 
 	private const int WmNcHitTest = 132;
 
+	internal const int DefaultAlertVolumePercent = 50;
+
+	private const int MciMaximumVolume = 1000;
+
+	internal static int DefaultAlarmMciVolume => MciMaximumVolume * DefaultAlertVolumePercent / 100;
+
 	private const int WmNcLButtonDown = 161;
 
 	private const int HtCaption = 2;
@@ -554,6 +560,7 @@ internal sealed class CalculatorForm : Form
 		try
 		{
 			SendMciCommand($"open \"{safePath}\" type mpegvideo alias {alias}");
+			SendMciCommand($"setaudio {alias} volume to {DefaultAlarmMciVolume}");
 			StringBuilder lengthText = new StringBuilder(32);
 			SendMciCommand($"status {alias} length", lengthText);
 			int durationMilliseconds = int.TryParse(
@@ -583,7 +590,8 @@ internal sealed class CalculatorForm : Form
 			{
 				played = true,
 				fileName = "Alarm.mp3",
-				durationMilliseconds
+				durationMilliseconds,
+				volumePercent = DefaultAlertVolumePercent
 			};
 		}
 		catch
@@ -659,6 +667,12 @@ internal sealed class CalculatorForm : Form
 					}
 
 					voiceType.InvokeMember(
+						"Volume",
+						System.Reflection.BindingFlags.SetProperty,
+						null,
+						voice,
+						new object[] { DefaultAlertVolumePercent });
+					voiceType.InvokeMember(
 						"Speak",
 						System.Reflection.BindingFlags.InvokeMethod,
 						null,
@@ -667,7 +681,8 @@ internal sealed class CalculatorForm : Form
 					completion.TrySetResult(new
 					{
 						spoken = true,
-						characters = safeText.Length
+						characters = safeText.Length,
+						volumePercent = DefaultAlertVolumePercent
 					});
 				}
 				catch (Exception ex)

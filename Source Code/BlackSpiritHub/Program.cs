@@ -276,6 +276,12 @@ internal static class Program
 		string root = Path.Combine(Path.GetTempPath(), $"black-spirit-hub-app-smoke-{Guid.NewGuid():N}");
 		try
 		{
+			if (CalculatorForm.DefaultAlertVolumePercent != 50
+				|| CalculatorForm.DefaultAlarmMciVolume != 500)
+			{
+				return 118;
+			}
+
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();
 			if (!offline)
@@ -1314,6 +1320,12 @@ internal static class Program
 				}
 			}
 
+			int bdoAlertsMarketResult = await RunBdoAlertsMarketOfflineSmokeTestAsync(testStateRoot);
+			if (bdoAlertsMarketResult != 0)
+			{
+				return bdoAlertsMarketResult;
+			}
+
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
 			statePaths.EnsureDirectories();
 			const string couponFeedJson = """
@@ -1709,6 +1721,8 @@ internal static class Program
 			{
 				return 82;
 			}
+			string fakeBdoAlertsApiKey = "bdo_" + new string('A', 26);
+			string fakeUntrustedBdoAlertsApiKey = "bdo_" + new string('L', 32);
 
 			using (HttpRequestMessage unconfiguredScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
@@ -1726,10 +1740,10 @@ internal static class Program
 			using (HttpRequestMessage apiKeyScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
 					new Uri(BossScheduleService.DefaultSourceUrl),
-					apiKey: "bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+					apiKey: fakeBdoAlertsApiKey))
 			{
 				if (!apiKeyScheduleRequest.Headers.TryGetValues("X-API-Key", out IEnumerable<string>? apiKeys)
-					|| !apiKeys.SequenceEqual(["bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"])
+					|| !apiKeys.SequenceEqual([fakeBdoAlertsApiKey])
 					|| apiKeyScheduleRequest.Headers.Referrer is not null
 					|| apiKeyScheduleRequest.Headers.Contains("Origin"))
 				{
@@ -1740,7 +1754,7 @@ internal static class Program
 			using (HttpRequestMessage untrustedScheduleRequest =
 				BossScheduleService.CreateRequestForTest(
 					new Uri("https://example.com/schedule"),
-					apiKey: "bdo_MUSTNOTLEAKABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+					apiKey: fakeUntrustedBdoAlertsApiKey))
 			{
 				if (untrustedScheduleRequest.Headers.Contains("X-API-Key")
 					|| untrustedScheduleRequest.Headers.Referrer is not null
@@ -1756,11 +1770,11 @@ internal static class Program
 				if (!BdoAlertsApiCredentials.TryApply(
 						apiKeyCouponRequest,
 						apiKeyCouponRequest.RequestUri!,
-						"bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+						fakeBdoAlertsApiKey)
 					|| !apiKeyCouponRequest.Headers.TryGetValues(
 						"X-API-Key",
 						out IEnumerable<string>? couponApiKeys)
-					|| !couponApiKeys.SequenceEqual(["bdo_ABCDEFGHIJKLMNOPQRSTUVWXYZ"]))
+					|| !couponApiKeys.SequenceEqual([fakeBdoAlertsApiKey]))
 				{
 					return 93;
 				}
@@ -1980,6 +1994,437 @@ internal static class Program
 		}
 	}
 
+	private static async Task<int> RunBdoAlertsMarketOfflineSmokeTestAsync(string stateRoot)
+	{
+		string fakeApiKey = "bdo_" + new string('T', 28);
+		string logPath = Path.Combine(stateRoot, "bdo-alerts-market-smoke.log");
+		Directory.CreateDirectory(stateRoot);
+
+		using (AppLogger marketLogger = new(logPath))
+		{
+			using (AnalyticsMarketStubHandler arshaPrimaryGuard = new(Array.Empty<long>()))
+			using (BdoAlertsMarketStubHandler bdoPrimary = new(
+				BdoAlertsMarketStubMode.ValidPriceHistory,
+				fakeApiKey))
+			using (GrindMarketPriceProvider provider = new(
+				marketLogger,
+				arshaPrimaryGuard,
+				bdoPrimary,
+				fakeApiKey))
+			{
+				GrindMarketPriceResponse response = await provider.GetPricesAsync(
+					[101, 102],
+					"eu",
+					CancellationToken.None);
+				if (response.Prices.Count != 2
+					|| response.Missing.Count != 0
+					|| response.Prices.Any(price =>
+						price.Source != "bdoalerts-price-history"
+						|| price.Price != 1_000_000L + price.ItemId)
+					|| arshaPrimaryGuard.RequestCount != 0
+					|| bdoPrimary.RequestCount != 1
+					|| !bdoPrimary.ExactAuthenticationObserved
+					|| !bdoPrimary.SecretStayedInApprovedHeader
+					|| ResponseContainsSecret(response, fakeApiKey))
+				{
+					return 183;
+				}
+			}
+
+			using (AnalyticsMarketStubHandler forbiddenFallback = new(Array.Empty<long>()))
+			using (BdoAlertsMarketStubHandler forbiddenBdo = new(
+				BdoAlertsMarketStubMode.Forbidden,
+				fakeApiKey))
+			using (GrindMarketPriceProvider provider = new(
+				marketLogger,
+				forbiddenFallback,
+				forbiddenBdo,
+				fakeApiKey))
+			{
+				GrindMarketPriceResponse response = await provider.GetPricesAsync(
+					[201, 202],
+					"eu",
+					CancellationToken.None);
+				if (response.Prices.Count != 2
+					|| response.Missing.Count != 0
+					|| response.Prices.Any(price => price.Source != "arsha-sublist-cache")
+					|| forbiddenBdo.RequestCount != 1
+					|| forbiddenFallback.RequestCount != 1
+					|| !forbiddenBdo.ExactAuthenticationObserved
+					|| !forbiddenBdo.SecretStayedInApprovedHeader
+					|| ResponseContainsSecret(response, fakeApiKey))
+				{
+					return 184;
+				}
+			}
+
+			using (AnalyticsMarketStubHandler partialFallback = new(Array.Empty<long>()))
+			using (BdoAlertsMarketStubHandler partialBdo = new(
+				BdoAlertsMarketStubMode.PartialPriceHistory,
+				fakeApiKey))
+			using (GrindMarketPriceProvider provider = new(
+				marketLogger,
+				partialFallback,
+				partialBdo,
+				fakeApiKey))
+			{
+				GrindMarketPriceResponse response = await provider.GetPricesAsync(
+					[401, 402],
+					"eu",
+					CancellationToken.None);
+				if (response.Prices.Count != 2
+					|| response.Prices.Select(price => price.ItemId).Distinct().Count() != 2
+					|| response.Missing.Count != 0
+					|| response.Provider != "BDO Alerts Central Market + Arsha fallback"
+					|| response.Prices.Single(price => price.ItemId == 401).Source
+						!= "bdoalerts-price-history"
+					|| response.Prices.Single(price => price.ItemId == 402).Source
+						!= "arsha-sublist-cache"
+					|| !partialFallback.LastRequestedItemIds.SequenceEqual([402L])
+					|| partialFallback.RequestCount != 1
+					|| partialBdo.RequestCount != 1
+					|| !partialBdo.ExactAuthenticationObserved
+					|| !partialBdo.SecretStayedInApprovedHeader
+					|| ResponseContainsSecret(response, fakeApiKey))
+				{
+					return 192;
+				}
+			}
+
+			using (AnalyticsMarketStubHandler malformedFallback = new(Array.Empty<long>()))
+			using (BdoAlertsMarketStubHandler malformedBdo = new(
+				BdoAlertsMarketStubMode.Malformed,
+				fakeApiKey))
+			using (GrindMarketPriceProvider provider = new(
+				marketLogger,
+				malformedFallback,
+				malformedBdo,
+				fakeApiKey))
+			{
+				GrindMarketPriceResponse response = await provider.GetPricesAsync(
+					[301, 302],
+					"eu",
+					CancellationToken.None);
+				if (response.Prices.Count != 2
+					|| response.Missing.Count != 0
+					|| response.Prices.Any(price => price.Source != "arsha-sublist-cache")
+					|| malformedBdo.RequestCount != 1
+					|| malformedFallback.RequestCount != 1
+					|| !malformedBdo.ExactAuthenticationObserved
+					|| !malformedBdo.SecretStayedInApprovedHeader
+					|| ResponseContainsSecret(response, fakeApiKey))
+				{
+					return 185;
+				}
+			}
+
+			Uri trustedPriceHistory = new(
+				"https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1");
+			using (HttpRequestMessage trustedRequest = new(HttpMethod.Get, trustedPriceHistory))
+			{
+				if (!BdoAlertsApiCredentials.TryApply(
+						trustedRequest,
+						trustedPriceHistory,
+						fakeApiKey)
+					|| !trustedRequest.Headers.TryGetValues(
+						"X-API-Key",
+						out IEnumerable<string>? values)
+					|| !values.SequenceEqual([fakeApiKey])
+					|| trustedRequest.Headers.Authorization is not null
+					|| trustedRequest.RequestUri!.AbsoluteUri.Contains(
+						fakeApiKey,
+						StringComparison.Ordinal)
+					|| trustedRequest.Content is not null)
+				{
+					return 186;
+				}
+			}
+
+			(string Method, string RequestUri, string EndpointUri)[] rejectedCredentials =
+			[
+				("POST", trustedPriceHistory.AbsoluteUri, trustedPriceHistory.AbsoluteUri),
+				("GET", "http://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1", "http://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1"),
+				("GET", "https://api.bdoalerts.net:444/api/market/price-history?item_ids=101,102&region=eu&days=1", "https://api.bdoalerts.net:444/api/market/price-history?item_ids=101,102&region=eu&days=1"),
+				("GET", "https://untrusted@api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1", "https://untrusted@api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1#untrusted", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1#untrusted"),
+				("GET", "https://example.com/api/market/price-history?item_ids=101,102&region=eu&days=1", "https://example.com/api/market/price-history?item_ids=101,102&region=eu&days=1"),
+				("GET", "https://api.bdoalerts.net.evil.example/api/market/price-history?item_ids=101,102&region=eu&days=1", "https://api.bdoalerts.net.evil.example/api/market/price-history?item_ids=101,102&region=eu&days=1"),
+				("GET", "https://api.bdoalerts.net/api/market/eu/pearlshop?limit=2000", "https://api.bdoalerts.net/api/market/eu/pearlshop?limit=2000"),
+				("GET", "https://api.bdoalerts.net/api/market/item/101?region=eu", "https://api.bdoalerts.net/api/market/item/101?region=eu"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history", "https://api.bdoalerts.net/api/market/price-history"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=na&days=1", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=na&days=1"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,101&region=eu&days=1", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,101&region=eu&days=1"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=0", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=0"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1&days=1", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1&days=1"),
+				("GET", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1&key=leak", "https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1&key=leak"),
+				("GET", trustedPriceHistory.AbsoluteUri, "https://api.bdoalerts.net/api/market/price-history?item_ids=101,103&region=eu&days=1")
+			];
+			foreach ((string method, string requestUri, string endpointUri) in rejectedCredentials)
+			{
+				using HttpRequestMessage rejected = new(
+					new HttpMethod(method),
+					requestUri);
+				if (BdoAlertsApiCredentials.TryApply(
+						rejected,
+						new Uri(endpointUri),
+						fakeApiKey)
+					|| rejected.Headers.Contains("X-API-Key")
+					|| rejected.RequestUri!.AbsoluteUri.Contains(
+						fakeApiKey,
+						StringComparison.Ordinal))
+				{
+					return 187;
+				}
+			}
+
+			DateTimeOffset pearlShopCaptured = new(
+				2026,
+				8,
+				8,
+				10,
+				0,
+				0,
+				TimeSpan.Zero);
+			using JsonDocument nearZeroTrades = CreatePearlShopFixture(
+				1500,
+				pearlShopCaptured,
+				index => index == 1500 ? 1L : 0L);
+			if (!PearlShopFixtureIsRejected(
+					nearZeroTrades,
+					Enumerable.Range(1, 1500)
+						.Select(index => (long)index)
+						.ToArray(),
+					pearlShopCaptured))
+			{
+				return 188;
+			}
+
+			using JsonDocument missingCoverage = CreatePearlShopFixture(
+				1500,
+				pearlShopCaptured,
+				index => 10_000L + index);
+			if (!PearlShopFixtureIsRejected(
+					missingCoverage,
+					[1, 999_999],
+					pearlShopCaptured))
+			{
+				return 189;
+			}
+
+			using JsonDocument structurallyValid = CreatePearlShopFixture(
+				1500,
+				pearlShopCaptured,
+				index => 10_000L + index);
+			BdoAlertsMarketSnapshot parsed = BdoAlertsCentralMarketClient.ParsePearlShop(
+				structurallyValid.RootElement,
+				[1, 1500],
+				"eu",
+				pearlShopCaptured.AddMinutes(5));
+			if (parsed.CapturedUtc != pearlShopCaptured
+				|| parsed.Prices.Count != 2
+				|| parsed.Prices.Any(price => price.TradeCount is null or <= 0))
+			{
+				return 190;
+			}
+		}
+
+		string logText = File.Exists(logPath)
+			? await File.ReadAllTextAsync(logPath, CancellationToken.None)
+			: string.Empty;
+		return logText.Contains(fakeApiKey, StringComparison.Ordinal)
+			? 191
+			: 0;
+	}
+
+	private static bool ResponseContainsSecret(
+		GrindMarketPriceResponse response,
+		string secret)
+	{
+		return response.Provider.Contains(secret, StringComparison.Ordinal)
+			|| response.Message.Contains(secret, StringComparison.Ordinal)
+			|| response.Prices.Any(price =>
+				price.Name.Contains(secret, StringComparison.Ordinal)
+				|| price.Source.Contains(secret, StringComparison.Ordinal));
+	}
+
+	private static JsonDocument CreatePearlShopFixture(
+		int itemCount,
+		DateTimeOffset capturedUtc,
+		Func<int, long> tradeCountFactory)
+	{
+		string json = JsonSerializer.Serialize(new
+		{
+			region = "eu",
+			scraped_at = capturedUtc,
+			total_items = itemCount,
+			items = Enumerable.Range(1, itemCount).Select(index => new
+			{
+				item_id = index,
+				sub_key = 0,
+				name = $"Fixture Pearl Item {index}",
+				price = 2_020_000_000L,
+				stock = 1,
+				total_trades = tradeCountFactory(index)
+			})
+		});
+		return JsonDocument.Parse(json);
+	}
+
+	private static bool PearlShopFixtureIsRejected(
+		JsonDocument fixture,
+		IReadOnlyCollection<long> requestedIds,
+		DateTimeOffset capturedUtc)
+	{
+		try
+		{
+			BdoAlertsCentralMarketClient.ParsePearlShop(
+				fixture.RootElement,
+				requestedIds,
+				"eu",
+				capturedUtc);
+			return false;
+		}
+		catch (InvalidDataException)
+		{
+			return true;
+		}
+	}
+
+	private enum BdoAlertsMarketStubMode
+	{
+		ValidPriceHistory,
+		PartialPriceHistory,
+		Forbidden,
+		Malformed
+	}
+
+	private sealed class BdoAlertsMarketStubHandler : HttpMessageHandler
+	{
+		private readonly BdoAlertsMarketStubMode mode;
+		private readonly string expectedApiKey;
+		private int requestCount;
+
+		public BdoAlertsMarketStubHandler(
+			BdoAlertsMarketStubMode mode,
+			string expectedApiKey)
+		{
+			this.mode = mode;
+			this.expectedApiKey = expectedApiKey;
+		}
+
+		public int RequestCount => Volatile.Read(ref requestCount);
+
+		public bool ExactAuthenticationObserved { get; private set; }
+
+		public bool SecretStayedInApprovedHeader { get; private set; }
+
+		protected override async Task<HttpResponseMessage> SendAsync(
+			HttpRequestMessage request,
+			CancellationToken cancellationToken)
+		{
+			Interlocked.Increment(ref requestCount);
+			string body = request.Content is null
+				? string.Empty
+				: await request.Content.ReadAsStringAsync(cancellationToken);
+			string uri = request.RequestUri?.AbsoluteUri ?? string.Empty;
+			string[] apiKeyValues = request.Headers.TryGetValues(
+				"X-API-Key",
+				out IEnumerable<string>? values)
+					? values.ToArray()
+					: Array.Empty<string>();
+			ExactAuthenticationObserved = request.Method == HttpMethod.Get
+				&& request.RequestUri?.Scheme == Uri.UriSchemeHttps
+				&& request.RequestUri.Host.Equals(
+					"api.bdoalerts.net",
+					StringComparison.OrdinalIgnoreCase)
+				&& request.RequestUri.AbsolutePath.Equals(
+					"/api/market/price-history",
+					StringComparison.Ordinal)
+				&& apiKeyValues.SequenceEqual([expectedApiKey])
+				&& request.Headers.Authorization is null
+				&& request.Headers.Referrer is null
+				&& !request.Headers.Contains("Origin");
+			SecretStayedInApprovedHeader = !uri.Contains(
+				expectedApiKey,
+				StringComparison.Ordinal)
+				&& !body.Contains(expectedApiKey, StringComparison.Ordinal)
+				&& request.Headers
+					.Where(header => !header.Key.Equals(
+						"X-API-Key",
+						StringComparison.OrdinalIgnoreCase))
+					.SelectMany(header => header.Value)
+					.All(value => !value.Contains(
+						expectedApiKey,
+						StringComparison.Ordinal));
+
+			if (mode == BdoAlertsMarketStubMode.Forbidden)
+			{
+				return new HttpResponseMessage(HttpStatusCode.Forbidden)
+				{
+					ReasonPhrase = "Forbidden",
+					Content = new StringContent(
+						JsonSerializer.Serialize(new
+						{
+							error = "forbidden",
+							detail = expectedApiKey
+						}),
+						Encoding.UTF8,
+						"application/json")
+				};
+			}
+			if (mode == BdoAlertsMarketStubMode.Malformed)
+			{
+				return new HttpResponseMessage(HttpStatusCode.OK)
+				{
+					Content = new StringContent(
+						"{\"success\":true,\"region\":\"eu\",\"items\":",
+						Encoding.UTF8,
+						"application/json")
+				};
+			}
+
+			long[] ids = ExtractPriceHistoryIds(request.RequestUri);
+			if (mode == BdoAlertsMarketStubMode.PartialPriceHistory)
+			{
+				ids = ids.Take(1).ToArray();
+			}
+			string json = JsonSerializer.Serialize(new
+			{
+				success = true,
+				region = "eu",
+				items = ids.Select(id => new
+				{
+					item_id = id,
+					sub_key = 0,
+					item_name = $"BDO Alerts Fixture {id}",
+					current_price = 1_000_000L + id,
+					current_stock = 10 + id,
+					last_updated = "2026-08-08T10:00:00Z"
+				})
+			});
+			return new HttpResponseMessage(HttpStatusCode.OK)
+			{
+				Content = new StringContent(json, Encoding.UTF8, "application/json")
+			};
+		}
+
+		private static long[] ExtractPriceHistoryIds(Uri? requestUri)
+		{
+			string query = requestUri?.Query.TrimStart('?') ?? string.Empty;
+			string rawIds = query
+				.Split('&', StringSplitOptions.RemoveEmptyEntries)
+				.Select(pair => pair.Split('=', 2))
+				.Where(parts => parts.Length == 2 && parts[0] == "item_ids")
+				.Select(parts => Uri.UnescapeDataString(parts[1]))
+				.FirstOrDefault() ?? string.Empty;
+			return rawIds
+				.Split(',', StringSplitOptions.RemoveEmptyEntries)
+				.Select(value => long.TryParse(value, out long id) ? id : 0)
+				.Where(id => id > 0)
+				.ToArray();
+		}
+	}
+
 	private sealed class AnalyticsMarketStubHandler : HttpMessageHandler
 	{
 		private readonly HashSet<long> invalidItemIds;
@@ -1997,6 +2442,8 @@ internal static class Program
 
 		public int RequestCount => Volatile.Read(ref requestCount);
 
+		public IReadOnlyList<long> LastRequestedItemIds { get; private set; } = Array.Empty<long>();
+
 		protected override async Task<HttpResponseMessage> SendAsync(
 			HttpRequestMessage request,
 			CancellationToken cancellationToken)
@@ -2006,6 +2453,7 @@ internal static class Program
 				? "[]"
 				: await request.Content.ReadAsStringAsync(cancellationToken);
 			long[] ids = JsonSerializer.Deserialize<long[]>(body) ?? Array.Empty<long>();
+			LastRequestedItemIds = ids;
 			if (ids.Any(invalidItemIds.Contains))
 			{
 				return new HttpResponseMessage(HttpStatusCode.InternalServerError)

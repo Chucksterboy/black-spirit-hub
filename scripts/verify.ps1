@@ -453,6 +453,13 @@ if ($script -notmatch '(?s)function initializeGrindTracker\(\).*?grindRender\(\)
 	$script -notmatch '\(spot\.drops\|\|\[\]\)\.map\(drop=>.*?grindDropPriceLine\(drop\)') {
 	throw "The Grind Zones picker-to-preview flow or preserved market-price pipeline is incomplete."
 }
+if ($script -notmatch 'const GRIND_PRICE_CACHE_VERSION=15;' -or
+	$script -notmatch 'cache\[normalized\]\.updatedAt="";cache\[normalized\]\.attemptedAt="";' -or
+	$script -notmatch 'const refreshedIds=new Set\(\);' -or
+	$script -notmatch 'isCompleteCatalogRefresh&&ids\.every\(id=>refreshedIds\.has\(id\)\|\|Object\.prototype\.hasOwnProperty\.call\(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String\(id\)\)\)\)target\.updatedAt=' -or
+	$script -match 'if\(data\?\.capturedUtc&&returnedPrices\.length\)target\.updatedAt=') {
+	throw "A partial Grind Zone market response can incorrectly advance the complete-cache freshness timestamp."
+}
 if ($script -notmatch 'ccs:\["knockdown","bound"\].*?Sycraia Crystal - Adamantine.*?bdfoundry-15742\.png.*?Ancient Magic Crystal of Nature - Adamantine.*?bdfoundry-ancient-nature\.webp' -or
 	$script -notmatch 'ccs:\["knockback","float"\].*?Sycraia Crystal - Fighting Spirit.*?bdfoundry-15743\.png.*?Ancient Magic Crystal of Nature - Fighting Spirit.*?bdfoundry-ancient-nature\.webp' -or
 	$script -notmatch 'ccs:\["stun","stiffness","freeze"\].*?Sycraia Crystal - Giant.*?bdfoundry-15744\.png.*?Ancient Magic Crystal of Nature - Giant.*?bdfoundry-ancient-nature\.webp' -or
@@ -742,6 +749,8 @@ for ($dropIndex = 0; $dropIndex -lt $expectedGavinyaDrops.Count; $dropIndex++) {
 if ($gavinya.drops[0].isTrash -ne $true -or
 	[string]$gavinya.icon -ne "Assets/GrindTracker/icons-clean/item-767350.png" -or
 	$script -notmatch 'Object\.assign\(GRIND_FIXED_ITEM_PRICES,\{"767350":165508\}\)' -or
+	$script -notmatch 'GRIND_REFERENCE_FALLBACK_ITEM_PRICES=\{"980115":9350000000,"980116":93500000\}' -or
+	$script -notmatch 'refreshedIds\.has\(id\)\|\|Object\.prototype\.hasOwnProperty\.call\(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String\(id\)\)' -or
 	$script -notmatch 'GRIND_NO_VALUE_ITEM_IDS\.add\("761726"\)' -or
 	$script -notmatch 'grindSpotCcOverrides\["gavinya coastal cliff"\]=\["knockdown","bound"\]' -or
 	$script -notmatch 'grindMaxCapOverrides\["gavinya coastal cliff"\]=\[2020,820\]') {
@@ -905,6 +914,16 @@ if (!(Test-Path -LiteralPath $bdoAlertsCredentialsSourcePath -PathType Leaf)) {
 	throw "The shared BDO Alerts credential guard is missing."
 }
 $bdoAlertsCredentialsSource = Get-Content -LiteralPath $bdoAlertsCredentialsSourcePath -Raw
+$bdoAlertsMarketSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BdoAlertsCentralMarketClient.cs"
+if (!(Test-Path -LiteralPath $bdoAlertsMarketSourcePath -PathType Leaf)) {
+	throw "The guarded BDO Alerts Central Market client is missing."
+}
+$bdoAlertsMarketSource = Get-Content -LiteralPath $bdoAlertsMarketSourcePath -Raw
+$grindMarketProviderSourcePath = Join-Path $sourceRoot "BlackSpiritHub\GrindMarketPriceProvider.cs"
+if (!(Test-Path -LiteralPath $grindMarketProviderSourcePath -PathType Leaf)) {
+	throw "The grind market provider is missing."
+}
+$grindMarketProviderSource = Get-Content -LiteralPath $grindMarketProviderSourcePath -Raw
 $couponSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CouponService.cs") -Raw
 $couponIconResolverSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BdoCodexItemIconResolver.cs"
 if (!(Test-Path -LiteralPath $couponIconResolverSourcePath -PathType Leaf)) {
@@ -930,6 +949,12 @@ if ($calculatorSource -notmatch 'mciGetErrorString' -or
 	$calculatorSource -match 'new object\[\]\s*\{\s*safeText,\s*1\s*\}') {
 	throw "Native Alarm.mp3 or TTS playback lost its completion and error-reporting safeguards."
 }
+if ($calculatorSource -notmatch 'internal const int DefaultAlertVolumePercent\s*=\s*50;' -or
+	$calculatorSource -notmatch 'DefaultAlarmMciVolume\s*=>\s*MciMaximumVolume\s*\*\s*DefaultAlertVolumePercent\s*/\s*100;' -or
+	$calculatorSource -notmatch 'SendMciCommand\(\$"setaudio \{alias\} volume to \{DefaultAlarmMciVolume\}"\)' -or
+	$calculatorSource -notmatch '"Volume",\s*System\.Reflection\.BindingFlags\.SetProperty,\s*null,\s*voice,\s*new object\[\]\s*\{\s*DefaultAlertVolumePercent\s*\}') {
+	throw "Alarm.mp3 and Windows TTS must share the exact 50 percent default output volume."
+}
 if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
 	$bossScheduleSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
 	$bossScheduleSource -notmatch 'Europe/Berlin' -or
@@ -946,11 +971,27 @@ if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
 if ($bdoAlertsCredentialsSource -notmatch 'BLACK_SPIRIT_HUB_BDOALERTS_API_KEY' -or
 	$bdoAlertsCredentialsSource -notmatch 'AssemblyMetadataKey = "BdoAlertsApiKey"' -or
 	$bdoAlertsCredentialsSource -notmatch 'TryAddWithoutValidation\("X-API-Key", resolved\)' -or
+	$bdoAlertsCredentialsSource -notmatch 'request\.RequestUri\.AbsoluteUri' -or
+	$bdoAlertsCredentialsSource -notmatch 'method == HttpMethod\.Get' -or
 	$bdoAlertsCredentialsSource -notmatch '/api/boss-schedule/eu' -or
 	$bdoAlertsCredentialsSource -notmatch '/api/coupons' -or
-	$bdoAlertsCredentialsSource -notmatch 'endpoint\.Query\.Length != 0' -or
+	$bdoAlertsCredentialsSource -notmatch '/api/market/price-history' -or
+	$bdoAlertsCredentialsSource -notmatch 'IsValidPriceHistoryQuery' -or
+	$bdoAlertsCredentialsSource -match '/api/market/eu/pearlshop' -or
+	$bdoAlertsCredentialsSource -notmatch 'endpoint\.UserInfo\.Length != 0' -or
 	$bdoAlertsCredentialsSource -notmatch 'endpoint\.Fragment\.Length != 0') {
 	throw "The BDO Alerts credential resolver can leak credentials or no longer covers the required endpoints."
+}
+if ($bdoAlertsMarketSource -notmatch 'AllowAutoRedirect\s*=\s*false' -or
+	$bdoAlertsMarketSource -notmatch 'MaximumPriceHistoryIds\s*=\s*100' -or
+	$bdoAlertsMarketSource -notmatch '/api/market/price-history\?item_ids=' -or
+	$bdoAlertsMarketSource -notmatch 'BdoAlertsApiCredentials\.TryApply\(request, endpoint, apiKey\)' -or
+	$bdoAlertsMarketSource -notmatch 'HttpCompletionOption\.ResponseHeadersRead' -or
+	$bdoAlertsMarketSource -notmatch 'MaxResponseBytes' -or
+	$grindMarketProviderSource -notmatch 'GetCurrentPricesAsync' -or
+	$grindMarketProviderSource -notmatch 'BDO Alerts Central Market \+ Arsha fallback' -or
+	$grindMarketProviderSource -match 'GetPearlShopSnapshotAsync') {
+	throw "The Grind Zone BDO Alerts price integration lost its bounded request, authentication, or Arsha fallback safeguards."
 }
 if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'AllowAutoRedirect = false' -or

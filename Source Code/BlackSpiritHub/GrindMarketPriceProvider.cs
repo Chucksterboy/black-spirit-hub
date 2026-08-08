@@ -50,16 +50,38 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 	private const int MaximumConsecutiveEmptyAnalyticsBatches = 2;
 
 	private readonly HttpClient client;
+	private readonly BdoAlertsCentralMarketClient? bdoAlertsClient;
 	private readonly AppLogger logger;
 
 	public GrindMarketPriceProvider(AppLogger logger)
-		: this(logger, null)
+		: this(logger, null, new BdoAlertsCentralMarketClient(logger))
 	{
 	}
 
 	internal GrindMarketPriceProvider(AppLogger logger, HttpMessageHandler? handler)
+		: this(logger, handler, null)
+	{
+	}
+
+	internal GrindMarketPriceProvider(
+		AppLogger logger,
+		HttpMessageHandler arshaHandler,
+		HttpMessageHandler bdoAlertsHandler,
+		string bdoAlertsApiKey)
+		: this(
+			logger,
+			arshaHandler,
+			new BdoAlertsCentralMarketClient(logger, bdoAlertsHandler, bdoAlertsApiKey))
+	{
+	}
+
+	private GrindMarketPriceProvider(
+		AppLogger logger,
+		HttpMessageHandler? handler,
+		BdoAlertsCentralMarketClient? bdoAlertsClient)
 	{
 		this.logger = logger;
+		this.bdoAlertsClient = bdoAlertsClient;
 		client = handler == null ? new HttpClient() : new HttpClient(handler);
 		client.Timeout = RequestTimeout;
 		client.MaxResponseContentBufferSize = MaxResponseBytes;
@@ -72,32 +94,70 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		string normalizedRegion = NormalizeRegion(region);
 		long[] ids = NormalizeItemIds(itemIds);
 		DateTimeOffset captured = DateTimeOffset.UtcNow;
-		string provider = "Arsha GetWorldMarketSubList";
+		string provider = "BDO Alerts Central Market";
 
 		if (ids.Length == 0)
 		{
 			return EmptyResponse(normalizedRegion, captured, provider);
 		}
 
-		IReadOnlyList<GrindMarketPrice> prices = Array.Empty<GrindMarketPrice>();
-		try
+		Dictionary<long, GrindMarketPrice> pricesById = new();
+		if (bdoAlertsClient?.IsConfigured == true)
 		{
-			prices = await FetchArshaSubListBatchAsync(
-				ids,
-				normalizedRegion,
-				captured,
-				InteractiveBatchAttempts,
-				cancellationToken);
-		}
-		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-		{
-			throw;
-		}
-		catch (Exception ex) when (IsProviderFailure(ex))
-		{
-			logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} batch failed: {ex.Message}");
+			try
+			{
+				BdoAlertsMarketSnapshot snapshot = await bdoAlertsClient.GetCurrentPricesAsync(
+					ids,
+					normalizedRegion,
+					cancellationToken);
+				captured = snapshot.CapturedUtc;
+				foreach (GrindMarketPrice price in snapshot.Prices)
+				{
+					pricesById[price.ItemId] = price;
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				logger.Warn($"BDO Alerts {normalizedRegion.ToUpperInvariant()} grind-price refresh failed; using the Arsha fallback. {ex.Message}");
+			}
 		}
 
+		long[] missingFromPrimary = ids.Where(id => !pricesById.ContainsKey(id)).ToArray();
+		if (missingFromPrimary.Length > 0)
+		{
+			provider = pricesById.Count > 0
+				? "BDO Alerts Central Market + Arsha fallback"
+				: "Arsha GetWorldMarketSubList";
+			try
+			{
+				IReadOnlyList<GrindMarketPrice> fallback = await FetchArshaSubListBatchAsync(
+					missingFromPrimary,
+					normalizedRegion,
+					DateTimeOffset.UtcNow,
+					InteractiveBatchAttempts,
+					cancellationToken);
+				foreach (GrindMarketPrice price in fallback)
+				{
+					pricesById[price.ItemId] = price;
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} fallback batch failed: {ex.Message}");
+			}
+		}
+
+		IReadOnlyList<GrindMarketPrice> prices = pricesById.Values
+			.OrderBy(price => price.ItemId)
+			.ToArray();
 		return CreateResponse(ids, normalizedRegion, captured, provider, prices);
 	}
 
@@ -247,7 +307,7 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		HashSet<long> resolved = prices.Select(price => price.ItemId).ToHashSet();
 		IReadOnlyList<long> missing = ids.Except(resolved).ToArray();
 		string message = prices.Count == 0
-			? "EU market prices could not be refreshed from Arsha. Cached prices remain available."
+			? "EU market prices could not be refreshed. Cached prices remain available."
 			: $"EU market prices refreshed: {prices.Count.ToString(CultureInfo.InvariantCulture)}/{ids.Length.ToString(CultureInfo.InvariantCulture)} items.";
 
 		return new GrindMarketPriceResponse(region, captured, prices, missing, provider, message);
@@ -719,6 +779,7 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 
 	public void Dispose()
 	{
+		bdoAlertsClient?.Dispose();
 		client.Dispose();
 	}
 

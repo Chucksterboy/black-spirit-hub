@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Security;
@@ -81,7 +84,13 @@ internal static class BdoAlertsApiCredentials
 		Uri endpoint,
 		string? apiKey)
 	{
-		if (!IsSupportedEndpoint(endpoint))
+		if (request.RequestUri is null
+			|| !string.Equals(
+				request.RequestUri.AbsoluteUri,
+				endpoint.AbsoluteUri,
+				StringComparison.Ordinal)
+			|| !IsSupportedEndpoint(endpoint)
+			|| !IsSupportedMethod(request.Method, endpoint))
 		{
 			return false;
 		}
@@ -101,15 +110,96 @@ internal static class BdoAlertsApiCredentials
 		if (!endpoint.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
 			|| !endpoint.IsDefaultPort
 			|| !endpoint.Host.Equals("api.bdoalerts.net", StringComparison.OrdinalIgnoreCase)
-			|| endpoint.Query.Length != 0
+			|| endpoint.UserInfo.Length != 0
 			|| endpoint.Fragment.Length != 0)
 		{
 			return false;
 		}
 
-		string path = endpoint.AbsolutePath.TrimEnd('/');
-		return path.Equals("/api/boss-schedule/eu", StringComparison.OrdinalIgnoreCase)
-			|| path.Equals("/api/coupons", StringComparison.OrdinalIgnoreCase);
+		string path = endpoint.AbsolutePath;
+		if (path.Equals("/api/boss-schedule/eu", StringComparison.Ordinal)
+			|| path.Equals("/api/coupons", StringComparison.Ordinal))
+		{
+			return endpoint.Query.Length == 0;
+		}
+
+		if (path.Equals("/api/market/price-history", StringComparison.Ordinal))
+		{
+			return IsValidPriceHistoryQuery(endpoint.Query);
+		}
+
+		return false;
+	}
+
+	private static bool IsSupportedMethod(HttpMethod method, Uri endpoint)
+	{
+		return method == HttpMethod.Get
+			&& IsSupportedEndpoint(endpoint);
+	}
+
+	private static bool IsValidPriceHistoryQuery(string query)
+	{
+		if (!TryParseQuery(query, out IReadOnlyDictionary<string, string> values)
+			|| values.Count != 3
+			|| !values.TryGetValue("item_ids", out string? rawIds)
+			|| !values.TryGetValue("region", out string? region)
+			|| !values.TryGetValue("days", out string? rawDays)
+			|| !region.Equals("eu", StringComparison.Ordinal)
+			|| !int.TryParse(rawDays, NumberStyles.None, CultureInfo.InvariantCulture, out int days)
+			|| days is < 1 or > 30)
+		{
+			return false;
+		}
+
+		string[] ids = rawIds.Split(',', StringSplitOptions.None);
+		return ids.Length is > 0 and <= 100
+			&& ids.All(value => long.TryParse(
+				value,
+				NumberStyles.None,
+				CultureInfo.InvariantCulture,
+				out long id) && id > 0)
+			&& ids.Distinct(StringComparer.Ordinal).Count() == ids.Length;
+	}
+
+	private static bool TryParseQuery(
+		string query,
+		out IReadOnlyDictionary<string, string> values)
+	{
+		Dictionary<string, string> parsed = new(StringComparer.Ordinal);
+		values = parsed;
+		if (string.IsNullOrEmpty(query) || query[0] != '?')
+		{
+			return false;
+		}
+
+		foreach (string pair in query[1..].Split('&', StringSplitOptions.None))
+		{
+			int separator = pair.IndexOf('=');
+			if (separator <= 0 || separator == pair.Length - 1)
+			{
+				return false;
+			}
+
+			string key;
+			string value;
+			try
+			{
+				key = Uri.UnescapeDataString(pair[..separator]);
+				value = Uri.UnescapeDataString(pair[(separator + 1)..]);
+			}
+			catch (UriFormatException)
+			{
+				return false;
+			}
+			if (key.Length == 0
+				|| value.Length == 0
+				|| !parsed.TryAdd(key, value))
+			{
+				return false;
+			}
+		}
+
+		return parsed.Count > 0;
 	}
 
 	private static string? Normalize(string? value)
