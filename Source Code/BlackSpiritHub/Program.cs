@@ -284,9 +284,18 @@ internal static class Program
 
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();
-			if (!offline)
+			if (offline)
 			{
-				PrepareUiFiles(paths);
+				// Reproduce a same-version update: the general asset copy is skipped,
+				// while feature folders still have to self-heal before the early return.
+				File.WriteAllText(Path.Combine(paths.Root, ".assets-version"), AppVersion.Current);
+			}
+			PrepareUiFiles(paths);
+			string[] requiredLifeSkillIcons = ["trading.svg", "farming.svg", "barter.svg"];
+			if (requiredLifeSkillIcons.Any(fileName =>
+				!File.Exists(Path.Combine(paths.MasteryIconsPath, fileName))))
+			{
+				return 119;
 			}
 			using AppLogger logger = new(paths.LogPath);
 			return offline
@@ -769,6 +778,13 @@ internal static class Program
 		CopyDirectoryIfPresent(
 			Path.Combine(baseDirectory, "Assets", "GrindTracker"),
 			Path.Combine(paths.Root, "Assets", "GrindTracker"));
+		// Player & Guild reuses the mastery icon set, including icons that can be
+		// introduced between builds without an application-version bump. Keep the
+		// small folder content-aware so a current version stamp cannot hide new or
+		// updated life-skill artwork from the per-user WebView directory.
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "Assets", "MasteryIcons"),
+			paths.MasteryIconsPath);
 
 		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
 			&& Directory.Exists(paths.ThemeAssetsPath)
@@ -1324,6 +1340,14 @@ internal static class Program
 			if (bdoAlertsMarketResult != 0)
 			{
 				return bdoAlertsMarketResult;
+			}
+
+			int playerGuildResult = await BdoPlayerGuildOfflineTests.RunAsync(
+				testStateRoot,
+				logger);
+			if (playerGuildResult != 0)
+			{
+				return playerGuildResult;
 			}
 
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);

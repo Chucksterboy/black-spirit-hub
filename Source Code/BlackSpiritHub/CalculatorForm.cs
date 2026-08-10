@@ -125,6 +125,8 @@ internal sealed class CalculatorForm : Form
 
 	private readonly BossScheduleService bossScheduleService;
 
+	private readonly BdoPlayerGuildService playerGuildService;
+
 	private readonly UpdateCheckerService updateCheckerService;
 
 	private MarketAnalyticsService? marketService;
@@ -182,6 +184,7 @@ internal sealed class CalculatorForm : Form
 		couponService = new CouponService(paths, logger);
 		eventService = new EventService(paths, logger);
 		bossScheduleService = new BossScheduleService(paths, logger);
+		playerGuildService = new BdoPlayerGuildService(paths, logger);
 		updateCheckerService = new UpdateCheckerService(logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
 		Text = "Black Spirit Hub";
@@ -810,6 +813,7 @@ internal sealed class CalculatorForm : Form
 		try { couponService.Dispose(); } catch { }
 		try { eventService.Dispose(); } catch { }
 		try { bossScheduleService.Dispose(); } catch { }
+		try { playerGuildService.Dispose(); } catch { }
 		try { updateCheckerService.Dispose(); } catch { }
 		TrySetTrayVisible(false);
 		try { trayIcon.Dispose(); } catch { }
@@ -1379,13 +1383,15 @@ internal sealed class CalculatorForm : Form
 			+ (requestId ?? string.Empty);
 	}
 
-	private static TimeSpan GetCommandTimeout(string command)
+	internal static TimeSpan GetCommandTimeout(string command)
 	{
 		return command switch
 		{
 			"downloadAndInstallUpdate" => TimeSpan.FromMinutes(10),
 			"refreshEvents" or "initializeEvents" => TimeSpan.FromSeconds(105),
 			"refreshBossSchedule" => TimeSpan.FromSeconds(20),
+			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
+			"searchBdoPlayersGuilds" or "getBdoGuildProfile" => TimeSpan.FromSeconds(33),
 			_ => TimeSpan.FromSeconds(45)
 		};
 	}
@@ -1448,6 +1454,40 @@ internal sealed class CalculatorForm : Form
 			return await bossScheduleService.InitializeAsync(cancellationToken);
 		case "refreshBossSchedule":
 			return await bossScheduleService.RefreshAsync(cancellationToken);
+		case "searchBdoPlayersGuilds":
+			return await playerGuildService.SearchAsync(
+				payload.TryGetProperty("mode", out JsonElement searchMode)
+					? searchMode.GetString() ?? string.Empty
+					: string.Empty,
+				payload.TryGetProperty("region", out JsonElement searchRegion)
+					? searchRegion.GetString() ?? string.Empty
+					: string.Empty,
+				payload.TryGetProperty("query", out JsonElement searchQuery)
+					? searchQuery.GetString() ?? string.Empty
+					: string.Empty,
+				cancellationToken);
+		case "getBdoGuildProfile":
+			return await playerGuildService.GetGuildProfileAsync(
+				payload.TryGetProperty("region", out JsonElement guildRegion)
+					? guildRegion.GetString() ?? string.Empty
+					: string.Empty,
+				payload.TryGetProperty("guildName", out JsonElement guildName)
+					? guildName.GetString() ?? string.Empty
+					: string.Empty,
+				cancellationToken,
+				payload.TryGetProperty("forceRefresh", out JsonElement guildForceRefresh)
+					&& guildForceRefresh.ValueKind == JsonValueKind.True);
+		case "getBdoPlayerProfile":
+			return await playerGuildService.GetPlayerProfileAsync(
+				payload.TryGetProperty("region", out JsonElement playerRegion)
+					? playerRegion.GetString() ?? string.Empty
+					: string.Empty,
+				payload.TryGetProperty("familyName", out JsonElement familyName)
+					? familyName.GetString() ?? string.Empty
+					: string.Empty,
+				cancellationToken,
+				payload.TryGetProperty("forceRefresh", out JsonElement playerForceRefresh)
+					&& playerForceRefresh.ValueKind == JsonValueKind.True);
 		case "getAppVersion":
 			return new { version = AppVersion.Current };
 		case "checkForUpdates":

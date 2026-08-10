@@ -35,6 +35,9 @@ $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
+$playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
+$bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
+$classIconRefreshScriptPath = Join-Path $repoRoot "scripts\update-class-icons.ps1"
 
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
@@ -435,6 +438,52 @@ $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
 
+if ($html -notmatch '(?s)<span class="navRowBreak"[^>]*></span>\s*<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?data-app-view="grindTrackerView"' -or
+	$html -notmatch 'id="playerGuildSearchMode"' -or
+	$html -notmatch '<option value="eu"' -or
+	$html -notmatch '<option value="na"' -or
+	$html -notmatch '<option value="kr"' -or
+	$html -notmatch '<option value="sa"' -or
+	$html -notmatch '<option value="asia"' -or
+	$html -notmatch '<form id="playerGuildSearchForm"[^>]*role="search"' -or
+	$html -notmatch 'id="playerGuildSearchButton"[^>]*type="submit"' -or
+	$html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css\?v=v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?' -or
+	$html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js\?v=v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?' -or
+	$html -notmatch 'id="playerGuildRosterRows" class="playerGuildRosterGrid"' -or
+	$html -notmatch 'id="playerGuildHistory"') {
+	throw "The bottom-left Player & Guild Search navigation, regional search, roster, or profile panels are incomplete."
+}
+if ($script -notmatch 'bridgeCall\("searchBdoPlayersGuilds",\{region,query,mode\},\{signal:request\.controller\.signal\}\)' -or
+	$script -notmatch 'bridgeCall\("getBdoGuildProfile"' -or
+	$script -notmatch 'bridgeCall\("getBdoPlayerProfile"' -or
+	$script -notmatch 'searchBdoPlayersGuilds:40000,getBdoGuildProfile:40000,getBdoPlayerProfile:75000' -or
+	$script -notmatch 'controller:new AbortController\(\)' -or
+	$script -notmatch 'document\.addEventListener\("submit",playerGuildHandleFormSubmit,true\)' -or
+	$script -notmatch 'if\(!initializePlayerGuild\(\)\)return' -or
+	$script -match '\bloadSetting\(' -or
+	$script -notmatch 'playerGuildCancelActiveRequest' -or
+	$script -notmatch 'sort\(\(a,b\)=>\(b\.level\?\?-1\)-\(a\.level\?\?-1\)' -or
+	$script -notmatch 'scrapedAtUtc' -or
+	$script -notmatch 'joinedAtUtc' -or
+	$script -notmatch 'leftAtUtc' -or
+	$script -notmatch 'playerGuildState\.searchResults=\[\];if\(item\.type==="guild"\)' -or
+	$script -notmatch 'trading:"trading\.svg"' -or
+	$script -notmatch 'farming:"farming\.svg"' -or
+	$script -notmatch 'barter:"barter\.svg"' -or
+	$css -notmatch '\.playerGuildRosterGrid\{' -or
+	$css -notmatch '\.playerGuildCharacterGrid' -or
+	$css -notmatch '\.playerGuildLifeSkillGrid' -or
+	$css -notmatch '#playerGuildView\{--pg-bg:rgba\(3,5,13,\.96\)' -or
+	$css -notmatch '\.playerGuildSearchPanel\{width:min\(960px,100%\);justify-self:center' -or
+	$css -notmatch '#playerGuildView\.active\.viewFading\{opacity:1;transform:none\}') {
+	throw "The Player & Guild bridge, navigation-state, ordering, timestamps, icons, or responsive UI contract is incomplete."
+}
+foreach ($lifeSkillIcon in @("trading.svg", "farming.svg", "barter.svg")) {
+	if (!(Test-Path -LiteralPath (Join-Path $sourceRoot "Assets\MasteryIcons\$lifeSkillIcon"))) {
+		throw "The Player & Guild life-skill icon is missing: $lifeSkillIcon"
+	}
+}
+
 if ($html -notmatch 'data-app-view="grindTrackerView"[^>]*>.*?<span class="navLabel">Grind Zones</span>' -or
 	$html -notmatch '<h1>Grind Zones</h1>' -or
 	$html -notmatch 'id="grindChangeZone"[^>]*>Choose Grind Zone</button>' -or
@@ -810,6 +859,74 @@ if ($missingReferencedAssets) {
 	throw "Missing class or modifier icons: $($missingReferencedAssets -join ', ')"
 }
 
+$expectedClassIconSlugs = @(
+	"warrior", "ranger", "sorceress", "berserker", "tamer", "ninja", "kunoichi", "witch",
+	"wizard", "maehwa", "valkyrie", "musa", "dark-knight", "striker", "mystic", "lahn",
+	"archer", "shai", "guardian", "hashashin", "nova", "sage", "corsair", "drakania",
+	"woosa", "maegu", "scholar", "dosa", "deadeye", "wukong", "seraph"
+)
+$classIconDirectory = Join-Path $sourceRoot "Assets\GrindTracker\classes"
+$actualClassIconSlugs = @(Get-ChildItem -LiteralPath $classIconDirectory -Filter "*.png" -File |
+	ForEach-Object { $_.BaseName } |
+	Sort-Object)
+$classIconMappingDifference = @(Compare-Object ($expectedClassIconSlugs | Sort-Object) $actualClassIconSlugs)
+if ($classIconMappingDifference) {
+	throw "The Player & Guild class-icon filenames no longer match the validated 31-class mapping."
+}
+foreach ($slug in $expectedClassIconSlugs) {
+	$iconPath = Join-Path $classIconDirectory ($slug + ".png")
+	$classIconBitmap = [System.Drawing.Bitmap]::new($iconPath)
+	try {
+		if ($classIconBitmap.Width -ne 256 -or
+			$classIconBitmap.Height -ne 256 -or
+			$classIconBitmap.PixelFormat -ne [System.Drawing.Imaging.PixelFormat]::Format32bppArgb) {
+			throw "Class icon '$slug' must remain a transparent 256x256 ARGB source asset."
+		}
+		$nonTransparent = 0
+		$luminous = 0
+		$minX = 256
+		$minY = 256
+		$maxX = -1
+		$maxY = -1
+		for ($y = 0; $y -lt 256; $y++) {
+			for ($x = 0; $x -lt 256; $x++) {
+				$pixel = $classIconBitmap.GetPixel($x, $y)
+				if ($pixel.A -eq 0) { continue }
+				$nonTransparent++
+				if ($pixel.R -ge 220 -and $pixel.G -ge 220 -and $pixel.B -ge 220) { $luminous++ }
+				if ($x -lt $minX) { $minX = $x }
+				if ($x -gt $maxX) { $maxX = $x }
+				if ($y -lt $minY) { $minY = $y }
+				if ($y -gt $maxY) { $maxY = $y }
+			}
+		}
+		$opaqueCorners = @(
+			$classIconBitmap.GetPixel(0, 0).A,
+			$classIconBitmap.GetPixel(255, 0).A,
+			$classIconBitmap.GetPixel(0, 255).A,
+			$classIconBitmap.GetPixel(255, 255).A
+		) | Where-Object { $_ -ne 0 }
+		if ($opaqueCorners -or
+			$nonTransparent -lt 3000 -or
+			$luminous -lt [Math]::Floor($nonTransparent * 0.85) -or
+			$minX -lt 12 -or $minY -lt 12 -or $maxX -gt 243 -or $maxY -gt 243) {
+			throw "Class icon '$slug' is empty, clipped, opaque, or unexpectedly dark."
+		}
+	}
+	finally {
+		$classIconBitmap.Dispose()
+	}
+}
+if (!(Test-Path -LiteralPath $classIconRefreshScriptPath -PathType Leaf)) {
+	throw "The reproducible Pearl Abyss class-icon refresh script is missing."
+}
+$classIconRefreshScript = Get-Content -LiteralPath $classIconRefreshScriptPath -Raw
+if ($classIconRefreshScript -notmatch 'https://s1\.pearlcdn\.com/NAEU/contents/img/common/character/icn_class_symbol_spr\.svg' -or
+	$classIconRefreshScript -notmatch '2ACBD72923F32801D1D454F97EC661B65100D84D05733518D1AA360E1987E642' -or
+	$classIconRefreshScript -notmatch '(?s)"warrior".*?"wukong", "seraph"') {
+	throw "The class-icon refresh script lost its official source, fail-closed hash, or 31-class mapping."
+}
+
 $resistanceCrystalAssets = [ordered]@{
 	"Assets/GrindTracker/icons-clean/bdfoundry-15742.png" = "C0F4FE7BB839A245336E00C3E2CB8884360A262440BD715642DC90EB5B5BCB10"
 	"Assets/GrindTracker/icons-clean/bdfoundry-15743.png" = "E65C44FC8D7FBA25D01CFB926A97914852163CEEC3DAD551FDECFC5DECA6CAC1"
@@ -892,8 +1009,8 @@ if ($unusedFunctions) {
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 $programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
-if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*bool assetsReady') {
-	throw "GrindTracker assets must self-heal before the version-stamp early return."
+if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*bool assetsReady') {
+	throw "GrindTracker and MasteryIcons assets must self-heal before the version-stamp early return."
 }
 if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore' -or
 	$programSource -match 'AppStateStore' -or
@@ -1054,6 +1171,12 @@ if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 	throw "The executable app-behavior JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $playerGuildJsTestPath -PathType Leaf)) {
+	throw "The executable Player & Guild JavaScript regression test is missing."
+}
+if (!(Test-Path -LiteralPath $bracketsJsTestPath -PathType Leaf)) {
+	throw "The executable AP & DP Brackets JavaScript regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -1075,6 +1198,14 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $appBehaviorJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "App behavior JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $playerGuildJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Player & Guild JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $bracketsJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "AP & DP Brackets JavaScript regression tests failed."
 	}
 }
 else {

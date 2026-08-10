@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.36">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.37">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -35,6 +35,7 @@
     <button class="navButton" data-app-view="couponsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Coupons</span></button>
     <button class="navButton" data-app-view="settingsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Settings</span></button>
     <span class="navRowBreak" aria-hidden="true"></span>
+    <button class="navButton betaNavButton" data-app-view="playerGuildView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Player &amp; Guild Search</span></button>
     <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Grind Zones</span></button>
     <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Reset Timers</span></button>
     <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Events</span></button>
@@ -571,6 +572,126 @@
   </div>
 </section>
 
+<section id="playerGuildView" class="appView">
+  <div class="playerGuildShell">
+    <header class="playerGuildHeader">
+      <div>
+        <span class="playerGuildEyebrow">GLOBAL ADVENTURER DIRECTORY</span>
+        <h1>Player &amp; Guild</h1>
+        <p>Find a family or guild across supported BDO regions, inspect its public profile, and move through the roster one adventurer at a time.</p>
+      </div>
+      <div id="playerGuildSourceStatus" class="playerGuildSourceStatus"><i></i><span>Ready to search</span></div>
+    </header>
+
+    <section class="playerGuildSearchPanel" aria-label="Player and guild search">
+      <form id="playerGuildSearchForm" class="playerGuildSearchBar" role="search">
+        <div id="playerGuildSearchMode" class="playerGuildModeToggle" role="group" aria-label="Search directory">
+          <button class="active" data-player-guild-mode="player" type="button">Players</button>
+          <button data-player-guild-mode="guild" type="button">Guilds</button>
+        </div>
+        <select id="playerGuildRegion" aria-label="Search region">
+          <option value="eu" selected>EU</option>
+          <option value="na">NA</option>
+          <option value="kr">KR</option>
+          <option value="sa">SA</option>
+          <option value="asia">Asia</option>
+        </select>
+        <label class="playerGuildSearchField">
+          <span class="playerGuildSearchIcon" aria-hidden="true"></span>
+          <input id="playerGuildSearch" type="search" maxlength="40" autocomplete="off" placeholder="Search family or guild name..." aria-label="Family or guild name">
+        </label>
+        <button id="playerGuildSearchButton" class="playerGuildPrimaryButton" type="submit">Search</button>
+      </form>
+      <div class="playerGuildRecentRow">
+        <span>Recent</span>
+        <div id="playerGuildRecents" class="playerGuildRecents"><small>Your recent profiles will stay on this device.</small></div>
+      </div>
+    </section>
+
+    <div id="playerGuildMessage" class="playerGuildMessage" role="status" aria-live="polite"></div>
+
+    <section id="playerGuildSearchResults" class="playerGuildSearchResults" hidden aria-label="Search results">
+      <article class="playerGuildResultPanel">
+        <div class="playerGuildPanelTitle"><span class="playerGuildPanelGlyph player"></span><div><strong>Players</strong><small id="playerGuildPlayerResultCount">0 matches</small></div></div>
+        <div id="playerGuildPlayerResults" class="playerGuildResultList"></div>
+      </article>
+      <article class="playerGuildResultPanel">
+        <div class="playerGuildPanelTitle"><span class="playerGuildPanelGlyph guild"></span><div><strong>Guilds</strong><small id="playerGuildGuildResultCount">0 matches</small></div></div>
+        <div id="playerGuildGuildResults" class="playerGuildResultList"></div>
+      </article>
+    </section>
+
+    <section id="playerGuildGuildProfile" class="playerGuildProfile" hidden aria-label="Guild profile">
+      <header class="playerGuildProfileHero guild">
+        <button class="playerGuildBackButton" data-player-guild-back type="button" aria-label="Back to search results">&larr;</button>
+        <span class="playerGuildHeroMark guild" aria-hidden="true"></span>
+        <div class="playerGuildHeroCopy">
+          <span>GUILD PROFILE</span>
+          <h2 id="playerGuildGuildName">Guild</h2>
+          <p id="playerGuildGuildMeta">Public guild information</p>
+        </div>
+        <div class="playerGuildHeroActions">
+          <span id="playerGuildGuildUpdated">Not loaded</span>
+          <button id="playerGuildReloadGuild" class="playerGuildGhostButton" type="button">Reload</button>
+        </div>
+      </header>
+      <div class="playerGuildMetricGrid">
+        <article><span>Guild Master</span><strong id="playerGuildMaster">&mdash;</strong></article>
+        <article><span>Declared Members</span><strong id="playerGuildMemberCount">0</strong></article>
+        <article><span>Roster Coverage</span><strong id="playerGuildProfileCoverage">&mdash;</strong></article>
+      </div>
+      <div class="playerGuildRosterToolbar">
+        <div><span>Guild Roster</span><small id="playerGuildRosterSummary">0 members</small></div>
+        <label><span class="playerGuildSearchIcon" aria-hidden="true"></span><input id="playerGuildRosterFilter" type="search" autocomplete="off" placeholder="Filter family name..." aria-label="Filter guild roster"></label>
+        <select id="playerGuildRosterSort" aria-label="Sort guild roster"><option value="name">Family A-Z</option><option value="name-desc">Family Z-A</option></select>
+      </div>
+      <div id="playerGuildRosterRows" class="playerGuildRosterGrid"></div>
+    </section>
+
+    <section id="playerGuildPlayerProfile" class="playerGuildProfile" hidden aria-label="Player profile">
+      <header class="playerGuildProfileHero player">
+        <button class="playerGuildBackButton" data-player-guild-back type="button" aria-label="Back to previous view">&larr;</button>
+        <span id="playerGuildPlayerHeroIcon" class="playerGuildHeroMark player" aria-hidden="true"></span>
+        <div class="playerGuildHeroCopy">
+          <span>FAMILY PROFILE</span>
+          <div class="playerGuildNameRow">
+            <h2 id="playerGuildFamilyName">Family</h2>
+            <div id="playerGuildProfileNotice" class="playerGuildProfileNotice" hidden role="status" aria-live="polite">
+              <span id="playerGuildProfileNoticeBadge"></span>
+              <small id="playerGuildProfileNoticeCopy"></small>
+            </div>
+          </div>
+          <p id="playerGuildFamilyMeta">Public adventurer information</p>
+        </div>
+        <div class="playerGuildHeroActions">
+          <span id="playerGuildPlayerUpdated">Not loaded</span>
+          <button id="playerGuildReloadPlayer" class="playerGuildGhostButton" type="button">Refresh Profile</button>
+        </div>
+      </header>
+      <div class="playerGuildMetricGrid player">
+        <article class="featured"><span>Maximum Gear Score</span><strong id="playerGuildMaxGearScore">&mdash;</strong></article>
+        <article><span>Contribution</span><strong id="playerGuildContribution">&mdash;</strong></article>
+        <article><span>Energy</span><strong id="playerGuildEnergy">&mdash;</strong></article>
+        <article><span>Family Created</span><strong id="playerGuildFamilyCreated">&mdash;</strong></article>
+      </div>
+      <div class="playerGuildDetailGrid">
+        <article class="playerGuildDetailPanel">
+          <div class="playerGuildPanelTitle"><span class="playerGuildPanelGlyph player"></span><div><strong>Characters</strong><small id="playerGuildCharacterCount">0 characters</small></div></div>
+          <div id="playerGuildCharacters" class="playerGuildCharacterGrid"></div>
+        </article>
+        <article class="playerGuildDetailPanel">
+          <div class="playerGuildPanelTitle"><span class="playerGuildPanelGlyph life"></span><div><strong>Life Skills</strong><small>Public family progress</small></div></div>
+          <div id="playerGuildLifeSkills" class="playerGuildLifeSkillGrid"></div>
+        </article>
+      </div>
+      <article class="playerGuildHistoryPanel">
+        <div class="playerGuildPanelTitle"><span class="playerGuildPanelGlyph guild"></span><div><strong>Guild History</strong><small>Public membership timeline</small></div></div>
+        <div id="playerGuildHistory" class="playerGuildHistoryStrip"></div>
+      </article>
+    </section>
+  </div>
+</section>
+
 <section id="grindTrackerView" class="appView">
   <div class="grindShell" data-grind-screen="spot">
     <header class="grindHeader">
@@ -861,8 +982,8 @@
   <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.36"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.36"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.37"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.37"></script>
 
 </body>
 </html>

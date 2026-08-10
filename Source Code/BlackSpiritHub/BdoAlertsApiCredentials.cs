@@ -19,6 +19,15 @@ internal static class BdoAlertsApiCredentials
 		RegexOptions.CultureInvariant,
 		TimeSpan.FromSeconds(1));
 
+	private static readonly HashSet<string> PlayerGuildRegions = new(StringComparer.Ordinal)
+	{
+		"eu",
+		"na",
+		"kr",
+		"sa",
+		"asia"
+	};
+
 	internal static string? Resolve()
 	{
 		string? processValue = Normalize(
@@ -128,7 +137,104 @@ internal static class BdoAlertsApiCredentials
 			return IsValidPriceHistoryQuery(endpoint.Query);
 		}
 
+		if (IsSupportedPlayerGuildEndpoint(endpoint))
+		{
+			return true;
+		}
+
 		return false;
+	}
+
+	private static bool IsSupportedPlayerGuildEndpoint(Uri endpoint)
+	{
+		string escapedPath = endpoint.GetComponents(
+			UriComponents.Path,
+			UriFormat.UriEscaped);
+		string[] segments = escapedPath.Split('/', StringSplitOptions.None);
+		if (segments.Length != 4
+			|| !segments[0].Equals("api", StringComparison.Ordinal)
+			|| (segments[1] != "player" && segments[1] != "guild"))
+		{
+			return false;
+		}
+
+		if (segments[2].Equals("search", StringComparison.Ordinal))
+		{
+			return PlayerGuildRegions.Contains(segments[3])
+				&& TryParseQuery(endpoint.Query, out IReadOnlyDictionary<string, string> values)
+				&& values.Count == 1
+				&& values.TryGetValue("query", out string? query)
+				&& IsSafeLookupText(query, minimumLength: 2);
+		}
+
+		if (!PlayerGuildRegions.Contains(segments[2]))
+		{
+			return false;
+		}
+
+		string name;
+		try
+		{
+			name = Uri.UnescapeDataString(segments[3]);
+		}
+		catch (UriFormatException)
+		{
+			return false;
+		}
+		if (!Uri.EscapeDataString(name).Equals(segments[3], StringComparison.Ordinal)
+			|| !IsSafeLookupText(name, minimumLength: 1))
+		{
+			return false;
+		}
+
+		return endpoint.Query.Length == 0
+			|| (segments[1].Equals("player", StringComparison.Ordinal)
+				&& IsValidPlayerProfileTargetQuery(endpoint.Query));
+	}
+
+	private static bool IsValidPlayerProfileTargetQuery(string query)
+	{
+		const string prefix = "?profile_target=";
+		const string forceRefreshSuffix = "&force_refresh=true";
+		if (!query.StartsWith(prefix, StringComparison.Ordinal))
+		{
+			return false;
+		}
+
+		string escapedValue = query[prefix.Length..];
+		if (escapedValue.EndsWith(forceRefreshSuffix, StringComparison.Ordinal))
+		{
+			escapedValue = escapedValue[..^forceRefreshSuffix.Length];
+		}
+		if (escapedValue.Length == 0 || escapedValue.Contains('&'))
+		{
+			return false;
+		}
+
+		string value;
+		try
+		{
+			value = Uri.UnescapeDataString(escapedValue);
+		}
+		catch (UriFormatException)
+		{
+			return false;
+		}
+
+		return Uri.EscapeDataString(value).Equals(escapedValue, StringComparison.Ordinal)
+			&& value.Length is > 0 and <= 2048
+			&& !value.Any(character => char.IsControl(character) || char.IsSurrogate(character));
+	}
+
+	private static bool IsSafeLookupText(string value, int minimumLength)
+	{
+		return value.Length >= minimumLength
+			&& value.Length <= 64
+			&& value.Equals(value.Trim(), StringComparison.Ordinal)
+			&& !value.Any(character =>
+				char.IsControl(character)
+				|| char.IsSurrogate(character)
+				|| character is '/' or '\\' or '?' or '#' or '%' or '&' or '=');
 	}
 
 	private static bool IsSupportedMethod(HttpMethod method, Uri endpoint)
