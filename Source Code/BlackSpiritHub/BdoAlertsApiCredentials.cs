@@ -137,6 +137,11 @@ internal static class BdoAlertsApiCredentials
 			return IsValidPriceHistoryQuery(endpoint.Query);
 		}
 
+		if (path.Equals("/api/market/eu/dehkia", StringComparison.Ordinal))
+		{
+			return endpoint.Query.Length == 0;
+		}
+
 		if (IsSupportedPlayerGuildEndpoint(endpoint))
 		{
 			return true;

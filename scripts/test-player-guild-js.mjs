@@ -80,7 +80,9 @@ for (const [command, expectedTimeout] of Object.entries({
   assert.equal(timeout, expectedTimeout, `${command} must retain its coordinated frontend timeout.`);
 }
 const start = source.indexOf("const PLAYER_GUILD_REGIONS=");
-const end = source.indexOf("initializeAppVersion();", start);
+const dehkiaStart = source.indexOf("const DEHKIA_", start);
+const appInitializationStart = source.indexOf("initializeAppVersion();", start);
+const end = dehkiaStart > start ? dehkiaStart : appInitializationStart;
 if (start < 0 || end <= start) throw new Error("Could not isolate the Player & Guild JavaScript block.");
 const playerGuildSource = source.slice(start, end);
 assert.doesNotMatch(playerGuildSource, /BDO Alerts/i, "Player & Guild UI copy must not expose provider branding");

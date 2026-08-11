@@ -51,14 +51,16 @@ internal static class MarketCollectorTaskManager
 	{
 		// Importing a custom XML task can require elevated Task Scheduler rights
 		// even when the XML requests LeastPrivilege. Standard schtasks switches
-		// create the same six-hour interactive-user task without an admin prompt.
+		// create the same hourly interactive-user check without an admin prompt.
+		// The collector's database freshness guard keeps successful bulk samples
+		// on the three-hour cadence while inexpensive due checks run hourly.
 		string taskCommand =
 			"\\\"" + executablePath.Replace("\"", "\\\"", StringComparison.Ordinal) +
 			"\\\" --market-scheduled-update";
 		string arguments =
 			"/Create /TN \"" + taskName +
 			"\" /TR \"" + taskCommand +
-			"\" /SC HOURLY /MO 6 /RL LIMITED /F";
+			"\" /SC HOURLY /MO 1 /RL LIMITED /F";
 		int exitCode = RunSchtasks(arguments, 15000, out details);
 		return exitCode == 0;
 	}

@@ -30,9 +30,14 @@ internal sealed class BlackDesertMarketProvider : IMarketDataProvider, IDisposab
 	public string Name => "Black Desert Market API";
 
 	public BlackDesertMarketProvider(AppLogger logger)
+		: this(logger, new HttpClientHandler())
+	{
+	}
+
+	internal BlackDesertMarketProvider(AppLogger logger, HttpMessageHandler handler)
 	{
 		this.logger = logger;
-		client = new HttpClient
+		client = new HttpClient(handler, disposeHandler: true)
 		{
 			Timeout = TimeSpan.FromSeconds(25.0),
 			MaxResponseContentBufferSize = MaxResponseBytes

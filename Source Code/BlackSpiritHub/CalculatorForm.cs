@@ -99,7 +99,7 @@ internal sealed class CalculatorForm : Form
 
 	private WebView2? eventsBrowserView;
 
-	private readonly Label loadingLabel;
+	private readonly StartupSplashWindow startupSplash;
 
 	private readonly Queue<DateTime> webViewRecoveryHistory = new();
 
@@ -126,6 +126,8 @@ internal sealed class CalculatorForm : Form
 	private readonly BossScheduleService bossScheduleService;
 
 	private readonly BdoPlayerGuildService playerGuildService;
+
+	private readonly DehkiaFuelService dehkiaFuelService;
 
 	private readonly UpdateCheckerService updateCheckerService;
 
@@ -185,6 +187,7 @@ internal sealed class CalculatorForm : Form
 		eventService = new EventService(paths, logger);
 		bossScheduleService = new BossScheduleService(paths, logger);
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
+		dehkiaFuelService = new DehkiaFuelService(paths, logger);
 		updateCheckerService = new UpdateCheckerService(logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
 		Text = "Black Spirit Hub";
@@ -201,18 +204,9 @@ internal sealed class CalculatorForm : Form
 		base.FormBorderStyle = FormBorderStyle.None;
 		base.Padding = Padding.Empty;
 		SetStyle(ControlStyles.ResizeRedraw, true);
-		loadingLabel = new Label
-		{
-			Dock = DockStyle.Fill,
-			Text = "Loading Black Spirit Hub...",
-			TextAlign = ContentAlignment.MiddleCenter,
-			ForeColor = Color.FromArgb(190, 231, 255),
-			BackColor = BackColor,
-			Font = new Font("Segoe UI", 13f)
-		};
+		startupSplash = new StartupSplashWindow(this, appIcon);
 		webView = CreateMainWebViewControl();
 		base.Controls.Add(webView);
-		base.Controls.Add(loadingLabel);
 	}
 
 	private static WebView2 CreateMainWebViewControl()
@@ -220,6 +214,7 @@ internal sealed class CalculatorForm : Form
 		return new WebView2
 		{
 			Dock = DockStyle.Fill,
+			DefaultBackgroundColor = Color.FromArgb(7, 17, 31),
 			Visible = false
 		};
 	}
@@ -782,6 +777,7 @@ internal sealed class CalculatorForm : Form
 	protected override async void OnShown(EventArgs e)
 	{
 		base.OnShown(e);
+		startupSplash.StartColdLaunch();
 		await InitializeAsync();
 	}
 
@@ -797,6 +793,7 @@ internal sealed class CalculatorForm : Form
 		webViewGeneration++;
 		CancelActiveBridgeRequests();
 		lifetimeCancellation.Cancel();
+		startupSplash.Stop();
 		base.OnFormClosing(e);
 	}
 
@@ -814,12 +811,14 @@ internal sealed class CalculatorForm : Form
 		try { eventService.Dispose(); } catch { }
 		try { bossScheduleService.Dispose(); } catch { }
 		try { playerGuildService.Dispose(); } catch { }
+		try { dehkiaFuelService.Dispose(); } catch { }
 		try { updateCheckerService.Dispose(); } catch { }
 		TrySetTrayVisible(false);
 		try { trayIcon.Dispose(); } catch { }
 		try { taskbarBadgeIcon?.Dispose(); } catch { }
 		try { trayBadgeIcon?.Dispose(); } catch { }
 		try { trayAppIcon.Dispose(); } catch { }
+		try { startupSplash.Dispose(); } catch { }
 		try { appIcon.Dispose(); } catch { }
 		try { backgroundNotificationTimer?.Stop(); } catch { }
 		try { backgroundNotificationTimer?.Dispose(); } catch { }
@@ -849,7 +848,12 @@ internal sealed class CalculatorForm : Form
 			{
 				PostEvent("status", new { message });
 			};
-			marketInitializationTask = marketService.InitializeAsync(cancellationToken);
+			// Microsoft.Data.Sqlite performs much of its startup work synchronously.
+			// Keep schema/settings initialization off the UI thread so the native
+			// startup animation can maintain a steady compositor cadence.
+			marketInitializationTask = Task.Run(
+				() => marketService.InitializeAsync(cancellationToken),
+				cancellationToken);
 			_ = marketInitializationTask.ContinueWith(
 				task => logger.Error("Market Analytics initialization failed.", task.Exception?.GetBaseException() ?? new InvalidOperationException("Unknown market initialization failure.")),
 				default,
@@ -918,7 +922,8 @@ internal sealed class CalculatorForm : Form
 
 		ThrowIfStaleWebView(target, generation, cancellationToken);
 		target.Visible = true;
-		loadingLabel.Visible = false;
+		startupSplash.BringToFront();
+		startupSplash.MarkApplicationReady();
 		recentUnresponsiveFailures = 0;
 		logger.Info($"WebView generation {generation}: interface ready.");
 	}
@@ -1178,9 +1183,7 @@ internal sealed class CalculatorForm : Form
 		{
 			logger.Warn($"Recreating WebView generation {failedGeneration}: {reason}.");
 			backgroundNotificationTimer?.Stop();
-			loadingLabel.Text = "Restoring Black Spirit Hub...";
-			loadingLabel.Visible = true;
-			loadingLabel.BringToFront();
+			startupSplash.ShowRestoring("Restoring Black Spirit Hub...");
 			CancelActiveBridgeRequests();
 
 			WebView2 oldWebView = webView;
@@ -1197,7 +1200,7 @@ internal sealed class CalculatorForm : Form
 			webView = replacement;
 			Controls.Add(replacement);
 			replacement.SendToBack();
-			loadingLabel.BringToFront();
+			startupSplash.BringToFront();
 
 			await Task.Delay(400, lifetimeCancellation.Token);
 			await InitializeMainWebViewControlAsync(replacement, newGeneration, lifetimeCancellation.Token);
@@ -1392,6 +1395,7 @@ internal sealed class CalculatorForm : Form
 			"refreshBossSchedule" => TimeSpan.FromSeconds(20),
 			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
 			"searchBdoPlayersGuilds" or "getBdoGuildProfile" => TimeSpan.FromSeconds(33),
+			"getDehkiaFuelData" => TimeSpan.FromSeconds(90),
 			_ => TimeSpan.FromSeconds(45)
 		};
 	}
@@ -1418,6 +1422,14 @@ internal sealed class CalculatorForm : Form
 			{
 				state = "closing"
 			};
+		case "getDehkiaFuelData":
+		{
+			bool forceRefresh = payload.ValueKind == JsonValueKind.Object
+				&& payload.TryGetProperty("forceRefresh", out JsonElement forceRefreshValue)
+				&& forceRefreshValue.ValueKind is JsonValueKind.True or JsonValueKind.False
+				&& forceRefreshValue.GetBoolean();
+			return await dehkiaFuelService.GetDataAsync(forceRefresh, cancellationToken);
+		}
 		case "windowDrag":
 			ReleaseCapture();
 			SendMessage(base.Handle, 161, 2, 0);
@@ -2349,9 +2361,7 @@ internal sealed class CalculatorForm : Form
 
 	private void ShowError(string message)
 	{
-		loadingLabel.Text = message;
-		loadingLabel.Visible = true;
-		loadingLabel.BringToFront();
+		startupSplash.ShowError(message);
 		if (!webView.IsDisposed)
 			webView.Visible = false;
 	}

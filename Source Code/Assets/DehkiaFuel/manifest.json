@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 2,
+  "generatedAtUtc": "2026-08-11T00:00:00Z",
+  "target": {
+    "width": 44,
+    "height": 44,
+    "format": "PNG",
+    "pixelFormat": "32bpp ARGB",
+    "requiresTransparency": true
+  },
+  "catalogAccessoryIds": [
+    11607,
+    11625,
+    11628,
+    11629,
+    11630,
+    11662,
+    11663,
+    11828,
+    11834,
+    11853,
+    11855,
+    11856,
+    11875,
+    12031,
+    12032,
+    12042,
+    12060,
+    12061,
+    12068,
+    12229,
+    12230,
+    12236,
+    12237,
+    12251,
+    12257,
+    12282
+  ],
+  "materialIds": [
+    766108
+  ],
+  "sourceProfiles": {
+    "bdo-codex-native": {
+      "itemPageTemplate": "https://bdocodex.com/us/item/{id}/",
+      "expectedWidth": 44,
+      "expectedHeight": 44,
+      "provenance": "Native-size Black Desert new_icon artwork mirrored by BDO Codex. Each exact sourceUrl was audited from its corresponding item page; no source is resized or upscaled."
+    }
+  },
+  "items": [
+    {
+      "id": 11607,
+      "name": "Ogre Ring",
+      "fuelTier": "high",
+      "file": "item-11607.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "2DBD73F9987F560A9DBFA559D2DDEE03F102AAD55C0FEB0FD939B909478E1B29",
+      "sha256": "DE0BBEBECB38DDA6006439D8126E800E5A8B6214974E4CC2DCCBD70CFDB70519",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011607.webp"
+    },
+    {
+      "id": 11625,
+      "name": "Sicil's Necklace",
+      "fuelTier": "low",
+      "file": "item-11625.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "D804B33FF3FF028698A9F906B8565E1522C26833556E6F662B765EB44AF7D22E",
+      "sha256": "0A5348B7797EDCD1B0B61011FBA213FB668DF79D94428A785527137C4924300B",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011625.webp"
+    },
+    {
+      "id": 11628,
+      "name": "Serap's Necklace",
+      "fuelTier": "low",
+      "file": "item-11628.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "DC61A76CB56A5F32CE9B75E539E8B6B142467912715C76ADA5C620397209972C",
+      "sha256": "CF4C09CBC1ECA3CDEF6DF05B67411B14B519E075CBFEA9C8E9B2A927AF3AAF80",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011628.webp"
+    },
+    {
+      "id": 11629,
+      "name": "Tungrad Necklace",
+      "fuelTier": "high",
+      "file": "item-11629.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "BCDF3F2A13D18B15A0C87912ABA868C4F5B2A28A3A8D336DE2E673F8F9B388B6",
+      "sha256": "AE2067C429E042D79CB3A8BBF10499E78A77EEB40215D23B2F680C27DDA3DEDF",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011629.webp"
+    },
+    {
+      "id": 11630,
+      "name": "Laytenn's Power Stone",
+      "fuelTier": "high",
+      "file": "item-11630.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "7105C42E5C4DA92AA5D9CF3727F7F71D48B55E9D88AB062AF034569F0A0690A1",
+      "sha256": "830D1E63A3778F09909742F24DBE43FC539C219782DE5FF8B71B22FCCF2EAEFF",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011630.webp"
+    },
+    {
+      "id": 11662,
+      "name": "Revived River Necklace",
+      "fuelTier": "high",
+      "file": "item-11662.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "2A098CF60BF2419C36E63EAC693D1336D603A988CC1FF3AA8D54F09CA0C34E17",
+      "sha256": "305FC0D40C5858DA5DE0DFDEB1ABA21681DD90EF5DD60673A908548C2FC4CE48",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011662.webp"
+    },
+    {
+      "id": 11663,
+      "name": "Revived Lunar Necklace",
+      "fuelTier": "high",
+      "file": "item-11663.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "28AA055A1C7C206B59E0E19D37F9B19517FD41111BD60838942A5F5F1846E75E",
+      "sha256": "7E625E3E078EBCF9FE013A5E45B6B2CA22C07B3B546148D7A3855EBADDBDE2F2",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/15_necklace/00011663.webp"
+    },
+    {
+      "id": 11828,
+      "name": "Tungrad Earring",
+      "fuelTier": "high",
+      "file": "item-11828.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "AC0A7DD8E7A00F5B835ABE31AD28471AE65CC2D01F8D107FE7D29088A1FC42EF",
+      "sha256": "60B099CDFAED3251D94BB8B8C7D767EED33DA543B772076CC517E16A6877586C",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011828.webp"
+    },
+    {
+      "id": 11834,
+      "name": "Narc Ear Accessory",
+      "fuelTier": "low",
+      "file": "item-11834.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "080C21DB938B8CFF990D3CBDEB2E0724D93F7D35CCBAD04468BC5608CC514141",
+      "sha256": "5D87432D54AFC0A098F381A4879A8704262614AC8CB8F536F94761DE666C6CCE",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011834.webp"
+    },
+    {
+      "id": 11853,
+      "name": "Black Distortion Earring",
+      "fuelTier": "high",
+      "file": "item-11853.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "3E708BA051AC76BC65D634EF3937E44F25CB555DB56C98D5D9C3486697E16F51",
+      "sha256": "2A078722EBDBB0E987B36955443068E75444CC0FAE4E902C7E45F74D64E974DA",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011852.webp"
+    },
+    {
+      "id": 11855,
+      "name": "Dawn Earring",
+      "fuelTier": "high",
+      "file": "item-11855.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "E4470B1F301B3ED5D07D3CF6A6342FF12A5847B0BF3E60618DBB9797E0E43108",
+      "sha256": "6FDF9E1F0A3964FC22C8609EE17C50173B28514D29464160190A06C7248B4F08",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011855.webp"
+    },
+    {
+      "id": 11856,
+      "name": "Ethereal Earring",
+      "fuelTier": "high",
+      "file": "item-11856.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "20D9D3C0BED461212AE68F669D9DE93066C072CE6292A6751E7EB438D70CFA33",
+      "sha256": "CB90AA765ABAF2EEC459205797E24DCC137DAE47B00AECFA80DC80A82E8F9C97",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011856.webp"
+    },
+    {
+      "id": 11875,
+      "name": "Vaha's Dawn",
+      "fuelTier": "high",
+      "file": "item-11875.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "880796604F806004EAF530CFECE00461F737EB5AFE553961FBD4811030FA002C",
+      "sha256": "6FB792213D0497DD5C6594D79499AF990F71418D64E34F916CA944BF20963765",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/17_earring/00011875.webp"
+    },
+    {
+      "id": 12031,
+      "name": "Ring of Crescent Guardian",
+      "fuelTier": "low",
+      "file": "item-12031.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "323CBBEE3D707F40E51A45C91A3806B74E5723A58614EC2AFCA150225D2A0187",
+      "sha256": "777019B783AEFFE8225B16763321FB4680ACE18237E798D30C892FF87C9D1596",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012031.webp"
+    },
+    {
+      "id": 12032,
+      "name": "Ring of Cadry Guardian",
+      "fuelTier": "low",
+      "file": "item-12032.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "FF021DB866751343D63E53EE302084D16198D672789A6E435FFC22FD7C20973D",
+      "sha256": "1609CD21B4AE6C657259261346A888DEF5BAC2559523D9AC8B83C11AD8123F77",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012032.webp"
+    },
+    {
+      "id": 12042,
+      "name": "Forest Ronaros Ring",
+      "fuelTier": "low",
+      "file": "item-12042.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "824834DF63C8F367A401711297D93BF86EC8BDD6E6A58BC8295F2B573F8886FD",
+      "sha256": "2E8B4F4C283A9439A8A9AFEA35B5B93EAB93FE4F80B2BA87B154BF25135D3279",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012042.webp"
+    },
+    {
+      "id": 12060,
+      "name": "Eye of the Ruins Ring",
+      "fuelTier": "low",
+      "file": "item-12060.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "D5B39A408E14551E7E5027D379BD439F0D88697FB9DD390E0EC703B6DB4B4712",
+      "sha256": "772ABD9A3A23DD91E5A439A8AFA8DCED45A0CB88F03F83F9DB6ABFA3674F5805",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012048.webp"
+    },
+    {
+      "id": 12061,
+      "name": "Tungrad Ring",
+      "fuelTier": "high",
+      "file": "item-12061.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "3FB91588CA8D629726D19E2DBD367DE34409B052C7B66C0BDFC9D308D027F54C",
+      "sha256": "7D191C8ECC7256315E3FE67EE68DE3F4701F756BFF478AA2A156715730FAE021",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012061.webp"
+    },
+    {
+      "id": 12068,
+      "name": "Ominous Ring",
+      "fuelTier": "high",
+      "file": "item-12068.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "BE253D44D3DA44EFD1962E60B44FDD1D44F7FDA052E9ACB58EDAD63FF29F34DF",
+      "sha256": "7509788553B3F27DB825182611ACDA6E07D1452DC3F4819D3691C0B828A0B070",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/16_ring/00012068.webp"
+    },
+    {
+      "id": 12229,
+      "name": "Centaurus Belt",
+      "fuelTier": "low",
+      "file": "item-12229.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "AFBFEADD5C48F82E67DF6F4BA44969F9BCA8FCB7FD4D2EA3BC88EA30A3BC011B",
+      "sha256": "BEAB59F523039D7FB6CE97A9DD2E785B6BD5123A1233BB96F4295EB386F0BC71",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012229.webp"
+    },
+    {
+      "id": 12230,
+      "name": "Basilisk's Belt",
+      "fuelTier": "low",
+      "file": "item-12230.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "0BC985FA7FD87924160FA583C0163E72CDEAC35B0D10001222B3B0F4E436B794",
+      "sha256": "7A5BA45D6F0DD36295B3D174385D12F5E2026C4B8CE37924708383CCE4D46F5C",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012230.webp"
+    },
+    {
+      "id": 12236,
+      "name": "Valtarra Eclipsed Belt",
+      "fuelTier": "low",
+      "file": "item-12236.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "941B4773223DC6A3EB50269C974AF1A9AEF0B03323919CFF01B9A4936A0467EB",
+      "sha256": "F3D249A33968DACEBBA4EBFE4BB4B12BE5D460139DB69BAD2558840AC34D22FF",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012236.webp"
+    },
+    {
+      "id": 12237,
+      "name": "Tungrad Belt",
+      "fuelTier": "high",
+      "file": "item-12237.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "F0EC57C56D6930569469B5DA8B729E68A68BE310E8588BF968D003DB407E3453",
+      "sha256": "5FECB2FAE6DC50BE8E13854B14CAFF1B33E9DE993D950F8034E5CC405D3C446C",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012237.webp"
+    },
+    {
+      "id": 12251,
+      "name": "Orkinrad's Belt",
+      "fuelTier": "low",
+      "file": "item-12251.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "BC0E7F4EA1ABB2541787C4ACBCB53E6154DD580DF591EC82539D5553E6EF99CD",
+      "sha256": "187C333AE12B502CBDEE8F0CCF4E4A7142112E993A259D191BF2B9986AB3A1A6",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012251.webp"
+    },
+    {
+      "id": 12257,
+      "name": "Turo's Belt",
+      "fuelTier": "high",
+      "file": "item-12257.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "60D7BFAB543FA7D7BA21F752E0D4E9B89E2676FECDC07EFDBE6FB81B02BD1BC6",
+      "sha256": "D370590948B4387F22746D46C4653D04FF4A0A14C25C7ED7CC045F40088A6609",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012257.webp"
+    },
+    {
+      "id": 12282,
+      "name": "Taebaek's Belt",
+      "fuelTier": "high",
+      "file": "item-12282.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "48385E2940F3C7FD832E9C36A83C5071C974323AD9E5AE28838D2692209F85FA",
+      "sha256": "C6C788C2FA1B45FDE4E8B8710D9FE89A1D098B9B2F428FF26056139C04E5E1F2",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/06_pc_equipitem/00_common/18_belt/00012282.webp"
+    },
+    {
+      "id": 766108,
+      "name": "Magical Lightstone Crystal",
+      "fuelTier": "material",
+      "file": "item-766108.png",
+      "sourceProfile": "bdo-codex-native",
+      "sourceSha256": "10105B109A7C639245B74AFA959A83E8FCC80F98CAC5B1FDEF0621D1CE9D9AC6",
+      "sha256": "48ED785C2773FF57D24B8B01FA07B8CAA13ACBA821EF92590D3BB9D6D968FD41",
+      "sourceUrl": "https://bdocodex.com/items/new_icon/03_etc/00766108.webp"
+    }
+  ]
+}

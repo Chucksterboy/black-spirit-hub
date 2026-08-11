@@ -785,6 +785,12 @@ internal static class Program
 		CopyDirectoryIfPresent(
 			Path.Combine(baseDirectory, "Assets", "MasteryIcons"),
 			paths.MasteryIconsPath);
+		// Dehkia Fuel artwork was introduced in a same-version build. Copy this
+		// compact feature folder before honoring the version stamp so installed
+		// users receive every accessory and crystal icon immediately.
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "Assets", "DehkiaFuel"),
+			Path.Combine(paths.Root, "Assets", "DehkiaFuel"));
 
 		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
 			&& Directory.Exists(paths.ThemeAssetsPath)
@@ -808,9 +814,23 @@ internal static class Program
 		string testStateRoot = Path.Combine(Path.GetTempPath(), $"bdo-state-offline-smoke-{Guid.NewGuid():N}");
 		try
 		{
+			int storageMaintenanceResult = await RunMarketStorageMaintenanceSmokeTestAsync();
+			if (storageMaintenanceResult != 0)
+			{
+				return storageMaintenanceResult;
+			}
+
 			MarketDatabase database = new(testDatabasePath);
 			await database.InitializeAsync(CancellationToken.None);
 			await database.SaveSettingsAsync(MarketSettings.Default, CancellationToken.None);
+			MarketSettings persistedSettings = await database.GetSettingsAsync(CancellationToken.None);
+			if (MarketSettings.DefaultCheckIntervalMinutes != 60
+				|| persistedSettings.IntervalMinutes != 60
+				|| MarketAnalyticsService.DefaultCollectorInterval != TimeSpan.FromHours(3)
+				|| MarketAnalyticsService.DefaultDetailCollectorInterval != TimeSpan.FromHours(24))
+			{
+				return 229;
+			}
 
 			MarketItem trackedItem = new(4901, 0, "Test Black Stone Powder", 1, 10_000, 25, 50, 20, 1);
 			await database.AddTrackedItemAsync(trackedItem, "eu", CancellationToken.None);
@@ -1057,6 +1077,7 @@ internal static class Program
 				(TimeSpan.FromDays(4), 1_000),
 				(TimeSpan.FromDays(3.75), 1_020),
 				(TimeSpan.FromDays(3.5), 1_040),
+				(TimeSpan.FromDays(3.25), 1_060),
 				(TimeSpan.FromDays(3), 1_080),
 				(TimeSpan.FromDays(2.25), 1_150),
 				(TimeSpan.FromDays(2), 1_200),
@@ -1105,12 +1126,12 @@ internal static class Program
 			if (weakSignalResult.Sales24Hours != 3
 				|| weakSignalResult.Sales3Days != 4
 				|| weakSignalResult.Sales7Days != 4
-				|| weakSignalResult.SampleCount != 12) return 210;
+				|| weakSignalResult.SampleCount != 5) return 210;
 			if (weakSignalResult.RecommendationEligible) return 211;
 			if (preorderOnlySignalResult.Sales24Hours != 0
 				|| preorderOnlySignalResult.Sales3Days != 3
 				|| preorderOnlySignalResult.Sales7Days != 11
-				|| preorderOnlySignalResult.SampleCount != 12) return 212;
+				|| preorderOnlySignalResult.SampleCount != 7) return 212;
 			if (preorderOnlySignalResult.RecommendationEligible) return 213;
 			if (strongSignalResult.Sales24Hours != 200
 				|| strongSignalResult.Sales3Days != 420
@@ -1161,6 +1182,133 @@ internal static class Program
 			if (staleDetailSignalResult.Sales24Hours != 200
 				|| staleDetailSignalResult.Sales3Days != 420) return 219;
 
+			MarketItem sparseEvidenceOutfit = new(700_008, 0, "Sparse Evidence Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem denseEvidenceOutfit = new(700_009, 0, "Dense Evidence Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem zeroSalesOutfit = new(700_010, 0, "Zero Sales Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
+			await database.SyncOutfitCatalogAsync(
+				[sparseEvidenceOutfit, denseEvidenceOutfit, zeroSalesOutfit],
+				"eu",
+				CancellationToken.None);
+			DateTimeOffset evidenceLatestUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
+			(TimeSpan Age, long Trades)[] sparseEvidenceSeries =
+			[
+				(TimeSpan.FromDays(7), 1_000),
+				(TimeSpan.FromDays(3), 1_040),
+				(TimeSpan.FromDays(1), 1_050),
+				(TimeSpan.FromHours(6), 1_060),
+				(TimeSpan.Zero, 1_060)
+			];
+			(TimeSpan Age, long Trades)[] denseEvidenceSeries =
+			[
+				(TimeSpan.FromDays(7), 1_000),
+				(TimeSpan.FromDays(6), 1_000),
+				(TimeSpan.FromDays(5), 1_000),
+				(TimeSpan.FromDays(3), 1_040),
+				(TimeSpan.FromDays(2), 1_040),
+				(TimeSpan.FromDays(1), 1_050),
+				(TimeSpan.FromHours(18), 1_050),
+				(TimeSpan.FromHours(12), 1_050),
+				(TimeSpan.FromHours(6), 1_060),
+				(TimeSpan.FromHours(3), 1_060),
+				(TimeSpan.Zero, 1_060)
+			];
+			foreach ((TimeSpan age, long trades) in sparseEvidenceSeries)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = sparseEvidenceOutfit.ItemId,
+						Name = sparseEvidenceOutfit.Name,
+						Price = sparseEvidenceOutfit.CurrentPrice,
+						BasePrice = sparseEvidenceOutfit.CurrentPrice,
+						TradeCount = trades,
+						CapturedUtc = evidenceLatestUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			foreach ((TimeSpan age, long trades) in denseEvidenceSeries)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = denseEvidenceOutfit.ItemId,
+						Name = denseEvidenceOutfit.Name,
+						Price = denseEvidenceOutfit.CurrentPrice,
+						BasePrice = denseEvidenceOutfit.CurrentPrice,
+						TradeCount = trades,
+						CapturedUtc = evidenceLatestUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			TimeSpan[] zeroSalesAges = Enumerable.Range(0, 15)
+				.Select(index => TimeSpan.FromHours((14 - index) * 12.0))
+				.ToArray();
+			foreach (TimeSpan age in zeroSalesAges)
+			{
+				await database.SaveOutfitBulkSamplesAsync(
+					[olderOutfitSample with
+					{
+						ItemId = zeroSalesOutfit.ItemId,
+						Name = zeroSalesOutfit.Name,
+						Price = zeroSalesOutfit.CurrentPrice,
+						BasePrice = zeroSalesOutfit.CurrentPrice,
+						TradeCount = 500,
+						CapturedUtc = evidenceLatestUtc.Subtract(age)
+					}],
+					"eu",
+					CancellationToken.None);
+			}
+			DateTimeOffset sharedDetailUtc = evidenceLatestUtc.AddMinutes(-1);
+			await using (SqliteConnection evidenceConnection = new($"Data Source={testDatabasePath}"))
+			{
+				await evidenceConnection.OpenAsync();
+				await using SqliteCommand markDetailed = evidenceConnection.CreateCommand();
+				markDetailed.CommandText = @"
+UPDATE outfit_catalog
+SET last_detailed_utc=$detailed
+WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
+				markDetailed.Parameters.AddWithValue("$detailed", sharedDetailUtc.ToString("O"));
+				markDetailed.Parameters.AddWithValue("$sparse", sparseEvidenceOutfit.ItemId);
+				markDetailed.Parameters.AddWithValue("$dense", denseEvidenceOutfit.ItemId);
+				markDetailed.Parameters.AddWithValue("$zero", zeroSalesOutfit.ItemId);
+				if (await markDetailed.ExecuteNonQueryAsync() != 3) return 222;
+
+				await using SqliteCommand countDenseAnchors = evidenceConnection.CreateCommand();
+				countDenseAnchors.CommandText = "SELECT COUNT(*) FROM outfit_snapshots WHERE region='eu' AND item_id=$id AND source='bulk-sales';";
+				countDenseAnchors.Parameters.AddWithValue("$id", denseEvidenceOutfit.ItemId);
+				if (Convert.ToInt32(await countDenseAnchors.ExecuteScalarAsync()) != denseEvidenceSeries.Length) return 223;
+				countDenseAnchors.Parameters["$id"].Value = zeroSalesOutfit.ItemId;
+				if (Convert.ToInt32(await countDenseAnchors.ExecuteScalarAsync()) != zeroSalesAges.Length) return 229;
+			}
+			OutfitReport evidenceReport = await database.GetOutfitReportAsync("eu", CancellationToken.None);
+			OutfitOpportunity sparseEvidenceResult = evidenceReport.Opportunities.Single(item => item.ItemId == sparseEvidenceOutfit.ItemId);
+			OutfitOpportunity denseEvidenceResult = evidenceReport.Opportunities.Single(item => item.ItemId == denseEvidenceOutfit.ItemId);
+			OutfitOpportunity zeroSalesResult = evidenceReport.Opportunities.Single(item => item.ItemId == zeroSalesOutfit.ItemId);
+			if (sparseEvidenceResult.SampleCount != 4
+				|| denseEvidenceResult.SampleCount != sparseEvidenceResult.SampleCount) return 224;
+			if (sparseEvidenceResult.Sales24Hours != 10
+				|| sparseEvidenceResult.Sales3Days != 20
+				|| sparseEvidenceResult.Sales7Days != 60
+				|| denseEvidenceResult.Sales24Hours != sparseEvidenceResult.Sales24Hours
+				|| denseEvidenceResult.Sales3Days != sparseEvidenceResult.Sales3Days
+				|| denseEvidenceResult.Sales7Days != sparseEvidenceResult.Sales7Days) return 225;
+			if (!sparseEvidenceResult.SalesPerDay.HasValue
+				|| !denseEvidenceResult.SalesPerDay.HasValue
+				|| Math.Abs(sparseEvidenceResult.SalesPerDay.Value - denseEvidenceResult.SalesPerDay.Value) > 0.000000001) return 226;
+			if (Math.Abs(sparseEvidenceResult.ConfidencePercent - denseEvidenceResult.ConfidencePercent) > 0.000000001) return 227;
+			if (zeroSalesResult.SampleCount != 1
+				|| zeroSalesResult.Sales24Hours != 0
+				|| zeroSalesResult.Sales3Days != 0
+				|| zeroSalesResult.Sales7Days != 0
+				|| zeroSalesResult.SalesPerDay != 0.0
+				|| zeroSalesResult.ConfidencePercent != 0.0
+				|| zeroSalesResult.LifetimeSales != 500
+				|| zeroSalesResult.LastSalesSampleUtc != evidenceLatestUtc
+				|| zeroSalesResult.SalesDataStale
+				|| zeroSalesResult.RecommendationEligible) return 228;
+
 			MarketItem[] coverageCatalog = Enumerable.Range(0, 100)
 				.Select(index => new MarketItem(
 					710_000 + index,
@@ -1178,6 +1326,7 @@ internal static class Program
 				"eu",
 				CancellationToken.None,
 				removeMissing: true);
+			DateTimeOffset coverageCapturedUtc = DateTimeOffset.UtcNow;
 			GrindMarketPrice[] coverageSamples = coverageCatalog
 				.Take(94)
 				.Select(item => currentOutfitSample with
@@ -1187,7 +1336,7 @@ internal static class Program
 					Price = item.CurrentPrice,
 					BasePrice = item.CurrentPrice,
 					TradeCount = 1_000 + item.ItemId,
-					CapturedUtc = DateTimeOffset.UtcNow
+					CapturedUtc = coverageCapturedUtc
 				})
 				.ToArray();
 			await database.SaveOutfitBulkSamplesAsync(coverageSamples, "eu", CancellationToken.None);
@@ -1209,7 +1358,7 @@ internal static class Program
 						Price = coverageCatalog[94].CurrentPrice,
 						BasePrice = coverageCatalog[94].CurrentPrice,
 						TradeCount = 1_000 + coverageCatalog[94].ItemId,
-						CapturedUtc = DateTimeOffset.UtcNow
+						CapturedUtc = coverageCapturedUtc
 					}
 				],
 				"eu",
@@ -1232,7 +1381,7 @@ internal static class Program
 						Price = item.CurrentPrice,
 						BasePrice = item.CurrentPrice,
 						TradeCount = 1_000 + item.ItemId,
-						CapturedUtc = DateTimeOffset.UtcNow
+						CapturedUtc = coverageCapturedUtc
 					})
 					.ToArray(),
 				"eu",
@@ -1244,6 +1393,50 @@ internal static class Program
 					CancellationToken.None)).Count != 0)
 			{
 				return 89;
+			}
+			DateTimeOffset secondHourlyCheckUtc = coverageCapturedUtc.AddHours(2);
+			if (await database.IsOutfitBulkRefreshDueAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					secondHourlyCheckUtc,
+					CancellationToken.None)
+				|| (await database.GetOutfitCatalogDueForBulkAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					secondHourlyCheckUtc,
+					CancellationToken.None)).Count != 0)
+			{
+				return 230;
+			}
+			DateTimeOffset justBeforeThirdHourlyCheckUtc = coverageCapturedUtc
+				.AddHours(2)
+				.AddMinutes(54);
+			if (await database.IsOutfitBulkRefreshDueAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					justBeforeThirdHourlyCheckUtc,
+					CancellationToken.None)
+				|| (await database.GetOutfitCatalogDueForBulkAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					justBeforeThirdHourlyCheckUtc,
+					CancellationToken.None)).Count != 0)
+			{
+				return 232;
+			}
+			DateTimeOffset thirdHourlyCheckUtc = coverageCapturedUtc.AddHours(3);
+			if (!await database.IsOutfitBulkRefreshDueAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					thirdHourlyCheckUtc,
+					CancellationToken.None)
+				|| (await database.GetOutfitCatalogDueForBulkAsync(
+					"eu",
+					MarketAnalyticsService.DefaultCollectorInterval,
+					thirdHourlyCheckUtc,
+					CancellationToken.None)).Count != coverageCatalog.Length)
+			{
+				return 231;
 			}
 
 			using (AnalyticsMarketStubHandler marketHandler = new(invalidItemId: 103))
@@ -1348,6 +1541,14 @@ internal static class Program
 			if (playerGuildResult != 0)
 			{
 				return playerGuildResult;
+			}
+
+			int dehkiaFuelResult = await DehkiaFuelOfflineTests.RunAsync(
+				testStateRoot,
+				logger);
+			if (dehkiaFuelResult != 0)
+			{
+				return dehkiaFuelResult;
 			}
 
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
@@ -2000,6 +2201,7 @@ internal static class Program
 		catch (Exception exception)
 		{
 			logger.Error("Offline smoke test failed.", exception);
+			Console.Error.WriteLine($"Offline smoke test failed: {exception}");
 			return 50;
 		}
 		finally
@@ -2015,6 +2217,223 @@ internal static class Program
 			catch
 			{
 			}
+		}
+	}
+
+	private static async Task<int> RunMarketStorageMaintenanceSmokeTestAsync()
+	{
+		string path = Path.Combine(Path.GetTempPath(), $"bdo-market-storage-smoke-{Guid.NewGuid():N}.db");
+		try
+		{
+			MarketDatabase database = new(path);
+			await database.InitializeAsync(CancellationToken.None);
+			DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
+			MarketItem outfit = new(880_001, 0, "Storage Test Outfit", 4, 2_020_000_000, 11, 0, 55, 1);
+			await database.SyncOutfitCatalogAsync([outfit], "eu", CancellationToken.None);
+			await database.SyncOutfitCatalogAsync(
+				[outfit with { CurrentPrice = 2_030_000_000, Stock = 17 }],
+				"eu",
+				CancellationToken.None);
+
+			await using (SqliteConnection seed = new($"Data Source={path};Pooling=False"))
+			{
+				await seed.OpenAsync();
+				await using (SqliteCommand makeLegacy = seed.CreateCommand())
+				{
+					makeLegacy.CommandText = "PRAGMA auto_vacuum=NONE; VACUUM;";
+					await makeLegacy.ExecuteNonQueryAsync();
+				}
+				await using SqliteTransaction transaction = (SqliteTransaction)await seed.BeginTransactionAsync();
+				await using (SqliteCommand tracked = seed.CreateCommand())
+				{
+					tracked.Transaction = transaction;
+					tracked.CommandText = @"
+INSERT INTO tracked_items(item_id,enhancement,region,name,grade,created_utc)
+VALUES(990001,0,'eu','Storage Tracked Item',1,$created);
+INSERT INTO snapshots(item_id,enhancement,region,captured_utc,price,source)
+VALUES(990001,0,'eu',$oldTracked,100,'provider-history'),
+      (990001,0,'eu',$keptTracked,110,'provider-history');";
+					tracked.Parameters.AddWithValue("$created", nowUtc.AddDays(-100).ToString("O"));
+					tracked.Parameters.AddWithValue("$oldTracked", nowUtc.AddDays(-91).ToString("O"));
+					tracked.Parameters.AddWithValue("$keptTracked", nowUtc.AddDays(-89).ToString("O"));
+					await tracked.ExecuteNonQueryAsync();
+				}
+				await using (SqliteCommand outfits = seed.CreateCommand())
+				{
+					outfits.Transaction = transaction;
+					outfits.CommandText = @"
+INSERT INTO outfit_snapshots(item_id,region,captured_utc,price,stock,trade_count,source)
+VALUES($id,'eu',$oldOutfit,2030000000,17,80,'bulk-sales'),
+      ($id,'eu',$baseline,2030000000,17,100,'bulk-sales'),
+      ($id,'eu',$current,2030000000,17,160,'bulk-sales');
+WITH RECURSIVE sequence(value) AS (
+    VALUES(1)
+    UNION ALL
+    SELECT value + 1 FROM sequence WHERE value < 6000
+)
+INSERT INTO outfit_snapshots(item_id,region,captured_utc,price,stock,trade_count,source)
+SELECT $id,'eu',datetime($bloatStart, '+' || value || ' seconds'),2030000000,17,value,'bulk-sales'
+FROM sequence;";
+					outfits.Parameters.AddWithValue("$id", outfit.ItemId);
+					outfits.Parameters.AddWithValue("$oldOutfit", nowUtc.AddDays(-15).ToString("O"));
+					outfits.Parameters.AddWithValue("$baseline", nowUtc.AddDays(-7).AddMinutes(-1).ToString("O"));
+					outfits.Parameters.AddWithValue("$current", nowUtc.AddMinutes(-1).ToString("O"));
+					outfits.Parameters.AddWithValue("$bloatStart", nowUtc.AddDays(-30).UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"));
+					await outfits.ExecuteNonQueryAsync();
+				}
+				await transaction.CommitAsync();
+			}
+
+			await database.InitializeAsync(CancellationToken.None);
+			MarketStorageMaintenanceResult result = await database.MaintainStorageAsync(
+				MarketAnalyticsService.MarketSampleRetention,
+				nowUtc,
+				CancellationToken.None);
+			if (!result.FullVacuumCompleted
+				|| result.IncrementalVacuumCompleted
+				|| result.RemovedRows < 6002
+				|| result.DeferredReason != null
+				|| result.FileBytesAfter >= result.FileBytesBefore)
+			{
+				return 233;
+			}
+
+			await using (SqliteConnection verify = new($"Data Source={path};Pooling=False"))
+			{
+				await verify.OpenAsync();
+				await using SqliteCommand command = verify.CreateCommand();
+				command.CommandText = @"
+SELECT
+    (SELECT auto_vacuum FROM pragma_auto_vacuum),
+    (SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ix_outfit_snapshots_item_time'),
+    (SELECT COUNT(*) FROM snapshots),
+    (SELECT COUNT(*) FROM outfit_snapshots),
+    (SELECT COUNT(*) FROM outfit_snapshots WHERE source='catalog'),
+    (SELECT price FROM outfit_catalog WHERE item_id=880001 AND region='eu'),
+    (SELECT stock FROM outfit_catalog WHERE item_id=880001 AND region='eu'),
+    (SELECT quick_check FROM pragma_quick_check);";
+				await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+				if (!await reader.ReadAsync()
+					|| reader.GetInt32(0) != 2
+					|| reader.GetInt32(1) != 0
+					|| reader.GetInt32(2) != 1
+					|| reader.GetInt32(3) != 2
+					|| reader.GetInt32(4) != 0
+					|| reader.GetInt64(5) != 2_030_000_000
+					|| reader.GetInt64(6) != 17
+					|| !string.Equals(reader.GetString(7), "ok", StringComparison.OrdinalIgnoreCase))
+				{
+					return 234;
+				}
+			}
+
+			OutfitOpportunity opportunity = (await database.GetOutfitReportAsync("eu", CancellationToken.None))
+				.Opportunities.Single(item => item.ItemId == outfit.ItemId);
+			if (opportunity.Sales7Days != 60)
+			{
+				return 235;
+			}
+
+			await using (SqliteConnection addExpired = new($"Data Source={path};Pooling=False"))
+			{
+				await addExpired.OpenAsync();
+				await using SqliteCommand insert = addExpired.CreateCommand();
+				insert.CommandText = @"
+INSERT INTO outfit_snapshots(item_id,region,captured_utc,price,stock,trade_count,source)
+VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
+				insert.Parameters.AddWithValue("$expired", nowUtc.AddDays(-20).ToString("O"));
+				await insert.ExecuteNonQueryAsync();
+			}
+			MarketStorageMaintenanceResult incremental = await database.MaintainStorageAsync(
+				MarketAnalyticsService.MarketSampleRetention,
+				nowUtc,
+				CancellationToken.None);
+			if (incremental.FullVacuumCompleted
+				|| !incremental.IncrementalVacuumCompleted
+				|| incremental.RemovedRows != 1
+				|| incremental.FileBytesAfter > incremental.FileBytesBefore)
+			{
+				return 236;
+			}
+
+			await using (SqliteConnection blocker = new($"Data Source={path};Pooling=False"))
+			{
+				await blocker.OpenAsync();
+				await using SqliteTransaction writeLock = (SqliteTransaction)await blocker.BeginTransactionAsync();
+				await using SqliteCommand hold = blocker.CreateCommand();
+				hold.Transaction = writeLock;
+				hold.CommandText = "UPDATE outfit_catalog SET stock=stock WHERE item_id=880001 AND region='eu';";
+				await hold.ExecuteNonQueryAsync();
+				MarketStorageMaintenanceResult deferred = await database.MaintainStorageAsync(
+					MarketAnalyticsService.MarketSampleRetention,
+					nowUtc,
+					CancellationToken.None);
+				if (string.IsNullOrWhiteSpace(deferred.DeferredReason))
+				{
+					return 237;
+				}
+				await writeLock.RollbackAsync();
+			}
+
+			MarketStorageMaintenanceResult retry = await database.MaintainStorageAsync(
+				MarketAnalyticsService.MarketSampleRetention,
+				nowUtc,
+				CancellationToken.None);
+			if (retry.DeferredReason != null
+				|| !retry.IncrementalVacuumCompleted
+				|| !MarketDatabase.HasSufficientVacuumSpace(60_000_000, 0, 200_000_000)
+				|| MarketDatabase.HasSufficientVacuumSpace(60_000_000, 0, 100_000_000))
+			{
+				return 238;
+			}
+
+			await using (SqliteConnection expiredBeforeFailure = new($"Data Source={path};Pooling=False"))
+			{
+				await expiredBeforeFailure.OpenAsync();
+				await using SqliteCommand insert = expiredBeforeFailure.CreateCommand();
+				insert.CommandText = @"
+INSERT INTO outfit_snapshots(item_id,region,captured_utc,price,stock,trade_count,source)
+VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
+				insert.Parameters.AddWithValue("$expired", nowUtc.AddDays(-20).ToString("O"));
+				await insert.ExecuteNonQueryAsync();
+			}
+			FailingMarketDataProvider failingProvider = new(
+				path,
+				nowUtc.Subtract(MarketDatabase.OutfitSampleRetention));
+			using (AppLogger maintenanceLogger = new(path + ".log"))
+			using (MarketAnalyticsService service = new(
+				database,
+				failingProvider,
+				maintenanceLogger,
+				useProcessUpdateLock: false))
+			{
+				await service.InitializeAsync(CancellationToken.None, startForegroundUpdates: false);
+				await service.RefreshDueMarketSamplesAsync(
+					MarketAnalyticsService.DefaultCollectorInterval,
+					"storage ordering smoke test",
+					CancellationToken.None);
+				if (!failingProvider.RequestObserved || !failingProvider.StorageWasPrunedBeforeRequest)
+				{
+					return 239;
+				}
+			}
+			await using (SqliteConnection verifyFailureOrdering = new($"Data Source={path};Pooling=False"))
+			{
+				await verifyFailureOrdering.OpenAsync();
+				await using SqliteCommand countExpired = verifyFailureOrdering.CreateCommand();
+				countExpired.CommandText = "SELECT COUNT(*) FROM outfit_snapshots WHERE captured_utc < $cutoff;";
+				countExpired.Parameters.AddWithValue("$cutoff", nowUtc.AddDays(-14).ToString("O"));
+				if (Convert.ToInt32(await countExpired.ExecuteScalarAsync()) != 0)
+				{
+					return 240;
+				}
+			}
+			return 0;
+		}
+		finally
+		{
+			SqliteCleanup(path);
+			try { File.Delete(path + ".log"); } catch (IOException) { }
 		}
 	}
 
@@ -2320,6 +2739,70 @@ internal static class Program
 		PartialPriceHistory,
 		Forbidden,
 		Malformed
+	}
+
+	private sealed class FailingMarketDataProvider : IMarketDataProvider
+	{
+		private readonly string databasePath;
+		private readonly DateTimeOffset retentionCutoff;
+
+		public FailingMarketDataProvider(string databasePath, DateTimeOffset retentionCutoff)
+		{
+			this.databasePath = databasePath;
+			this.retentionCutoff = retentionCutoff;
+		}
+
+		public bool RequestObserved { get; private set; }
+
+		public bool StorageWasPrunedBeforeRequest { get; private set; } = true;
+
+		public string Name => "Offline failure fixture";
+
+		public Task<IReadOnlyList<MarketItem>> SearchAsync(
+			string query,
+			string region,
+			CancellationToken cancellationToken)
+		{
+			throw CreateFailure();
+		}
+
+		public Task<IReadOnlyList<MarketItem>> GetVariantsAsync(
+			long itemId,
+			string region,
+			CancellationToken cancellationToken)
+		{
+			throw CreateFailure();
+		}
+
+		public Task<IReadOnlyList<MarketItem>> GetCategoryAsync(
+			int mainCategory,
+			int subCategory,
+			string region,
+			CancellationToken cancellationToken)
+		{
+			throw CreateFailure();
+		}
+
+		public Task<MarketSnapshot> GetSnapshotAsync(
+			long itemId,
+			int enhancement,
+			string region,
+			CancellationToken cancellationToken)
+		{
+			throw CreateFailure();
+		}
+
+		private InvalidOperationException CreateFailure()
+		{
+			RequestObserved = true;
+			using SqliteConnection connection = new($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+			connection.Open();
+			using SqliteCommand command = connection.CreateCommand();
+			command.CommandText = "SELECT COUNT(*) FROM outfit_snapshots WHERE captured_utc < $cutoff;";
+			command.Parameters.AddWithValue("$cutoff", retentionCutoff.ToString("O"));
+			StorageWasPrunedBeforeRequest &= Convert.ToInt32(command.ExecuteScalar()) == 0;
+			return new InvalidOperationException("Offline provider failure fixture.");
+		}
 	}
 
 	private sealed class BdoAlertsMarketStubHandler : HttpMessageHandler

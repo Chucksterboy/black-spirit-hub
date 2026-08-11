@@ -13,11 +13,11 @@ namespace BlackSpiritHub;
 internal sealed class MarketDatabase
 {
 	private const int CurrentSchemaVersion = 2;
-	private static readonly TimeSpan OutfitSampleRetention = TimeSpan.FromDays(32);
+	internal static readonly TimeSpan OutfitSampleRetention = TimeSpan.FromDays(14);
 	private static readonly TimeSpan OutfitReportHistory = OutfitSampleRetention;
 	private static readonly TimeSpan OutfitSampleFreshness = TimeSpan.FromHours(12);
 	private static readonly TimeSpan OutfitClockSkewTolerance = TimeSpan.FromMinutes(5);
-	private static readonly TimeSpan OutfitBulkFreshnessGrace = TimeSpan.FromMinutes(30);
+	private static readonly TimeSpan OutfitBulkSchedulingTolerance = TimeSpan.FromMinutes(5);
 	private const int OutfitRecommendationMinimumSamples = 12;
 	private const long OutfitRecommendationActive24HourSales = 10;
 	private const long OutfitRecommendationActive3DaySales = 20;
@@ -25,6 +25,9 @@ internal sealed class MarketDatabase
 	private const int OutfitRecommendationMinimumActiveWindows = 2;
 	private const double OutfitRecommendationMinimumConfidence = 0.6;
 	private static readonly TimeSpan OutfitRecommendationMaximumDetailAge = TimeSpan.FromDays(7);
+	private const int IncrementalVacuumPageLimit = 1024;
+	private const int MaintenanceBusyTimeoutMilliseconds = 5000;
+	private const long VacuumFreeSpaceReserveBytes = 32L * 1024L * 1024L;
 
 	private readonly string connectionString;
 
@@ -43,13 +46,25 @@ internal sealed class MarketDatabase
 
 	public async Task InitializeAsync(CancellationToken cancellationToken)
 	{
+		bool isNewDatabase = !File.Exists(DatabasePath) || new FileInfo(DatabasePath).Length == 0;
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		int schemaVersion = await GetSchemaVersionAsync(connection, cancellationToken);
 		if (schemaVersion < CurrentSchemaVersion)
 		{
 			await BackupBeforeMigrationAsync(connection, schemaVersion, cancellationToken);
 		}
+		if (isNewDatabase)
+		{
+			await using SqliteCommand autoVacuum = connection.CreateCommand();
+			autoVacuum.CommandText = "PRAGMA auto_vacuum=INCREMENTAL;";
+			await autoVacuum.ExecuteNonQueryAsync(cancellationToken);
+		}
 		string commandText = "PRAGMA journal_mode=WAL;\nPRAGMA foreign_keys=ON;\nCREATE TABLE IF NOT EXISTS settings (\n    key TEXT PRIMARY KEY,\n    value TEXT NOT NULL\n);\nCREATE TABLE IF NOT EXISTS tracked_items (\n    item_id INTEGER NOT NULL,\n    enhancement INTEGER NOT NULL,\n    region TEXT NOT NULL,\n    name TEXT NOT NULL,\n    grade INTEGER NOT NULL,\n    main_category INTEGER NOT NULL DEFAULT 0,\n    sub_category INTEGER NOT NULL DEFAULT 0,\n    created_utc TEXT NOT NULL,\n    last_price INTEGER,\n    last_stock INTEGER,\n    last_trade_count INTEGER,\n    last_updated_utc TEXT,\n    PRIMARY KEY (item_id, enhancement, region)\n);\nCREATE TABLE IF NOT EXISTS snapshots (\n    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,\n    item_id INTEGER NOT NULL,\n    enhancement INTEGER NOT NULL,\n    region TEXT NOT NULL,\n    captured_utc TEXT NOT NULL,\n    price INTEGER NOT NULL,\n    stock INTEGER,\n    trade_count INTEGER,\n    order_book_min INTEGER,\n    order_book_max INTEGER,\n    order_book_average REAL,\n    source TEXT NOT NULL,\n    UNIQUE(item_id, enhancement, region, captured_utc, source)\n);\nCREATE INDEX IF NOT EXISTS ix_snapshots_item_time\n    ON snapshots(item_id, enhancement, region, captured_utc);\nCREATE INDEX IF NOT EXISTS ix_snapshots_region_item_time\n    ON snapshots(region, item_id, enhancement, captured_utc DESC);\nCREATE TABLE IF NOT EXISTS outfit_catalog (\n    item_id INTEGER NOT NULL,\n    region TEXT NOT NULL,\n    name TEXT NOT NULL,\n    grade INTEGER NOT NULL,\n    sub_category INTEGER NOT NULL,\n    price INTEGER NOT NULL,\n    stock INTEGER NOT NULL,\n    last_catalog_sync_utc TEXT NOT NULL,\n    last_detailed_utc TEXT,\n    PRIMARY KEY(item_id, region)\n);\nCREATE TABLE IF NOT EXISTS outfit_snapshots (\n    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,\n    item_id INTEGER NOT NULL,\n    region TEXT NOT NULL,\n    captured_utc TEXT NOT NULL,\n    price INTEGER NOT NULL,\n    stock INTEGER NOT NULL,\n    trade_count INTEGER,\n    preorder_count INTEGER,\n    source TEXT NOT NULL\n);\nCREATE INDEX IF NOT EXISTS ix_outfit_snapshots_item_time\n    ON outfit_snapshots(item_id, region, captured_utc);\nCREATE INDEX IF NOT EXISTS ix_outfit_snapshots_region_item_time\n    ON outfit_snapshots(region, item_id, captured_utc DESC);";
+		commandText = commandText.Replace(
+			"CREATE INDEX IF NOT EXISTS ix_outfit_snapshots_item_time\\n    ON outfit_snapshots(item_id, region, captured_utc);\\n",
+			string.Empty,
+			StringComparison.Ordinal)
+			+ "\nDROP INDEX IF EXISTS ix_outfit_snapshots_item_time;";
 		await using SqliteCommand command = connection.CreateCommand();
 		command.CommandText = commandText;
 		await command.ExecuteNonQueryAsync(cancellationToken);
@@ -250,7 +265,16 @@ SELECT EXISTS (
 
 	public async Task<bool> IsOutfitBulkRefreshDueAsync(string region, TimeSpan maximumAge, CancellationToken cancellationToken)
 	{
-		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge).Subtract(OutfitBulkFreshnessGrace);
+		return await IsOutfitBulkRefreshDueAsync(region, maximumAge, DateTimeOffset.UtcNow, cancellationToken);
+	}
+
+	internal async Task<bool> IsOutfitBulkRefreshDueAsync(
+		string region,
+		TimeSpan maximumAge,
+		DateTimeOffset nowUtc,
+		CancellationToken cancellationToken)
+	{
+		DateTimeOffset cutoff = GetOutfitBulkDueCutoff(nowUtc, maximumAge);
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using SqliteCommand command = connection.CreateCommand();
 		command.CommandText = @"
@@ -333,7 +357,7 @@ SELECT
 		{
 			return null;
 		}
-		DateTimeOffset since = DateTimeOffset.UtcNow.AddDays(-Math.Clamp(days, 1, 365));
+		DateTimeOffset since = DateTimeOffset.UtcNow.AddDays(-Math.Clamp(days, 1, 90));
 		List<PricePoint> points = new List<PricePoint>();
 		ItemAnalytics result;
 		await using (SqliteConnection connection = await OpenAsync(cancellationToken))
@@ -402,25 +426,173 @@ SELECT
 
 	public async Task<int> PruneOldMarketSamplesAsync(TimeSpan retention, CancellationToken cancellationToken)
 	{
-		DateTimeOffset now = DateTimeOffset.UtcNow;
+		return await PruneOldMarketSamplesAsync(retention, DateTimeOffset.UtcNow, cancellationToken);
+	}
+
+	internal async Task<int> PruneOldMarketSamplesAsync(
+		TimeSpan retention,
+		DateTimeOffset nowUtc,
+		CancellationToken cancellationToken)
+	{
+		if (retention <= TimeSpan.Zero)
+		{
+			throw new ArgumentOutOfRangeException(nameof(retention));
+		}
+
+		await using SqliteConnection connection = await OpenMaintenanceAsync(cancellationToken);
+		return await PruneOldMarketSamplesAsync(connection, retention, nowUtc, cancellationToken);
+	}
+
+	public Task<MarketStorageMaintenanceResult> MaintainStorageAsync(
+		TimeSpan trackedSampleRetention,
+		CancellationToken cancellationToken)
+	{
+		return MaintainStorageAsync(trackedSampleRetention, DateTimeOffset.UtcNow, cancellationToken);
+	}
+
+	internal async Task<MarketStorageMaintenanceResult> MaintainStorageAsync(
+		TimeSpan trackedSampleRetention,
+		DateTimeOffset nowUtc,
+		CancellationToken cancellationToken)
+	{
+		if (trackedSampleRetention <= TimeSpan.Zero)
+		{
+			throw new ArgumentOutOfRangeException(nameof(trackedSampleRetention));
+		}
+
+		long databaseBytesBefore = GetDatabaseFileLength();
+		long storageBytesBefore = GetDatabaseStorageLength();
+		int removed;
+		try
+		{
+			await using SqliteConnection pruneConnection = await OpenMaintenanceAsync(cancellationToken);
+			removed = await PruneOldMarketSamplesAsync(
+				pruneConnection,
+				trackedSampleRetention,
+				nowUtc,
+				cancellationToken);
+		}
+		catch (Exception exception) when (IsDeferrableMaintenanceFailure(exception))
+		{
+			return new MarketStorageMaintenanceResult(
+				0,
+				storageBytesBefore,
+				GetDatabaseStorageLength(),
+				FullVacuumCompleted: false,
+				IncrementalVacuumCompleted: false,
+				WalCheckpointDeferred: false,
+				DeferredReason: GetMaintenanceFailureReason(exception));
+		}
+
+		bool fullVacuumCompleted = false;
+		bool incrementalVacuumCompleted = false;
+		bool checkpointDeferred = false;
+		string? deferredReason = null;
+		try
+		{
+			await using SqliteConnection maintenanceConnection = await OpenMaintenanceAsync(cancellationToken);
+			int autoVacuumMode = await GetPragmaIntAsync(maintenanceConnection, "auto_vacuum", cancellationToken);
+			if (autoVacuumMode == 0)
+			{
+				string integrity = await GetPragmaTextAsync(maintenanceConnection, "quick_check", cancellationToken);
+				if (!string.Equals(integrity, "ok", StringComparison.OrdinalIgnoreCase))
+				{
+					deferredReason = "SQLite integrity check did not pass; compaction was skipped.";
+				}
+				else
+				{
+					long walBytes = GetFileLengthIfPresent(DatabasePath + "-wal");
+					long availableBytes = GetAvailableFreeSpace(DatabasePath);
+					if (!HasSufficientVacuumSpace(databaseBytesBefore, walBytes, availableBytes))
+					{
+						deferredReason = "Not enough temporary disk space is available for safe SQLite compaction.";
+					}
+					else
+					{
+						await ExecutePragmaAsync(maintenanceConnection, "auto_vacuum=INCREMENTAL", cancellationToken);
+						await ExecutePragmaAsync(maintenanceConnection, "VACUUM", cancellationToken);
+						fullVacuumCompleted = true;
+					}
+				}
+			}
+			else
+			{
+				if (autoVacuumMode == 1)
+				{
+					await ExecutePragmaAsync(maintenanceConnection, "auto_vacuum=INCREMENTAL", cancellationToken);
+				}
+				await ExecutePragmaAsync(
+					maintenanceConnection,
+					$"incremental_vacuum({IncrementalVacuumPageLimit})",
+					cancellationToken);
+				incrementalVacuumCompleted = true;
+			}
+
+			checkpointDeferred = await TryCheckpointWalAsync(maintenanceConnection, cancellationToken);
+		}
+		catch (Exception exception) when (IsDeferrableMaintenanceFailure(exception))
+		{
+			deferredReason = GetMaintenanceFailureReason(exception);
+		}
+
+		return new MarketStorageMaintenanceResult(
+			removed,
+			storageBytesBefore,
+			GetDatabaseStorageLength(),
+			fullVacuumCompleted,
+			incrementalVacuumCompleted,
+			checkpointDeferred,
+			deferredReason);
+	}
+
+	private static async Task<int> PruneOldMarketSamplesAsync(
+		SqliteConnection connection,
+		TimeSpan trackedSampleRetention,
+		DateTimeOffset nowUtc,
+		CancellationToken cancellationToken)
+	{
 		int removed = 0;
-		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using DbTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
 		(string Table, TimeSpan Retention)[] tables =
 		[
-			("snapshots", retention),
-			("outfit_snapshots", retention < OutfitSampleRetention ? retention : OutfitSampleRetention)
+			("snapshots", trackedSampleRetention),
+			("outfit_snapshots", OutfitSampleRetention)
 		];
 		foreach ((string table, TimeSpan tableRetention) in tables)
 		{
 			await using SqliteCommand command = connection.CreateCommand();
 			command.Transaction = (SqliteTransaction)transaction;
 			command.CommandText = $"DELETE FROM {table} WHERE captured_utc < $cutoff;";
-			command.Parameters.AddWithValue("$cutoff", now.Subtract(tableRetention).ToString("O"));
+			command.Parameters.AddWithValue("$cutoff", nowUtc.Subtract(tableRetention).ToString("O"));
 			removed += await command.ExecuteNonQueryAsync(cancellationToken);
+		}
+		await using (SqliteCommand removeCatalogHistory = connection.CreateCommand())
+		{
+			removeCatalogHistory.Transaction = (SqliteTransaction)transaction;
+			removeCatalogHistory.CommandText = "DELETE FROM outfit_snapshots WHERE source='catalog';";
+			removed += await removeCatalogHistory.ExecuteNonQueryAsync(cancellationToken);
 		}
 		await transaction.CommitAsync(cancellationToken);
 		return removed;
+	}
+
+	internal static bool HasSufficientVacuumSpace(long databaseBytes, long walBytes, long availableBytes)
+	{
+		if (databaseBytes < 0 || walBytes < 0 || availableBytes < 0)
+		{
+			return false;
+		}
+
+		long requiredBytes;
+		try
+		{
+			requiredBytes = checked(databaseBytes * 2L + walBytes + VacuumFreeSpaceReserveBytes);
+		}
+		catch (OverflowException)
+		{
+			return false;
+		}
+		return availableBytes >= requiredBytes;
 	}
 
 	public async Task<int> SyncOutfitCatalogAsync(
@@ -476,29 +648,6 @@ DELETE FROM synced_outfit_ids;";
 				command.Parameters.AddWithValue("$sync", now.ToString("O"));
 				await command.ExecuteNonQueryAsync(cancellationToken);
 			}
-			await using SqliteCommand snapshot = connection.CreateCommand();
-			snapshot.Transaction = (SqliteTransaction)transaction;
-			snapshot.CommandText = @"
-INSERT INTO outfit_snapshots(
-    item_id,region,captured_utc,price,stock,trade_count,preorder_count,source)
-SELECT $id,$region,$captured,$price,$stock,NULL,NULL,'catalog'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM (
-        SELECT price,stock
-        FROM outfit_snapshots
-        WHERE item_id=$id AND region=$region AND source='catalog'
-        ORDER BY captured_utc DESC
-        LIMIT 1
-    ) latest
-    WHERE latest.price=$price AND latest.stock=$stock
-);";
-			snapshot.Parameters.AddWithValue("$id", item.ItemId);
-			snapshot.Parameters.AddWithValue("$region", region);
-			snapshot.Parameters.AddWithValue("$captured", now.ToString("O"));
-			snapshot.Parameters.AddWithValue("$price", item.CurrentPrice);
-			snapshot.Parameters.AddWithValue("$stock", item.Stock);
-			await snapshot.ExecuteNonQueryAsync(cancellationToken);
 		}
 
 		if (removeMissing)
@@ -558,7 +707,16 @@ ORDER BY item_id;";
 		TimeSpan maximumAge,
 		CancellationToken cancellationToken)
 	{
-		DateTimeOffset cutoff = DateTimeOffset.UtcNow.Subtract(maximumAge).Subtract(OutfitBulkFreshnessGrace);
+		return await GetOutfitCatalogDueForBulkAsync(region, maximumAge, DateTimeOffset.UtcNow, cancellationToken);
+	}
+
+	internal async Task<IReadOnlyList<MarketItem>> GetOutfitCatalogDueForBulkAsync(
+		string region,
+		TimeSpan maximumAge,
+		DateTimeOffset nowUtc,
+		CancellationToken cancellationToken)
+	{
+		DateTimeOffset cutoff = GetOutfitBulkDueCutoff(nowUtc, maximumAge);
 		List<MarketItem> items = new List<MarketItem>();
 		await using SqliteConnection connection = await OpenAsync(cancellationToken);
 		await using SqliteCommand command = connection.CreateCommand();
@@ -592,6 +750,23 @@ ORDER BY c.item_id;";
 				reader.GetInt32(5)));
 		}
 		return items;
+	}
+
+	internal static DateTimeOffset GetOutfitBulkDueCutoff(DateTimeOffset nowUtc, TimeSpan maximumAge)
+	{
+		if (maximumAge < TimeSpan.Zero)
+		{
+			throw new ArgumentOutOfRangeException(nameof(maximumAge));
+		}
+
+		// A successful provider response is captured a little after its hourly
+		// task started. Treat the final five minutes as scheduling tolerance so the
+		// third hourly check collects again instead of missing by seconds and
+		// deferring the next successful sample to hour four.
+		TimeSpan effectiveMaximumAge = maximumAge > OutfitBulkSchedulingTolerance
+			? maximumAge - OutfitBulkSchedulingTolerance
+			: TimeSpan.Zero;
+		return nowUtc.Subtract(effectiveMaximumAge);
 	}
 
 	public async Task<IReadOnlyList<MarketItem>> GetOutfitsDueAsync(string region, int limit, CancellationToken cancellationToken)
@@ -765,7 +940,7 @@ WHERE region=$region
   AND trade_count IS NOT NULL
   AND captured_utc >= $since
   AND captured_utc <= $latest
-ORDER BY item_id,captured_utc;";
+ORDER BY item_id,captured_utc,snapshot_id;";
 				command.Parameters.AddWithValue("$region", region);
 				command.Parameters.AddWithValue("$since", reportNow.Subtract(OutfitReportHistory).ToString("O"));
 				command.Parameters.AddWithValue("$latest", reportNow.Add(OutfitClockSkewTolerance).ToString("O"));
@@ -806,6 +981,8 @@ WHERE row_number=1;";
 				{
 					value2 = new List<(DateTimeOffset, long, long)>();
 				}
+				IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> evidenceSamples =
+					CompactOutfitEvidenceSamples(value2);
 				DateTimeOffset? lastSalesSampleUtc = value2.Count == 0
 					? null
 					: value2[value2.Count - 1].Item1;
@@ -814,7 +991,7 @@ WHERE row_number=1;";
 				long? num = CalculateOutfitSalesWindow(value2, TimeSpan.FromHours(24.0), reportNow);
 				long? num2 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(3.0), reportNow);
 				long? num3 = CalculateOutfitSalesWindow(value2, TimeSpan.FromDays(7.0), reportNow);
-				double? num4 = EstimateOutfitSalesPerDay(value2, num, num2, num3);
+				double? num4 = EstimateOutfitSalesPerDay(value2, evidenceSamples, num, num2, num3);
 				double? sevenDayChancePercent = null;
 				long? preorderCount = item2.Detail.HasValue
 					&& latestPreorders.TryGetValue(item2.Id, out long latestPreorderCount)
@@ -845,7 +1022,7 @@ WHERE row_number=1;";
 					demandMomentumPercent = ((double)num.Value - num6) * 100.0 / num6;
 				}
 				double volumeReliability = Math.Min(1.0, Math.Sqrt(((double)(num3 ?? (long)Math.Round(num4.GetValueOrDefault() * 7.0))) / 30.0));
-				double confidence = CalculateOutfitConfidence(value2, item2.Detail, num, num2, num3);
+				double confidence = CalculateOutfitConfidence(evidenceSamples, item2.Detail, num, num2, num3, reportNow);
 				double confidencePercent = confidence * 100.0;
 				int activeSalesWindows =
 					(num.GetValueOrDefault() >= OutfitRecommendationActive24HourSales ? 1 : 0)
@@ -858,7 +1035,7 @@ WHERE row_number=1;";
 				bool flag3 =
 					!salesDataStale
 					&& hasCurrentPreorderDetail
-					&& value2.Count >= OutfitRecommendationMinimumSamples
+					&& evidenceSamples.Count >= OutfitRecommendationMinimumSamples
 					&& confidence >= OutfitRecommendationMinimumConfidence
 					&& num4.HasValue
 					&& num4.Value > 0.0
@@ -868,7 +1045,7 @@ WHERE row_number=1;";
 				double score = flag3 && estimatedQueueDays.HasValue && estimatedQueueDays.Value > 0.0
 					? confidence * volumeReliability / estimatedQueueDays.Value
 					: 0.0;
-				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, value2.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
+				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, evidenceSamples.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
 			}
 			int num10 = catalog.Count<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>(delegate((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x)
 			{
@@ -951,7 +1128,66 @@ WHERE row_number=1;";
 		return (long)Math.Round((last.Trades - nearest.Value.Trades) * window.TotalHours / observedHours);
 	}
 
-	private static double? EstimateOutfitSalesPerDay(IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples, long? sales24Hours, long? sales3Days, long? sales7Days)
+	private static IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> CompactOutfitEvidenceSamples(
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples)
+	{
+		if (samples.Count < 2)
+		{
+			return samples;
+		}
+
+		// A cumulative trade counter that has not moved is still an important time
+		// anchor for rolling-window calculations, but it is not independent evidence
+		// of demand. Keep every raw anchor in the database and in the window logic,
+		// while collapsing consecutive equal observations for confidence and sample
+		// count. Retaining the first observation in each run makes a later change span
+		// the whole quiet period instead of looking like a burst in only the most recent
+		// polling interval.
+		List<(DateTimeOffset Time, long Trades, long Preorders)> compacted =
+			new List<(DateTimeOffset, long, long)>(samples.Count);
+		foreach ((DateTimeOffset Time, long Trades, long Preorders) sample in samples)
+		{
+			if (compacted.Count == 0 || compacted[compacted.Count - 1].Trades != sample.Trades)
+			{
+				compacted.Add(sample);
+			}
+		}
+		return compacted;
+	}
+
+	private static IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> BuildOutfitRateSamples(
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples,
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> evidenceSamples)
+	{
+		if (samples.Count < 2 || evidenceSamples.Count == 0)
+		{
+			return evidenceSamples;
+		}
+
+		(DateTimeOffset Time, long Trades, long Preorders) latest = samples[samples.Count - 1];
+		(DateTimeOffset Time, long Trades, long Preorders) latestEvidence = evidenceSamples[evidenceSamples.Count - 1];
+		if (latest.Time <= latestEvidence.Time || latest.Trades != latestEvidence.Trades)
+		{
+			return evidenceSamples;
+		}
+
+		// A currently-flat run has no later movement to carry its elapsed time into
+		// the rate calculation. Append only its latest anchor, so a quiet terminal
+		// period contributes one zero-rate interval regardless of how often it was
+		// polled, rather than repeatedly damping the moving estimate.
+		List<(DateTimeOffset Time, long Trades, long Preorders)> rateSamples =
+			new List<(DateTimeOffset, long, long)>(evidenceSamples.Count + 1);
+		rateSamples.AddRange(evidenceSamples);
+		rateSamples.Add(latest);
+		return rateSamples;
+	}
+
+	private static double? EstimateOutfitSalesPerDay(
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples,
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> evidenceSamples,
+		long? sales24Hours,
+		long? sales3Days,
+		long? sales7Days)
 	{
 		double weightedRate = 0.0;
 		double totalWeight = 0.0;
@@ -970,7 +1206,9 @@ WHERE row_number=1;";
 			weightedRate += ((double)sales7Days.Value / 7.0) * 0.15;
 			totalWeight += 0.15;
 		}
-		double? smoothedRate = EstimateSmoothedOutfitSalesPerDay(samples);
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> rateSamples =
+			BuildOutfitRateSamples(samples, evidenceSamples);
+		double? smoothedRate = EstimateSmoothedOutfitSalesPerDay(rateSamples);
 		if (totalWeight > 0.0)
 		{
 			double windowRate = weightedRate / totalWeight;
@@ -1028,7 +1266,13 @@ WHERE row_number=1;";
 		return smoothedRate;
 	}
 
-	private static double CalculateOutfitConfidence(IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples, DateTimeOffset? lastDetailedUtc, long? sales24Hours, long? sales3Days, long? sales7Days)
+	private static double CalculateOutfitConfidence(
+		IReadOnlyList<(DateTimeOffset Time, long Trades, long Preorders)> samples,
+		DateTimeOffset? lastDetailedUtc,
+		long? sales24Hours,
+		long? sales3Days,
+		long? sales7Days,
+		DateTimeOffset now)
 	{
 		if (samples.Count < 2)
 		{
@@ -1039,7 +1283,7 @@ WHERE row_number=1;";
 		double ageFactor = 0.0;
 		if (lastDetailedUtc.HasValue)
 		{
-			double ageHours = Math.Max(0.0, (DateTimeOffset.UtcNow - lastDetailedUtc.Value).TotalHours);
+			double ageHours = Math.Max(0.0, (now - lastDetailedUtc.Value).TotalHours);
 			ageFactor = Math.Clamp(1.0 - Math.Max(0.0, ageHours - 6.0) / 42.0, 0.0, 1.0);
 		}
 		double spacingFactor = CalculateSampleSpacingQuality(samples);
@@ -1144,6 +1388,140 @@ WHERE row_number=1;";
 		return connection;
 	}
 
+	private async Task<SqliteConnection> OpenMaintenanceAsync(CancellationToken cancellationToken)
+	{
+		SqliteConnection connection = new(new SqliteConnectionStringBuilder
+		{
+			DataSource = DatabasePath,
+			Mode = SqliteOpenMode.ReadWriteCreate,
+			Cache = SqliteCacheMode.Private,
+			Pooling = false,
+			DefaultTimeout = MaintenanceBusyTimeoutMilliseconds / 1000
+		}.ToString());
+		await connection.OpenAsync(cancellationToken);
+		await using SqliteCommand timeout = connection.CreateCommand();
+		timeout.CommandText = $"PRAGMA busy_timeout={MaintenanceBusyTimeoutMilliseconds};";
+		await timeout.ExecuteNonQueryAsync(cancellationToken);
+		return connection;
+	}
+
+	private static async Task<int> GetPragmaIntAsync(
+		SqliteConnection connection,
+		string pragma,
+		CancellationToken cancellationToken)
+	{
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = $"PRAGMA {pragma};";
+		object? value = await command.ExecuteScalarAsync(cancellationToken);
+		return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+	}
+
+	private static async Task<string> GetPragmaTextAsync(
+		SqliteConnection connection,
+		string pragma,
+		CancellationToken cancellationToken)
+	{
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = $"PRAGMA {pragma};";
+		object? value = await command.ExecuteScalarAsync(cancellationToken);
+		return Convert.ToString(value) ?? string.Empty;
+	}
+
+	private static async Task ExecutePragmaAsync(
+		SqliteConnection connection,
+		string pragma,
+		CancellationToken cancellationToken)
+	{
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = string.Equals(pragma, "VACUUM", StringComparison.Ordinal)
+			? "VACUUM;"
+			: $"PRAGMA {pragma};";
+		await command.ExecuteNonQueryAsync(cancellationToken);
+	}
+
+	private static async Task<bool> TryCheckpointWalAsync(
+		SqliteConnection connection,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			await using SqliteCommand timeout = connection.CreateCommand();
+			timeout.CommandText = "PRAGMA busy_timeout=1000;";
+			await timeout.ExecuteNonQueryAsync(cancellationToken);
+			await using SqliteCommand checkpoint = connection.CreateCommand();
+			checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+			await using SqliteDataReader reader = await checkpoint.ExecuteReaderAsync(cancellationToken);
+			return await reader.ReadAsync(cancellationToken) && reader.GetInt32(0) != 0;
+		}
+		catch (Exception exception) when (IsDeferrableMaintenanceFailure(exception))
+		{
+			return true;
+		}
+	}
+
+	private long GetDatabaseFileLength()
+	{
+		return GetFileLengthIfPresent(DatabasePath);
+	}
+
+	private long GetDatabaseStorageLength()
+	{
+		long databaseBytes = GetDatabaseFileLength();
+		long walBytes = GetFileLengthIfPresent(DatabasePath + "-wal");
+		try
+		{
+			return checked(databaseBytes + walBytes);
+		}
+		catch (OverflowException)
+		{
+			return long.MaxValue;
+		}
+	}
+
+	private static long GetFileLengthIfPresent(string path)
+	{
+		try
+		{
+			return File.Exists(path) ? new FileInfo(path).Length : 0L;
+		}
+		catch (IOException)
+		{
+			return 0L;
+		}
+		catch (UnauthorizedAccessException)
+		{
+			return 0L;
+		}
+	}
+
+	private static long GetAvailableFreeSpace(string databasePath)
+	{
+		try
+		{
+			string? root = Path.GetPathRoot(Path.GetFullPath(databasePath));
+			return string.IsNullOrWhiteSpace(root) ? 0L : new DriveInfo(root).AvailableFreeSpace;
+		}
+		catch (Exception exception) when (exception is IOException
+			or UnauthorizedAccessException
+			or ArgumentException)
+		{
+			return 0L;
+		}
+	}
+
+	private static bool IsDeferrableMaintenanceFailure(Exception exception)
+	{
+		return exception is SqliteException sqlite
+			&& sqlite.SqliteErrorCode is 5 or 6 or 13;
+	}
+
+	private static string GetMaintenanceFailureReason(Exception exception)
+	{
+		return exception is SqliteException { SqliteErrorCode: 13 }
+			? "Not enough temporary disk space is available for safe SQLite compaction."
+			: "The market database is currently busy; storage maintenance will retry later.";
+	}
+
 	private static string EscapeCsv(string value)
 	{
 		if (value.IndexOfAny(new char[4] { ',', '"', '\r', '\n' }) < 0)
@@ -1153,4 +1531,13 @@ WHERE row_number=1;";
 		return "\"" + value.Replace("\"", "\"\"") + "\"";
 	}
 }
+
+internal readonly record struct MarketStorageMaintenanceResult(
+	int RemovedRows,
+	long FileBytesBefore,
+	long FileBytesAfter,
+	bool FullVacuumCompleted,
+	bool IncrementalVacuumCompleted,
+	bool WalCheckpointDeferred,
+	string? DeferredReason);
 

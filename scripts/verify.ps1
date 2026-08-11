@@ -37,6 +37,9 @@ $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistanc
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
+$dehkiaFuelJsTestPath = Join-Path $repoRoot "scripts\test-dehkia-fuel-frontend.mjs"
+$startupSplashJsTestPath = Join-Path $repoRoot "scripts\test-startup-splash.mjs"
+$dehkiaFuelIconVerifyScriptPath = Join-Path $repoRoot "scripts\verify-dehkia-fuel-icons.ps1"
 $classIconRefreshScriptPath = Join-Path $repoRoot "scripts\update-class-icons.ps1"
 
 if (!$SkipBuild) {
@@ -47,6 +50,10 @@ if (!$SkipBuild) {
 foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath, $alarmPath)) {
 	if (!(Test-Path -LiteralPath $path)) { throw "Required UI asset is missing: $path" }
 }
+if (!(Test-Path -LiteralPath $dehkiaFuelIconVerifyScriptPath -PathType Leaf)) {
+	throw "The Dehkia Fuel icon verification script is missing."
+}
+& $dehkiaFuelIconVerifyScriptPath
 if ((Get-Item -LiteralPath $alarmPath).Length -lt 32000) {
 	throw "Alarm.mp3 is unexpectedly small or empty."
 }
@@ -666,6 +673,12 @@ if ($marketDatabaseSource -notmatch 'OutfitRecommendationMinimumSamples\s*=\s*12
 	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumConfidence\s*=\s*0\.6;') {
 	throw "Top outfit recommendations must retain the minimum evidence and sales-volume gates."
 }
+if ($marketDatabaseSource -notmatch 'CompactOutfitEvidenceSamples\(value2\)' -or
+	$marketDatabaseSource -notmatch 'evidenceSamples\.Count\s*>=\s*OutfitRecommendationMinimumSamples' -or
+	$marketDatabaseSource -notmatch 'BuildOutfitRateSamples\(samples,\s*evidenceSamples\)' -or
+	$marketDatabaseSource -notmatch 'EstimateSmoothedOutfitSalesPerDay\(rateSamples\)') {
+	throw "Outfit recommendations must compact unchanged cumulative observations before confidence and smoothing calculations."
+}
 
 $htmlIds = [regex]::Matches($html, '\bid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
 $duplicateIds = $htmlIds | Group-Object | Where-Object Count -gt 1
@@ -1009,8 +1022,8 @@ if ($unusedFunctions) {
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 $programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
-if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*bool assetsReady') {
-	throw "GrindTracker and MasteryIcons assets must self-heal before the version-stamp early return."
+if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
+	throw "GrindTracker, MasteryIcons, and DehkiaFuel assets must self-heal before the version-stamp early return."
 }
 if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore' -or
 	$programSource -match 'AppStateStore' -or
@@ -1018,6 +1031,8 @@ if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore'
 	throw "The retired native Grind Tracker session store was reintroduced."
 }
 $marketCollectorTaskSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketCollectorTaskManager.cs") -Raw
+$marketAnalyticsServiceSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketAnalyticsService.cs") -Raw
+$marketSettingsSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketSettings.cs") -Raw
 if ($calculatorSource -match 'Windows\.Media\.Ocr|OcrEngine|selectGrindLootImage|scanGrindLootImage|GrindLootImageMatch|MaxGrindImageBytes') {
 	throw "Native Grind screenshot/OCR code was reintroduced."
 }
@@ -1177,6 +1192,12 @@ if (!(Test-Path -LiteralPath $playerGuildJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $bracketsJsTestPath -PathType Leaf)) {
 	throw "The executable AP & DP Brackets JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $dehkiaFuelJsTestPath -PathType Leaf)) {
+	throw "The executable Dehkia Fuel frontend regression test is missing."
+}
+if (!(Test-Path -LiteralPath $startupSplashJsTestPath -PathType Leaf)) {
+	throw "The executable native startup splash regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -1206,6 +1227,14 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $bracketsJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "AP & DP Brackets JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $dehkiaFuelJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Dehkia Fuel frontend regression tests failed."
+	}
+	& $nodeCommand.Source $startupSplashJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Native startup splash regression tests failed."
 	}
 }
 else {
@@ -1279,10 +1308,53 @@ if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
 	$programSource -notmatch 'SendShutdownRequestToExistingInstance' -or
 	$programSource -notmatch '--install-market-task' -or
 	$programSource -notmatch '--remove-market-task' -or
-	$marketCollectorTaskSource -notmatch '/SC HOURLY /MO 6 /RL LIMITED /F' -or
+	$marketCollectorTaskSource -notmatch '/SC HOURLY /MO 1 /RL LIMITED /F' -or
 	$marketCollectorTaskSource -match '/XML' -or
 	$marketCollectorTaskSource -notmatch '--market-scheduled-update') {
 	throw "Native installer update compatibility, uninstall integration, or market collector scheduling is incomplete."
+}
+if ($marketAnalyticsServiceSource -notmatch 'DefaultCollectorInterval\s*=\s*TimeSpan\.FromHours\(3\);' -or
+	$marketAnalyticsServiceSource -notmatch 'DefaultDetailCollectorInterval\s*=\s*TimeSpan\.FromHours\(24\);' -or
+	$marketAnalyticsServiceSource -notmatch 'RunTimerAsync\(TimeSpan\.FromMinutes\(settings\.IntervalMinutes\)' -or
+	$marketSettingsSource -notmatch 'DefaultCheckIntervalMinutes\s*=\s*60;' -or
+	$marketDatabaseSource -notmatch 'OutfitBulkSchedulingTolerance\s*=\s*TimeSpan\.FromMinutes\(5\);' -or
+	$marketDatabaseSource -notmatch 'maximumAge\s*-\s*OutfitBulkSchedulingTolerance' -or
+	$marketDatabaseSource -notmatch 'GetOutfitBulkDueCutoff\(nowUtc, maximumAge\)' -or
+	$marketDatabaseSource -match 'OutfitBulkFreshnessGrace' -or
+	$programSource -notmatch 'secondHourlyCheckUtc\s*=\s*coverageCapturedUtc\.AddHours\(2\)' -or
+	$programSource -notmatch 'justBeforeThirdHourlyCheckUtc\s*=\s*coverageCapturedUtc' -or
+	$programSource -notmatch '\.AddHours\(2\)\s*\.AddMinutes\(54\)' -or
+	$programSource -notmatch 'thirdHourlyCheckUtc\s*=\s*coverageCapturedUtc\.AddHours\(3\)') {
+	throw "Market Analytics must check hourly, collect bulk sales on the third hourly check, and keep detail collection daily."
+}
+if ($marketDatabaseSource -notmatch 'OutfitSampleRetention\s*=\s*TimeSpan\.FromDays\(14\);' -or
+	$marketAnalyticsServiceSource -notmatch 'MarketSampleRetention\s*=\s*TimeSpan\.FromDays\(90\);' -or
+	$marketDatabaseSource -notmatch 'Math\.Clamp\(days,\s*1,\s*90\)' -or
+	$marketDatabaseSource -match 'Math\.Clamp\(days,\s*1,\s*365\)' -or
+	$marketDatabaseSource -notmatch 'DELETE FROM outfit_snapshots WHERE source=''catalog'';' -or
+	$marketDatabaseSource -match "NULL,NULL,'catalog'" -or
+	$marketDatabaseSource -notmatch 'DROP INDEX IF EXISTS ix_outfit_snapshots_item_time;' -or
+	$marketDatabaseSource -notmatch 'auto_vacuum=INCREMENTAL' -or
+	$marketDatabaseSource -notmatch 'incremental_vacuum\(\{IncrementalVacuumPageLimit\}\)' -or
+	$marketDatabaseSource -notmatch 'wal_checkpoint\(TRUNCATE\)' -or
+	$marketDatabaseSource -notmatch 'sqlite\.SqliteErrorCode is 5 or 6 or 13' -or
+	$marketDatabaseSource -notmatch 'HasSufficientVacuumSpace\(databaseBytesBefore, walBytes, availableBytes\)' -or
+	$marketDatabaseSource -notmatch 'GetDatabaseStorageLength\(\)' -or
+	$marketAnalyticsServiceSource -notmatch 'database\.MaintainStorageAsync\(\s*MarketSampleRetention') {
+	throw "Market storage must retain 14/90 days, remove redundant catalog history, and compact safely without blocking collection."
+}
+if ($programSource -notmatch 'RunMarketStorageMaintenanceSmokeTestAsync' -or
+	$programSource -notmatch 'result\.FullVacuumCompleted' -or
+	$programSource -notmatch 'result\.FileBytesAfter\s*>?=\s*result\.FileBytesBefore' -or
+	$programSource -notmatch 'incremental\.IncrementalVacuumCompleted' -or
+	$programSource -notmatch 'FailingMarketDataProvider' -or
+	$programSource -notmatch 'StorageWasPrunedBeforeRequest' -or
+	$programSource -notmatch 'useProcessUpdateLock:\s*false' -or
+	$programSource -notmatch 'verifyFailureOrdering') {
+	throw "The offline smoke suite must cover retention, full/incremental compaction, lock deferral, and pre-provider cleanup ordering."
+}
+if ($html -match '<option\s+value="365">\s*1 year\s*</option>') {
+	throw "Tracked market history is retained for 90 days, so the retired one-year history option must not be shown."
 }
 $bridgeCommands = @(
 	[regex]::Matches($script, 'bridgeCall\(\s*["'']([^"'']+)["'']') |

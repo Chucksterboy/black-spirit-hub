@@ -613,7 +613,7 @@ const marketEl = {
   outfitRows: document.getElementById("outfitRows"),
 };
 
-const BRIDGE_TIMEOUTS={downloadAndInstallUpdate:600000,refreshEvents:105000,initializeEvents:105000,searchBdoPlayersGuilds:40000,getBdoGuildProfile:40000,getBdoPlayerProfile:75000};
+const BRIDGE_TIMEOUTS={downloadAndInstallUpdate:600000,refreshEvents:105000,initializeEvents:105000,searchBdoPlayersGuilds:40000,getBdoGuildProfile:40000,getBdoPlayerProfile:75000,getDehkiaFuelData:100000};
 function bridgeCall(command, payload = {}, options = {}) {
   if(!window.chrome?.webview) return Promise.reject(new Error("The Windows application bridge is unavailable."));
   const signal=options?.signal;
@@ -2088,6 +2088,144 @@ function playerGuildHandleFormSubmit(event){
   if(playerGuildState.loading)playerGuildBusyFeedback();else playerGuildSearch();
 }
 if(!window.__blackSpiritHubPlayerGuildSubmitGuard){window.__blackSpiritHubPlayerGuildSubmitGuard=true;document.addEventListener("submit",playerGuildHandleFormSubmit,true)}
+
+const DEHKIA_CATALOG=[
+  [11828,"Tungrad Earring","high"],[11629,"Tungrad Necklace","high"],[12061,"Tungrad Ring","high"],[12237,"Tungrad Belt","high"],
+  [11630,"Laytenn's Power Stone","high"],[11607,"Ogre Ring","high"],[11662,"Revived River Necklace","high"],[11663,"Revived Lunar Necklace","high"],
+  [11853,"Black Distortion Earring","high"],[12068,"Ominous Ring","high"],[11855,"Dawn Earring","high"],[12282,"Taebaek's Belt","high"],
+  [11875,"Vaha's Dawn","high"],[11856,"Ethereal Earring","high"],[12257,"Turo's Belt","high"],
+  [12042,"Forest Ronaros Ring","low"],[11628,"Serap's Necklace","low"],[11625,"Sicil's Necklace","low"],[12229,"Centaurus Belt","low"],
+  [12251,"Orkinrad's Belt","low"],[12032,"Ring of Cadry Guardian","low"],[11834,"Narc Ear Accessory","low"],[12230,"Basilisk's Belt","low"],
+  [12060,"Eye of the Ruins Ring","low"],[12031,"Ring of Crescent Guardian","low"],[12236,"Valtarra Eclipsed Belt","low"]
+].map(([itemId,name,tier])=>({itemId,name,tier}));
+const DEHKIA_ENHANCEMENTS={1:"PRI (I)",2:"DUO (II)",3:"TRI (III)"};
+const DEHKIA_ENHANCEMENT_MARKS={1:"I",2:"II",3:"III",4:"IV"};
+const DEHKIA_FUEL_YIELDS={high:{1:165,2:450,3:1275},low:{1:25,2:75,3:210}};
+const DEHKIA_MARKET_ROW_COUNT=DEHKIA_CATALOG.length*3;
+const DEHKIA_CANONICAL_KEYS=new Set(DEHKIA_CATALOG.flatMap(item=>[1,2,3].map(enhancementLevel=>`${item.itemId}:${enhancementLevel}`)));
+const dehkiaEl={
+  rows:document.getElementById("dehkiaRows"),refresh:document.getElementById("dehkiaRefresh"),
+  state:document.getElementById("dehkiaDataState"),message:document.getElementById("dehkiaMessage"),
+  updated:document.getElementById("dehkiaUpdatedText"),bestName:document.getElementById("dehkiaBestName"),bestValue:document.getElementById("dehkiaBestValue"),bestIconWrap:document.getElementById("dehkiaBestIconWrap"),bestIcon:document.getElementById("dehkiaBestIcon"),bestEnhancement:document.getElementById("dehkiaBestEnhancement"),
+  crystal:document.getElementById("dehkiaCrystalValue"),crystalSource:document.getElementById("dehkiaCrystalSource"),useLiveCrystal:document.getElementById("dehkiaUseLiveCrystal"),crystalIcon:document.getElementById("dehkiaCrystalIcon")
+};
+function dehkiaStoredCrystal(){
+  const stored=readSetting("dehkiaFuelCrystal",{}),value=Number(stored?.value);
+  const mode=stored?.mode==="manual"?"manual":"live",trusted=mode==="manual"||stored?.verified===true;
+  return{mode,value:trusted&&Number.isFinite(value)&&value>0?Math.floor(value):null,verified:trusted&&Number.isFinite(value)&&value>0};
+}
+const dehkiaState={ready:false,loading:false,rows:[],sortKey:"pricePerFuel",sortDirection:"asc",crystal:dehkiaStoredCrystal(),suggestedCrystalValue:null,crystalValueSource:null,crystalIconPath:"Assets/DehkiaFuel/item-766108.png",status:"idle",fetchedUtc:null,marketRows:0};
+function dehkiaStaticRows(){return DEHKIA_CATALOG.flatMap(item=>[1,2,3].map(enhancementLevel=>({...item,enhancementLevel,fuelYield:DEHKIA_FUEL_YIELDS[item.tier][enhancementLevel],price:null,stock:null,iconPath:""})))}
+function dehkiaNonNegative(value){if(value===null||value===undefined||value==="")return null;const numeric=Number(value);return Number.isFinite(numeric)&&numeric>=0?Math.floor(numeric):null}
+function dehkiaPositive(value){const numeric=dehkiaNonNegative(value);return numeric!==null&&numeric>0?numeric:null}
+function dehkiaKey(itemId,enhancementLevel){return`${itemId}:${enhancementLevel}`}
+function dehkiaSafeIconPath(value){const path=String(value||"").replace(/\\/g,"/");return /^Assets\/[A-Za-z0-9_ ./-]+\.(?:png|webp|jpg|jpeg)$/i.test(path)&&!path.includes("..")&&!path.includes("://")?path:""}
+function dehkiaIconPath(row){return`Assets/DehkiaFuel/item-${row.itemId}.png`}
+function dehkiaEnhancementMark(enhancementLevel){return DEHKIA_ENHANCEMENT_MARKS[Number(enhancementLevel)]||String(enhancementLevel||"")}
+function dehkiaNormalizeRows(payload){
+  const supplied=Array.isArray(payload?.rows)?payload.rows:Array.isArray(payload?.items)?payload.items:[];
+  const catalogById=new Map(DEHKIA_CATALOG.map(item=>[item.itemId,item])),merged=new Map(dehkiaStaticRows().map(row=>[dehkiaKey(row.itemId,row.enhancementLevel),row]));
+  for(const source of supplied){
+    const itemId=dehkiaNonNegative(source?.itemId??source?.item_id),enhancementLevel=dehkiaNonNegative(source?.enhancementLevel??source?.enhancement_level??source?.enhancement);
+    if(!itemId||![1,2,3].includes(enhancementLevel))continue;
+    const catalog=catalogById.get(itemId),tier=catalog?.tier??(["high","low"].includes(String(source?.tier).toLowerCase())?String(source.tier).toLowerCase():"");
+    if(!tier)continue;
+    const fuelYield=catalog?DEHKIA_FUEL_YIELDS[tier][enhancementLevel]:dehkiaNonNegative(source?.fuelYield??source?.fuel_yield??source?.lightFuel);
+    if(!fuelYield)continue;
+    const name=String(source?.name??source?.itemName??source?.item_name??catalog?.name??`Item ${itemId}`).trim()||catalog?.name||`Item ${itemId}`;
+    merged.set(dehkiaKey(itemId,enhancementLevel),{itemId,name,tier,enhancementLevel,fuelYield,price:dehkiaNonNegative(source?.price??source?.currentPrice??source?.current_price),stock:dehkiaNonNegative(source?.stock??source?.currentStock??source?.current_stock),iconPath:dehkiaSafeIconPath(source?.iconPath??source?.icon_path)});
+  }
+  return[...merged.values()].sort((a,b)=>a.name.localeCompare(b.name)||a.enhancementLevel-b.enhancementLevel);
+}
+function dehkiaRowsAreComplete(rows){
+  if(!Array.isArray(rows)||rows.length!==DEHKIA_MARKET_ROW_COUNT)return false;
+  const seen=new Set();
+  for(const row of rows){const itemId=dehkiaNonNegative(row?.itemId??row?.item_id),enhancementLevel=dehkiaNonNegative(row?.enhancementLevel??row?.enhancement_level??row?.enhancement),key=dehkiaKey(itemId,enhancementLevel),price=dehkiaPositive(row?.price??row?.currentPrice??row?.current_price),stock=dehkiaNonNegative(row?.stock??row?.currentStock??row?.current_stock);if(!DEHKIA_CANONICAL_KEYS.has(key)||seen.has(key)||price===null||stock===null)return false;seen.add(key)}
+  return seen.size===DEHKIA_MARKET_ROW_COUNT;
+}
+function dehkiaCompleteMarketRows(payload){const supplied=Array.isArray(payload?.rows)?payload.rows:Array.isArray(payload?.items)?payload.items:[];if(!dehkiaRowsAreComplete(supplied))return null;const normalized=dehkiaNormalizeRows({rows:supplied});return dehkiaRowsAreComplete(normalized)?normalized:null}
+function dehkiaValidTimestamp(value){if(value===null||value===undefined||value==="")return null;const date=new Date(value);return Number.isNaN(date.getTime())?null:value}
+function dehkiaNormalizeStatus(payload){const raw=String(payload?.status||"").toLowerCase();if(raw==="cache")return"cached";if(["live","cached","stale","error","reference"].includes(raw))return raw;if(payload?.isStale===true)return"stale";if(payload?.cached===true)return"cached";return"live"}
+function dehkiaRestoreSnapshot(){
+  const snapshot=readSetting("dehkiaFuelSnapshot",null);if(!snapshot||!Array.isArray(snapshot.rows))return false;
+  const rows=dehkiaCompleteMarketRows({rows:snapshot.rows});if(!rows)return false;
+  dehkiaState.rows=rows;dehkiaState.marketRows=DEHKIA_MARKET_ROW_COUNT;dehkiaState.status="cached";dehkiaState.fetchedUtc=dehkiaValidTimestamp(snapshot.fetchedUtc);
+  dehkiaState.suggestedCrystalValue=dehkiaPositive(snapshot.suggestedCrystalValue);dehkiaState.crystalValueSource=snapshot.crystalValueSource&&typeof snapshot.crystalValueSource==="object"?snapshot.crystalValueSource:null;
+  dehkiaState.crystalIconPath=dehkiaSafeIconPath(snapshot.crystalIconPath)||"Assets/DehkiaFuel/item-766108.png";
+  if(dehkiaState.crystal.mode==="live"&&dehkiaState.suggestedCrystalValue!==null)dehkiaState.crystal={mode:"live",value:dehkiaState.suggestedCrystalValue,verified:true};
+  return true;
+}
+function dehkiaPersistSnapshot(){if(!dehkiaRowsAreComplete(dehkiaState.rows))return false;persistSetting("dehkiaFuelSnapshot",{schemaVersion:2,fetchedUtc:dehkiaState.fetchedUtc,rows:dehkiaState.rows,suggestedCrystalValue:dehkiaState.suggestedCrystalValue,crystalValueSource:dehkiaState.crystalValueSource,crystalIconPath:dehkiaState.crystalIconPath});return true}
+function dehkiaSetMessage(text,state="idle"){
+  if(!dehkiaEl.message)return;dehkiaEl.message.hidden=!text;dehkiaEl.message.textContent=text||"";dehkiaEl.message.dataset.state=state;
+}
+function dehkiaSetStatus(label,state){if(!dehkiaEl.state)return;dehkiaEl.state.textContent=label;dehkiaEl.state.dataset.state=state}
+function dehkiaTotalCost(row,crystalValue){if(row.price===null||row.price<=0||dehkiaPositive(crystalValue)===null)return null;return row.price+10*crystalValue}
+function dehkiaEnrichRows(){
+  const crystal=dehkiaPositive(dehkiaState.crystal.value),complete=dehkiaRowsAreComplete(dehkiaState.rows);
+  const rows=dehkiaState.rows.map(row=>{const key=dehkiaKey(row.itemId,row.enhancementLevel),totalCost=complete?dehkiaTotalCost(row,crystal):null,pricePerFuel=totalCost===null?null:Math.floor(totalCost/row.fuelYield),eligible=complete&&crystal!==null&&(row.price??0)>0&&(row.stock??0)>0;return{...row,key,totalCost,pricePerFuel,eligible}});
+  const ranked=rows.filter(row=>row.eligible&&row.pricePerFuel!==null).sort((a,b)=>a.pricePerFuel-b.pricePerFuel||a.name.localeCompare(b.name)||a.enhancementLevel-b.enhancementLevel);
+  const ranks=new Map(ranked.map((row,index)=>[row.key,index+1]));return rows.map(row=>({...row,rank:ranks.get(row.key)??null}));
+}
+function dehkiaSortValue(row,key){if(key==="name")return row.name.toLocaleLowerCase();return row[key]}
+function dehkiaSortedRows(rows){
+  const key=dehkiaState.sortKey,direction=dehkiaState.sortDirection==="desc"?-1:1;
+  return rows.slice().sort((a,b)=>{const av=dehkiaSortValue(a,key),bv=dehkiaSortValue(b,key),aNull=av===null||av===undefined,bNull=bv===null||bv===undefined;if(aNull!==bNull)return aNull?1:-1;let compared=0;if(typeof av==="string")compared=av.localeCompare(bv);else compared=av-bv;return compared?compared*direction:a.name.localeCompare(b.name)||a.enhancementLevel-b.enhancementLevel});
+}
+function dehkiaFormatInteger(value){return value===null||value===undefined?"—":Math.floor(value).toLocaleString()}
+function dehkiaFormatSilver(value){
+  if(value===null||value===undefined)return"—";const numeric=Math.floor(value),units=[[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]];
+  for(const[limit,suffix]of units)if(numeric>=limit){const scaled=numeric/limit;return`${scaled>=100?scaled.toFixed(0):scaled>=10?scaled.toFixed(1):scaled.toFixed(2)}`.replace(/\.?0+$/,"")+suffix}return numeric.toLocaleString();
+}
+function dehkiaDateText(value){const date=new Date(value||"");return Number.isNaN(date.getTime())?"Update time unavailable":`Updated ${date.toLocaleString([],{dateStyle:"medium",timeStyle:"short"})}`}
+function dehkiaCrystalSourceText(){
+  const suggested=dehkiaState.suggestedCrystalValue,source=dehkiaState.crystalValueSource,current=dehkiaPositive(dehkiaState.crystal.value);if(dehkiaState.crystal.mode==="manual")return current!==null?(suggested!==null?`Manual value · live estimate ${dehkiaFormatSilver(suggested)}`:"Manual value · live estimate unavailable"):"Enter a crystal price to calculate totals and rankings.";
+  if(suggested===null)return current!==null?"Last verified value · live estimate unavailable":"Live estimate unavailable · enter a crystal price to calculate totals.";
+  const sourceName=String(source?.name||"lowest-priced Imperfect Lightstone"),yieldCount=dehkiaNonNegative(source?.yield)||6,stock=dehkiaNonNegative(source?.stock);return`Live estimate from ${sourceName} ÷ ${yieldCount}${stock!==null?` · stock ${stock.toLocaleString()}`:""}`;
+}
+function dehkiaSyncCrystalControls(){
+  if(dehkiaEl.crystal&&document.activeElement!==dehkiaEl.crystal){const value=dehkiaPositive(dehkiaState.crystal.value);dehkiaEl.crystal.value=value===null?"":String(value)}
+  if(dehkiaEl.crystalSource)dehkiaEl.crystalSource.textContent=dehkiaCrystalSourceText();if(dehkiaEl.useLiveCrystal)dehkiaEl.useLiveCrystal.disabled=dehkiaState.suggestedCrystalValue===null||dehkiaState.crystal.mode==="live";if(dehkiaEl.crystalIcon)dehkiaEl.crystalIcon.src=dehkiaSafeIconPath(dehkiaState.crystalIconPath)||"Assets/DehkiaFuel/item-766108.png";
+}
+function dehkiaRenderSummary(allRows){
+  const hasCrystal=dehkiaPositive(dehkiaState.crystal.value)!==null,marketBest=allRows.filter(row=>row.price>0&&row.stock>0&&row.pricePerFuel!==null).sort((a,b)=>a.pricePerFuel-b.pricePerFuel||a.name.localeCompare(b.name))[0];
+  if(dehkiaEl.bestName)dehkiaEl.bestName.textContent=!hasCrystal?"Crystal value required":marketBest?`${DEHKIA_ENHANCEMENTS[marketBest.enhancementLevel]} ${marketBest.name}`:"No in-stock market choice";
+  if(dehkiaEl.bestValue)dehkiaEl.bestValue.textContent=!hasCrystal?"Enter the Magical Lightstone Crystal price to calculate efficiency.":marketBest?`${dehkiaFormatSilver(marketBest.pricePerFuel)} silver per fuel`:"Refresh when market stock is available.";
+  if(dehkiaEl.bestIconWrap){dehkiaEl.bestIconWrap.hidden=!marketBest;dehkiaEl.bestIconWrap.title=marketBest?DEHKIA_ENHANCEMENTS[marketBest.enhancementLevel]:""}if(dehkiaEl.bestIcon&&marketBest){dehkiaEl.bestIcon.src=dehkiaIconPath(marketBest);dehkiaEl.bestIcon.alt=`${DEHKIA_ENHANCEMENTS[marketBest.enhancementLevel]} ${marketBest.name}`}if(dehkiaEl.bestEnhancement){dehkiaEl.bestEnhancement.textContent=marketBest?dehkiaEnhancementMark(marketBest.enhancementLevel):"";dehkiaEl.bestEnhancement.dataset.level=marketBest?String(marketBest.enhancementLevel):""}if(dehkiaEl.updated)dehkiaEl.updated.textContent=dehkiaState.marketRows===DEHKIA_MARKET_ROW_COUNT?`${DEHKIA_MARKET_ROW_COUNT.toLocaleString()} market choices · ${dehkiaDateText(dehkiaState.fetchedUtc)}`:`Market snapshot unavailable · ${dehkiaDateText(dehkiaState.fetchedUtc)}`;dehkiaSyncCrystalControls();
+}
+function dehkiaRenderSortHeaders(){document.querySelectorAll("[data-dehkia-sort]").forEach(button=>{const active=button.dataset.dehkiaSort===dehkiaState.sortKey;button.classList.toggle("active",active);if(active)button.dataset.direction=dehkiaState.sortDirection;else delete button.dataset.direction;button.setAttribute("aria-sort",active?(dehkiaState.sortDirection==="asc"?"ascending":"descending"):"none")})}
+function dehkiaRender(){
+  if(!dehkiaEl.rows)return;const all=dehkiaEnrichRows(),rows=dehkiaSortedRows(all);dehkiaRenderSummary(all);dehkiaRenderSortHeaders();
+  dehkiaEl.rows.innerHTML=rows.map(row=>{const available=row.eligible,stockAvailable=row.stock>0&&row.price>0,icon=dehkiaIconPath(row),enhancementLabel=DEHKIA_ENHANCEMENTS[row.enhancementLevel]||dehkiaEnhancementMark(row.enhancementLevel),exactPrice=row.price===null?"":row.price.toLocaleString(),exactCost=row.totalCost===null?"":row.totalCost.toLocaleString(),exactEfficiency=row.pricePerFuel===null?"":row.pricePerFuel.toLocaleString();return`<tr class="${available?"":"unavailable"}" data-dehkia-row="${row.key}"><td><div class="dehkiaItemCell"><span class="dehkiaRank ${row.rank===1?"best":""}">${row.rank??"—"}</span><span class="dehkiaItemIconWrap" title="${escapeHtml(enhancementLabel)}"><img class="dehkiaItemIcon" src="${escapeHtml(icon)}" alt=""><span class="dehkiaIconEnhancement" data-level="${row.enhancementLevel}" aria-hidden="true">${dehkiaEnhancementMark(row.enhancementLevel)}</span></span><span class="dehkiaItemCopy"><strong title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong><span class="dehkiaItemMeta"><i class="dehkiaEnhancement">${enhancementLabel}</i><i class="dehkiaTierBadge ${row.tier}">${row.tier==="high"?"High tier":"Low tier"}</i></span></span></div></td><td class="dehkiaNumber" title="${exactPrice}">${dehkiaFormatSilver(row.price)}</td><td class="dehkiaNumber">${dehkiaFormatInteger(row.fuelYield)}</td><td><span class="dehkiaStockState ${stockAvailable?"available":"unavailable"}"><b class="dehkiaNumber">${dehkiaFormatInteger(row.stock)}</b><small>${stockAvailable?"Available":"Unavailable"}</small></span></td><td class="dehkiaNumber" title="${exactCost}">${dehkiaFormatSilver(row.totalCost)}</td><td class="dehkiaNumber dehkiaEfficiency" title="${exactEfficiency}">${dehkiaFormatSilver(row.pricePerFuel)}</td></tr>`}).join("");
+}
+function dehkiaApplyPayload(payload){
+  const rows=dehkiaCompleteMarketRows(payload);if(!rows)return 0;dehkiaState.rows=rows;dehkiaState.marketRows=DEHKIA_MARKET_ROW_COUNT;dehkiaState.status=dehkiaNormalizeStatus(payload);dehkiaState.fetchedUtc=dehkiaValidTimestamp(payload?.fetchedUtc??payload?.scrapedAt??payload?.scraped_at??payload?.updatedUtc);
+  dehkiaState.suggestedCrystalValue=dehkiaPositive(payload?.suggestedCrystalValue??payload?.suggested_crystal_value);dehkiaState.crystalValueSource=payload?.crystalValueSource??payload?.crystal_value_source??null;
+  dehkiaState.crystalIconPath=dehkiaSafeIconPath(payload?.crystalIconPath??payload?.crystal_icon_path)||"Assets/DehkiaFuel/item-766108.png";
+  if(dehkiaState.crystal.mode==="live"&&dehkiaState.suggestedCrystalValue!==null)dehkiaState.crystal={mode:"live",value:dehkiaState.suggestedCrystalValue,verified:true};
+  if(dehkiaPositive(dehkiaState.crystal.value)!==null)persistSetting("dehkiaFuelCrystal",dehkiaState.crystal);dehkiaPersistSnapshot();return DEHKIA_MARKET_ROW_COUNT;
+}
+async function dehkiaLoad(forceRefresh=false){
+  if(dehkiaState.loading)return;dehkiaState.loading=true;if(dehkiaEl.refresh){dehkiaEl.refresh.disabled=true;dehkiaEl.refresh.textContent=forceRefresh?"Refreshing...":"Loading..."}dehkiaSetStatus(forceRefresh?"Refreshing market":"Loading market","loading");dehkiaSetMessage(forceRefresh?"Refreshing market prices while keeping the current table available...":"Loading Dehkia market prices...","idle");
+  try{
+    const payload=await bridgeCall("getDehkiaFuelData",{forceRefresh:Boolean(forceRefresh)}),marketRows=dehkiaApplyPayload(payload);
+    if(!marketRows){const restored=dehkiaRestoreSnapshot();if(restored){dehkiaSetStatus("Cached market data","stale");dehkiaSetMessage("Live market values are temporarily unavailable. The last complete local snapshot is still shown.","stale")}else{dehkiaState.status="error";dehkiaSetStatus("Market unavailable","error");dehkiaSetMessage("Market values are temporarily unavailable. The complete official accessory list remains visible and will update on the next successful refresh.","error")}}
+    else if(dehkiaState.status==="cached"||dehkiaState.status==="stale"){dehkiaSetStatus(dehkiaState.status==="cached"?"Cached market data":"Stale market data",dehkiaState.status);dehkiaSetMessage("Showing the most recent complete local market snapshot.",dehkiaState.status)}else{dehkiaSetStatus("Live market data","live");dehkiaSetMessage("")}
+  }catch(error){
+    const restored=dehkiaState.marketRows>0||dehkiaRestoreSnapshot();if(restored){dehkiaState.status="stale";dehkiaSetStatus("Cached market data","stale");dehkiaSetMessage("The live refresh could not finish. Your last complete local market snapshot is still shown.","stale")}else{dehkiaState.rows=dehkiaStaticRows();dehkiaState.marketRows=0;dehkiaState.status="error";dehkiaSetStatus("Market unavailable","error");dehkiaSetMessage("Market values could not be loaded. The official accessory list is available and the controls are ready to try again.","error")}
+  }finally{dehkiaState.loading=false;if(dehkiaEl.refresh){dehkiaEl.refresh.disabled=false;dehkiaEl.refresh.textContent="Refresh Market"}dehkiaRender()}
+}
+function dehkiaSetCrystalManual(){const value=dehkiaPositive(dehkiaEl.crystal?.value);if(value===null){dehkiaSyncCrystalControls();return}dehkiaState.crystal={mode:"manual",value,verified:true};persistSetting("dehkiaFuelCrystal",dehkiaState.crystal);dehkiaRender()}
+function dehkiaUseLiveCrystal(){if(dehkiaState.suggestedCrystalValue===null)return;dehkiaState.crystal={mode:"live",value:dehkiaState.suggestedCrystalValue,verified:true};persistSetting("dehkiaFuelCrystal",dehkiaState.crystal);dehkiaRender()}
+function dehkiaHandleIconError(event){const image=event.target;if(!(image instanceof HTMLImageElement)||!image.classList.contains("dehkiaItemIcon"))return;const fallback=document.createElement("span");fallback.className="dehkiaItemFallback";fallback.textContent="?";fallback.setAttribute("aria-hidden","true");image.replaceWith(fallback)}
+function initializeDehkiaFuel(){
+  if(dehkiaState.ready)return;if(!dehkiaEl.rows||!dehkiaEl.refresh)return;dehkiaState.ready=true;dehkiaState.rows=dehkiaStaticRows();dehkiaRestoreSnapshot();dehkiaSyncCrystalControls();
+  dehkiaEl.refresh.addEventListener("click",()=>dehkiaLoad(true));dehkiaEl.crystal?.addEventListener("change",dehkiaSetCrystalManual);dehkiaEl.useLiveCrystal?.addEventListener("click",dehkiaUseLiveCrystal);
+  dehkiaEl.rows.addEventListener("error",dehkiaHandleIconError,true);dehkiaEl.bestIcon?.addEventListener("error",()=>{if(dehkiaEl.bestIconWrap)dehkiaEl.bestIconWrap.hidden=true});dehkiaEl.crystalIcon?.addEventListener("error",()=>{const fallback="Assets/DehkiaFuel/item-766108.png";if(!dehkiaEl.crystalIcon.src.endsWith(fallback))dehkiaEl.crystalIcon.src=fallback});
+  document.querySelectorAll("[data-dehkia-sort]").forEach(button=>button.addEventListener("click",()=>{const key=button.dataset.dehkiaSort,defaults={name:"asc",price:"asc",fuelYield:"desc",stock:"desc",totalCost:"asc",pricePerFuel:"asc"};if(dehkiaState.sortKey===key)dehkiaState.sortDirection=dehkiaState.sortDirection==="asc"?"desc":"asc";else{dehkiaState.sortKey=key;dehkiaState.sortDirection=defaults[key]||"asc"}dehkiaRender()}));
+  dehkiaRender();dehkiaLoad(false);
+}
+
 initializeAppVersion();
 initializeHomeDashboard();
 setTimeout(()=>initializeCoupons(),1000);
@@ -2104,7 +2242,7 @@ document.addEventListener("click", async event => {
 
 let appViewTransitionTimer=null;
 let activeAppViewId=document.querySelector(".appView.active")?.id||"homeView";
-const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg"});
+const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",dehkiaFuelView:"Assets/CinematicBackgrounds/cinematic-09.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg"});
 function updateCinematicBackground(viewId){const url=CINEMATIC_BACKGROUNDS[viewId]||CINEMATIC_BACKGROUNDS.homeView;document.body.style.setProperty("--cinematic-bg",`url("${url}")`)}
 function tickActiveAppView(){if(document.hidden)return;if(activeAppViewId==="homeView")updateHomeTimers(normalizedHomeSettings());else if(activeAppViewId==="resetTimersView")renderResetTimers(normalizedResetSettings());else if(activeAppViewId==="eventsView"&&eventsState.events.length)updateEventTimelineClock()}
 clearInterval(window.__bdoActiveViewTicker);
@@ -2204,6 +2342,7 @@ function initializeAppView(viewId){
   if(viewId === "couponsView") initializeCoupons();
   if(viewId === "eventsView") initializeEvents();
   if(viewId === "playerGuildView") initializePlayerGuild();
+  if(viewId === "dehkiaFuelView") initializeDehkiaFuel();
   if(viewId === "grindTrackerView") initializeGrindTracker();
   if(viewId === "resetTimersView") initializeResetTimers();
   if(viewId === "bracketsView") initializeBrackets();

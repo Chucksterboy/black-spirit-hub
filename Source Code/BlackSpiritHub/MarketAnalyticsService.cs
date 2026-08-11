@@ -11,10 +11,10 @@ internal sealed class MarketAnalyticsService : IDisposable
 {
 	public const int DefaultOutfitsPerScan = 100;
 
-	public static readonly TimeSpan DefaultCollectorInterval = TimeSpan.FromHours(6);
+	public static readonly TimeSpan DefaultCollectorInterval = TimeSpan.FromHours(3);
 	public static readonly TimeSpan DefaultDetailCollectorInterval = TimeSpan.FromHours(24);
 
-	private static readonly TimeSpan MarketSampleRetention = TimeSpan.FromDays(180);
+	internal static readonly TimeSpan MarketSampleRetention = TimeSpan.FromDays(90);
 	private const int MinimumValidatedOutfitCatalogSize = 1000;
 
 	private readonly MarketDatabase database;
@@ -27,7 +27,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 
 	private readonly SemaphoreSlim updateLock = new SemaphoreSlim(1, 1);
 
-	private readonly Semaphore processUpdateLock = new Semaphore(1, 1, "Local\\BlackSpiritHub-MarketUpdate");
+	private readonly Semaphore? processUpdateLock;
 
 	private readonly CancellationTokenSource shutdown = new CancellationTokenSource();
 
@@ -56,10 +56,22 @@ internal sealed class MarketAnalyticsService : IDisposable
 	public event EventHandler<string>? StatusChanged;
 
 	public MarketAnalyticsService(MarketDatabase database, IMarketDataProvider provider, AppLogger logger)
+		: this(database, provider, logger, useProcessUpdateLock: true)
+	{
+	}
+
+	internal MarketAnalyticsService(
+		MarketDatabase database,
+		IMarketDataProvider provider,
+		AppLogger logger,
+		bool useProcessUpdateLock)
 	{
 		this.database = database;
 		this.provider = provider;
 		this.logger = logger;
+		processUpdateLock = useProcessUpdateLock
+			? new Semaphore(1, 1, "Local\\BlackSpiritHub-MarketUpdate")
+			: null;
 		bulkMarketProvider = new GrindMarketPriceProvider(logger);
 	}
 
@@ -194,11 +206,31 @@ internal sealed class MarketAnalyticsService : IDisposable
 		bool ownsProcessLock = false;
 		try
 		{
-			ownsProcessLock = processUpdateLock.WaitOne(0);
+			ownsProcessLock = processUpdateLock == null || processUpdateLock.WaitOne(0);
 			if (!ownsProcessLock)
 			{
 				this.StatusChanged?.Invoke(this, "A background market update is already running.");
 				return;
+			}
+			MarketStorageMaintenanceResult maintenance = await database.MaintainStorageAsync(
+				MarketSampleRetention,
+				cancellationToken);
+			if (maintenance.RemovedRows > 0)
+			{
+				logger.Info($"Market sample retention removed {maintenance.RemovedRows:N0} old or redundant row(s).");
+			}
+			if (maintenance.FileBytesAfter < maintenance.FileBytesBefore)
+			{
+				logger.Info(
+					$"Market database compaction reclaimed {maintenance.FileBytesBefore - maintenance.FileBytesAfter:N0} byte(s).");
+			}
+			if (!string.IsNullOrWhiteSpace(maintenance.DeferredReason))
+			{
+				logger.Warn(maintenance.DeferredReason);
+			}
+			if (maintenance.WalCheckpointDeferred)
+			{
+				logger.Info("Market database WAL truncation was deferred because a reader is active.");
 			}
 			bool refreshedAny = false;
 			foreach (string region in new[] { "eu" })
@@ -228,19 +260,11 @@ internal sealed class MarketAnalyticsService : IDisposable
 			{
 				this.StatusChanged?.Invoke(this, "EU market samples are already up to date.");
 			}
-			else
-			{
-				int pruned = await database.PruneOldMarketSamplesAsync(MarketSampleRetention, cancellationToken);
-				if (pruned > 0)
-				{
-					logger.Info($"Market sample retention removed {pruned:N0} old row(s).");
-				}
-			}
 			this.DataChanged?.Invoke(this, EventArgs.Empty);
 		}
 		finally
 		{
-			if (ownsProcessLock)
+			if (ownsProcessLock && processUpdateLock != null)
 			{
 				processUpdateLock.Release();
 			}
@@ -557,7 +581,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 		timerCancellation?.Dispose();
 		updateLock.Dispose();
 		shutdown.Dispose();
-		processUpdateLock.Dispose();
+		processUpdateLock?.Dispose();
 		bulkMarketProvider.Dispose();
 		if (provider is IDisposable disposableProvider)
 		{

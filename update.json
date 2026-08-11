@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.37",
+    "version":  "v0.9.38",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.37/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "6DC13F64795373050C8F3B99FF1A57030DE52E92961492105C2178B2F8688374",
-    "notes":  "Adds Player \u0026 Guild Search with regional lookup, recent searches, guild rosters, public/private family profiles, live refresh, resilient local caching, ordered character lists, and detailed life-skill data. Upgrades class and life-skill artwork and improves profile readability and interactions. Updates high-end AP, Monster AP, and DR bracket calculations and improves the Brackets layout. Includes asset self-healing and expanded offline and UI regression coverage."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.38/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "7B80C4017758C589CAC2849EEB0EBB5889169FA48F9A6AB188215273C1E2BCD4",
+    "notes":  "Adds the Dehkia Fuel calculator with resilient EU market pricing and verified native artwork; improves Market Analytics cadence, retention, and safe storage maintenance; and introduces a redesigned, smoother native startup experience."
 }

@@ -26,6 +26,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		"font-changer-settings.json",
 		"app-behavior-settings.json",
 		"bdo-player-guild-cache.json",
+		"dehkia-fuel-cache.json",
 		"grind-sessions.json",
 		"grind-sessions.backup.json"
 	];
@@ -45,6 +46,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	public string FontGuidePath => Path.Combine(Root, "Assets", "FontGuide");
 	public string AppBehaviorSettingsPath => Path.Combine(Root, "app-behavior-settings.json");
 	public string BdoPlayerGuildCachePath => Path.Combine(Root, "bdo-player-guild-cache.json");
+	public string DehkiaFuelCachePath => Path.Combine(Root, "dehkia-fuel-cache.json");
 	public string GrindSessionsPath => Path.Combine(Root, "grind-sessions.json");
 	public string GrindSessionsBackupPath => Path.Combine(Root, "grind-sessions.backup.json");
 
