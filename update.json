@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.38",
+    "version":  "v0.9.39",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.38/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "7B80C4017758C589CAC2849EEB0EBB5889169FA48F9A6AB188215273C1E2BCD4",
-    "notes":  "Adds the Dehkia Fuel calculator with resilient EU market pricing and verified native artwork; improves Market Analytics cadence, retention, and safe storage maintenance; and introduces a redesigned, smoother native startup experience."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.39/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "4CE97B5FC668F4DC097A1D01FD149043D942C25224EACF742A58460274BA5D56",
+    "notes":  "Boss alerts now cascade through every lower warning milestone, with duplicate-safe world and guild notifications."
 }
