@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.39",
+    "version":  "v0.9.40",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.39/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "4CE97B5FC668F4DC097A1D01FD149043D942C25224EACF742A58460274BA5D56",
-    "notes":  "Boss alerts now cascade through every lower warning milestone, with duplicate-safe world and guild notifications."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.40/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "6BC24A487380849A4FD3500D76D479E04545C017CF56A882FA015B73F5351AD7",
+    "notes":  "Refreshes the dashboard with vibrant Day and Night styling and a more readable cycle countdown, adds the English Labs news link, and enhances the Guild Boss Timer with a red skull treatment plus day-based remaining labels before the final 24-hour countdown."
 }

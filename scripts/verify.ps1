@@ -1005,6 +1005,27 @@ $remaining = $nightMs - $elapsed
 if ($elapsed -lt 0 -or $elapsed -ge $nightMs -or $remaining -lt (26 * 60000) -or $remaining -gt (28 * 60000)) {
 	throw "The BDO day/night cycle no longer matches the live EU phase captured on 2026-07-20."
 }
+if ($html -notmatch 'id="homeDayNightCard"[^>]*data-cycle-state="loading"' -or
+	$html -notmatch 'id="homeDayNightSun"' -or
+	$html -notmatch 'id="homeDayNightMoon"' -or
+	$script -notmatch 'homeEl\.dayNightCard\.dataset\.cycleState=cycleState' -or
+	$css -notmatch '#homeDayNightCard\[data-cycle-state="day"\]' -or
+	$css -notmatch '#homeDayNightCard\[data-cycle-state="night"\]' -or
+	$css -notmatch '#homeDayNightSub\s*\{[^}]*font-size:14px') {
+	throw "The Day/Night card lost its state-driven palette, icons, or readable countdown treatment."
+}
+if ($html -notmatch 'id="homeGuildBossTimerCard"' -or
+	$html -notmatch 'id="homeGuildBossTimerIcon"[^>]*class="homeTimerIcon"' -or
+	$html -notmatch 'id="homeGuildBossSkull"' -or
+	$html -notmatch 'id="homeGuildBossValue"[^>]*data-display-mode="countdown"' -or
+	$script -notmatch 'function fmtGuildBossCountdown\(ms\)' -or
+	$script -notmatch 'Math\.ceil\(ms/86400000\).*days remaining' -or
+	$script -notmatch 'dataset\.displayMode=diff>86400000\?"days":"countdown"' -or
+	$css -notmatch '#homeGuildBossValue\s*\{[^}]*color:#ff5b66' -or
+	$css -notmatch '#homeGuildBossValue\[data-display-mode="days"\]' -or
+	$css -notmatch '#homeGuildBossTimerIcon\s*\{[^}]*color:#ff626c') {
+	throw "The Guild Boss Timer lost its day-label transition, red countdown, or skull badge treatment."
+}
 
 $functionNames = [regex]::Matches($script, '(?m)^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(') |
 	ForEach-Object { $_.Groups[1].Value }
@@ -1022,6 +1043,10 @@ if ($unusedFunctions) {
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 $programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
+if ($html -notmatch '<button class="homeExternalLink" data-open-url="https://www\.blackdesertfoundry\.com/category/all-news/global/">English Labs</button>' -or
+	$calculatorSource -notmatch '"www\.blackdesertfoundry\.com"') {
+	throw "The English Labs dashboard link or its native external-host permission is missing."
+}
 if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
 	throw "GrindTracker, MasteryIcons, and DehkiaFuel assets must self-heal before the version-stamp early return."
 }

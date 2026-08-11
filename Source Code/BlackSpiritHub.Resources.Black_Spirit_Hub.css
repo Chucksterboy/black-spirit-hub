@@ -3056,6 +3056,20 @@
   .homeTimerSub { margin-top:8px;color:var(--muted);font-size:12px;line-height:1.35; }
   .homeProgress { height:7px;margin-top:13px;border:1px solid color-mix(in srgb,var(--a1) 25%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--bg0) 82%,#000);overflow:hidden; }
   .homeProgress span { display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a2),var(--a1));box-shadow:0 0 12px color-mix(in srgb,var(--a1) 42%,transparent);transition:width .35s ease; }
+  #homeDayNightCard { --cycle-value:var(--text);--cycle-sub:var(--muted);transition:transform .18s ease,box-shadow .28s ease,border-color .28s ease,background-color .28s ease; }
+  #homeDayNightCard[data-cycle-state="day"] { --a1:#ffd447;--a2:#ff7b35;--cycle-value:#ffe477;--cycle-sub:#fff0b8;border-color:rgba(255,197,55,.78);background:radial-gradient(circle at 82% 18%,rgba(255,210,70,.24),transparent 35%),linear-gradient(145deg,#251707 0%,#130d09 54%,#070609 100%);box-shadow:inset 0 0 0 1px rgba(255,223,115,.16),0 16px 38px rgba(0,0,0,.3),0 0 26px rgba(255,145,45,.14); }
+  #homeDayNightCard[data-cycle-state="night"] { --a1:#54b9ff;--a2:#405fff;--cycle-value:#8ed8ff;--cycle-sub:#c8e9ff;border-color:rgba(68,151,255,.72);background:radial-gradient(circle at 82% 18%,rgba(54,137,255,.23),transparent 35%),linear-gradient(145deg,#07182e 0%,#050b1a 55%,#02050d 100%);box-shadow:inset 0 0 0 1px rgba(112,186,255,.14),0 16px 38px rgba(0,0,0,.34),0 0 26px rgba(35,112,255,.14); }
+  #homeDayNightCard .homeTimerValue { color:var(--cycle-value);text-shadow:0 0 18px color-mix(in srgb,var(--a1) 34%,transparent);transition:color .28s ease,text-shadow .28s ease; }
+  #homeDayNightSub { margin-top:7px;color:var(--cycle-sub);font-size:14px;font-weight:700;line-height:1.4;letter-spacing:.1px;font-variant-numeric:tabular-nums;transition:color .28s ease; }
+  #homeDayNightCard .homeProgress { height:8px;border-color:color-mix(in srgb,var(--a1) 48%,var(--border));box-shadow:inset 0 0 8px rgba(0,0,0,.38); }
+  #homeDayNightIcon { transition:color .28s ease,border-color .28s ease,box-shadow .28s ease; }
+  #homeDayNightSun { display:none; }
+  #homeDayNightCard[data-cycle-state="day"] #homeDayNightSun { display:block; }
+  #homeDayNightCard[data-cycle-state="day"] #homeDayNightMoon { display:none; }
+  #homeGuildBossValue { color:#ff5b66;text-shadow:0 0 18px rgba(255,49,70,.38);font-variant-numeric:tabular-nums; }
+  #homeGuildBossValue[data-display-mode="days"] { font-size:clamp(18px,1.6vw,24px);line-height:1.1;letter-spacing:.1px;white-space:nowrap; }
+  #homeGuildBossTimerIcon { color:#ff626c;border-color:rgba(255,83,98,.74);background:radial-gradient(circle,rgba(255,66,83,.25),rgba(20,4,9,.94) 72%);box-shadow:0 0 17px rgba(255,42,62,.25); }
+  #homeGuildBossSkull circle { fill:currentColor;stroke:none; }
   .homeMainGrid { display:grid;grid-template-columns:minmax(0,1.9fr) minmax(330px,.72fr);gap:16px;align-items:start; }
   .homePanel,.bossNotifyPanel { border-radius:var(--ui-radius);padding:18px; }
   .homePanelHead { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px; }

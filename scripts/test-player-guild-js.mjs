@@ -14,6 +14,26 @@ const cssAssetVersion = html.match(/BlackSpiritHub\.Resources\.Black_Spirit_Hub\
 const jsAssetVersion = html.match(/BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js\?v=([^"\s>]+)/)?.[1];
 assert.match(cssAssetVersion ?? "", /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/, "CSS must use a versioned cache buster");
 assert.equal(jsAssetVersion, cssAssetVersion, "CSS and JavaScript cache busters must stay aligned");
+
+function sourceFunctionLine(name) {
+  const start = source.indexOf(`function ${name}(`);
+  assert.ok(start >= 0, `Missing ${name}().`);
+  const end = source.indexOf("\n", start);
+  return source.slice(start, end < 0 ? source.length : end).trim();
+}
+
+const guildCountdownContext = vm.createContext({});
+new vm.Script(`${sourceFunctionLine("fmtCountdown")}\n${sourceFunctionLine("fmtGuildBossCountdown")}`).runInContext(guildCountdownContext);
+const formatGuildCountdown = milliseconds => vm.runInContext(`fmtGuildBossCountdown(${milliseconds})`, guildCountdownContext);
+assert.equal(formatGuildCountdown(7 * 86400000), "7 days remaining");
+assert.equal(formatGuildCountdown(169 * 3600000), "7 days remaining", "the autumn DST transition must never display 8 days");
+assert.equal(formatGuildCountdown(6 * 86400000 + 1), "7 days remaining", "partial days must round up");
+assert.equal(formatGuildCountdown(6 * 86400000), "6 days remaining");
+assert.equal(formatGuildCountdown(86400000 + 1), "2 days remaining");
+assert.equal(formatGuildCountdown(86400000), "24:00:00", "the live countdown must start at exactly 24 hours");
+assert.equal(formatGuildCountdown(86399000), "23:59:59");
+assert.match(css, /#homeGuildBossValue\[data-display-mode="days"\]\s*\{[^}]*white-space:nowrap/);
+assert.match(source, /guildBossValue\.dataset\.displayMode=diff>86400000\?"days":"countdown"/);
 assert.match(html, /data-app-view="playerGuildView"[^>]*>[\s\S]*?<span class="navLabel">Player &amp; Guild Search<\/span>/);
 assert.doesNotMatch(html, /playerGuildWelcome|Start with a family or guild name/);
 assert.doesNotMatch(css, /playerGuildWelcome/);
