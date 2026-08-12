@@ -19,6 +19,7 @@ $htmlPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.htm
 $cssPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.css"
 $scriptPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.js"
 $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
+$innerEdaniaGrindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots-inner-edania.js"
 $recipeBookRoot = Join-Path $sourceRoot "Assets\RecipeBook"
 $recipeBookDataPath = Join-Path $recipeBookRoot "recipes.json"
 $recipeBookManifestPath = Join-Path $recipeBookRoot "manifest.json"
@@ -61,6 +62,7 @@ foreach ($path in @(
 	$cssPath,
 	$scriptPath,
 	$grindDataPath,
+	$innerEdaniaGrindDataPath,
 	$alarmPath,
 	$recipeBookDataPath,
 	$recipeBookManifestPath,
@@ -849,6 +851,14 @@ $grindAssignment = [regex]::Match(
 )
 if (!$grindAssignment.Success) { throw "The grind-spot data assignment is malformed." }
 $grindSpots = $grindAssignment.Groups[1].Value | ConvertFrom-Json
+$innerEdaniaGrindData = Get-Content -LiteralPath $innerEdaniaGrindDataPath -Raw
+$innerEdaniaAssignment = [regex]::Match(
+	$innerEdaniaGrindData,
+	'(?s)const\s+BSH_INNER_EDANIA_PART_TWO_SPOTS\s*=\s*(\[.*?\])\s*;'
+)
+if (!$innerEdaniaAssignment.Success) { throw "The Inner Edania grind-spot data assignment is malformed." }
+$innerEdaniaSpots = $innerEdaniaAssignment.Groups[1].Value | ConvertFrom-Json
+$grindSpots = @($grindSpots) + @($innerEdaniaSpots)
 if ($grindSpots.Count -lt 90) {
 	throw "The grind-spot catalog unexpectedly contains only $($grindSpots.Count) spots."
 }
@@ -920,6 +930,63 @@ if ($gavinya.drops[0].isTrash -ne $true -or
 	$script -notmatch 'grindSpotCcOverrides\["gavinya coastal cliff"\]=\["knockdown","bound"\]' -or
 	$script -notmatch 'grindMaxCapOverrides\["gavinya coastal cliff"\]=\[2020,820\]') {
 	throw "Gavinya pricing, paint, CC, resistance, or maximum-stat mappings are incomplete."
+}
+
+$expectedInnerEdaniaSpots = @(
+	@("Aphrodon Temple", 917, 400, 470, "1", "inner-edania-abundance-imbued-branch", "Abundance-imbued Branch", 155127, 14),
+	@("Emesia Fortress", 918, 405, 485, "1", "inner-edania-black-crystal-fragment", "Black Crystal Fragment", 160539, 16),
+	@("Magaia Temple", 919, 410, 490, "1", "inner-edania-elion-follower-helmet", "Elion Follower's Helmet", 181042, 17),
+	@("Aresion Temple", 920, 415, 495, "1", "inner-edania-scorched-belt-ornament", "Scorched Belt Ornament", 182049, 24),
+	@("Scales of Judgment", 921, 415, 500, "3", "inner-edania-elion-follower-mark", "Elion Follower's Mark", 186458, 24),
+	@("Event Horizon", 922, 420, 505, "1", "inner-edania-broken-void-glove", "Broken Void Glove", 196501, 27)
+)
+foreach ($expectedSpot in $expectedInnerEdaniaSpots) {
+	$zoneName = [string]$expectedSpot[0]
+	$matches = @($grindSpots | Where-Object name -eq $zoneName)
+	if ($matches.Count -ne 1) {
+		throw "$zoneName must appear exactly once in the Grind Zones catalog."
+	}
+	$zone = $matches[0]
+	if ([int]$zone.id -ne [int]$expectedSpot[1] -or
+		[string]$zone.zone -ne "Edania" -or
+		[int]$zone.ap -ne [int]$expectedSpot[2] -or
+		[int]$zone.dp -ne [int]$expectedSpot[3] -or
+		[string]$zone.players -ne [string]$expectedSpot[4] -or
+		[string]$zone.type -ne "edania" -or
+		[int]$zone.spotType -ne 111 -or
+		[string]$zone.trashId -ne [string]$expectedSpot[5] -or
+		[string]$zone.primaryTrash -ne [string]$expectedSpot[6]) {
+		throw "$zoneName metadata is missing or incorrect."
+	}
+	$primaryDrop = @($zone.drops | Where-Object { [string]$_.id -eq [string]$expectedSpot[5] })
+	if ($primaryDrop.Count -ne 1 -or $primaryDrop[0].isTrash -ne $true) {
+		throw "$zoneName must contain exactly one correctly flagged primary trash drop."
+	}
+	if ($zone.drops.Count -ne [int]$expectedSpot[8]) {
+		throw "$zoneName must contain all $($expectedSpot[8]) official loot entries including trash."
+	}
+	$priceToken = '"' + [string]$expectedSpot[5] + '":' + [string]$expectedSpot[7]
+	if ($script.IndexOf($priceToken, [StringComparison]::Ordinal) -lt 0) {
+		throw "$zoneName is missing its official trash-loot vendor price."
+	}
+}
+if ($html -notmatch 'Assets/GrindTracker/grind-spots-inner-edania\.js\?v=[^"]+') {
+	throw "The Inner Edania catalog cache key is missing."
+}
+$officialInnerEdaniaIcons = @(Get-ChildItem -LiteralPath (Join-Path $sourceRoot "Assets\GrindTracker\icons-clean") -Filter "official-inner-edania-*.png" -File)
+if ($officialInnerEdaniaIcons.Count -ne 33) {
+	throw "Expected exactly 33 cached official Inner Edania reward icons, found $($officialInnerEdaniaIcons.Count)."
+}
+foreach ($iconFile in $officialInnerEdaniaIcons) {
+	$bitmap = [System.Drawing.Bitmap]::new($iconFile.FullName)
+	try {
+		if ($bitmap.Width -ne 44 -or $bitmap.Height -ne 44) {
+			throw "Inner Edania reward icon '$($iconFile.Name)' must remain a native 44x44 PNG."
+		}
+	}
+	finally {
+		$bitmap.Dispose()
+	}
 }
 
 $missingGrindAssets = [System.Collections.Generic.HashSet[string]]::new(

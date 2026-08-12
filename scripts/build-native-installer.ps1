@@ -49,6 +49,7 @@ function Assert-AppPublish {
 		"Assets\AppIcon\app-icon-ui.png",
 		"Assets\Alarm.mp3",
 		"Assets\GrindTracker\grind-spots.js",
+		"Assets\GrindTracker\grind-spots-inner-edania.js",
 		"Assets\RecipeBook\recipes.json",
 		"Assets\RecipeBook\manifest.json",
 		"Assets\RecipeBook\bundle-id.txt",

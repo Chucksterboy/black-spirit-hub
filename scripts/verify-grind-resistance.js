@@ -12,6 +12,10 @@ const catalogSource = fs.readFileSync(
   path.join(sourceRoot, "Assets", "GrindTracker", "grind-spots.js"),
   "utf8"
 );
+const innerEdaniaCatalogSource = fs.readFileSync(
+  path.join(sourceRoot, "Assets", "GrindTracker", "grind-spots-inner-edania.js"),
+  "utf8"
+);
 
 function extractExpression(pattern, label) {
   const match = appSource.match(pattern);
@@ -27,6 +31,20 @@ const ccOverrides = extractExpression(
   /const grindSpotCcOverrides=(\{.*?\});\r?\nconst grindMaxCapOverrides=/s,
   "grind-zone CC overrides"
 );
+const maxCapOverrides = extractExpression(
+  /const grindMaxCapOverrides=(\{.*?\});\r?\ngrindSpotCcOverrides\[/s,
+  "grind-zone maximum-stat overrides"
+);
+const innerEdaniaCcOverrides = extractExpression(
+  /Object\.assign\(grindSpotCcOverrides,(\{[^\r\n]*"aphrodon temple"[^\r\n]*\})\);/,
+  "Inner Edania CC overrides"
+);
+const innerEdaniaMaxCapOverrides = extractExpression(
+  /Object\.assign\(grindMaxCapOverrides,(\{[^\r\n]*"aphrodon temple"[^\r\n]*\})\);/,
+  "Inner Edania maximum-stat overrides"
+);
+Object.assign(ccOverrides, innerEdaniaCcOverrides);
+Object.assign(maxCapOverrides, innerEdaniaMaxCapOverrides);
 assert(
   appSource.includes('grindSpotCcOverrides["dehkia thornwood forest"]=["knockback","float"];'),
   "The current Dehkia Thornwood Knockback/Floating correction is missing."
@@ -36,6 +54,7 @@ ccOverrides["dehkia thornwood forest"] = ["knockback", "float"];
 const catalogContext = { window: {} };
 vm.createContext(catalogContext);
 vm.runInContext(catalogSource, catalogContext);
+vm.runInContext(innerEdaniaCatalogSource, catalogContext);
 const spots = catalogContext.window.BDO_GRIND_SPOTS;
 assert(Array.isArray(spots) && spots.length >= 90, "The grind-zone catalog did not load.");
 
@@ -114,6 +133,26 @@ for (const name of ["Sycraia Abyssal Ruins (Lower)", "Sycraia Abyssal Ruins (Upp
 }
 assert.deepStrictEqual(Array.from(recommendations(spot("Star's End")), group => group.primary.name), ["Sycraia Crystal - Giant"]);
 assert.deepStrictEqual(Array.from(recommendations(spot("[Dehkia] Thornwood Forest")), group => group.primary.name), ["Sycraia Crystal - Fighting Spirit"]);
+const innerEdaniaFixtures = [
+  ["Aphrodon Temple", 917, 400, 470, "1", 14, [2090, 810], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
+  ["Emesia Fortress", 918, 405, 485, "1", 16, [2220, 830], ["knockback", "float"], "Sycraia Crystal - Fighting Spirit"],
+  ["Magaia Temple", 919, 410, 490, "1", 17, [2340, 840], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
+  ["Aresion Temple", 920, 415, 495, "1", 24, [2455, 850], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
+  ["Scales of Judgment", 921, 415, 500, "3", 24, [2455, 860], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
+  ["Event Horizon", 922, 420, 505, "1", 27, [2570, 870], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"]
+];
+for (const [name, id, ap, dp, players, expectedDropCount, maxCaps, expectedCcs, expectedCrystal] of innerEdaniaFixtures) {
+  const zone = spot(name);
+  assert.strictEqual(zone.id, id, `${name} has the wrong catalog id.`);
+  assert.strictEqual(zone.zone, "Edania", `${name} must be grouped under Edania.`);
+  assert.strictEqual(zone.ap, ap, `${name} has the wrong displayed AP recommendation.`);
+  assert.strictEqual(zone.dp, dp, `${name} has the wrong displayed DP recommendation.`);
+  assert.strictEqual(zone.players, players, `${name} has the wrong party size.`);
+  assert.strictEqual(zone.drops.length, expectedDropCount, `${name} does not contain the complete official loot table.`);
+  assert.deepStrictEqual(Array.from(spotCcs(zone)), expectedCcs, `${name} has the wrong live-client resistance family.`);
+  assert.deepStrictEqual(Array.from(maxCapOverrides[normalizeName(name)]), maxCaps, `${name} has the wrong total AP/DP cap.`);
+  assert.deepStrictEqual(Array.from(recommendations(zone), group => group.primary.name), [expectedCrystal], `${name} recommends the wrong resistance crystal.`);
+}
 for (const name of ["Bashim Base", "Desert Naga Temple", "Traitor's Graveyard"]) {
   assert.strictEqual(recommendations(spot(name)).length, 0, `${name} should use the neutral state.`);
 }

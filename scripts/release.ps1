@@ -236,6 +236,7 @@ function Assert-AppPublishFiles {
 		"Assets\AppIcon\app-icon-ui.png",
 		"Assets\Alarm.mp3",
 		"Assets\GrindTracker\grind-spots.js",
+		"Assets\GrindTracker\grind-spots-inner-edania.js",
 		"Assets\RecipeBook\recipes.json",
 		"Assets\RecipeBook\manifest.json",
 		"Assets\RecipeBook\bundle-id.txt",
@@ -305,6 +306,7 @@ Replace-Text $nativeInstallerSource '#define AppVersion "[^"]+"' ('#define AppVe
 Replace-Text $nativeInstallerSource '#define AppFileVersion "[^"]+"' ('#define AppFileVersion "' + $assemblyVersion + '"')
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=' + $versionTag)
 Replace-Text $htmlFile 'Assets/GrindTracker/grind-spots\.js(?:\?v=[^"]+)?' ('Assets/GrindTracker/grind-spots.js?v=' + $versionTag)
+Replace-Text $htmlFile 'Assets/GrindTracker/grind-spots-inner-edania\.js(?:\?v=[^"]+)?' ('Assets/GrindTracker/grind-spots-inner-edania.js?v=' + $versionTag)
 Replace-Text $htmlFile 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.js(?:\?v=[^"]+)?' ('BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=' + $versionTag)
 
 $manifest = [ordered]@{

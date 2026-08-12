@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-label="Elion Follower's Helmet">
+  <defs><radialGradient id="b" cx="50%" cy="40%" r="68%"><stop stop-color="#28364a"/><stop offset="1" stop-color="#080c13"/></radialGradient><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffef0"/><stop offset=".45" stop-color="#b8c8d8"/><stop offset="1" stop-color="#536477"/></linearGradient></defs>
+  <rect x="2" y="2" width="68" height="68" rx="14" fill="url(#b)" stroke="#d5b966" stroke-opacity=".65"/>
+  <path d="M21 29c0-13 7-20 15-20s15 7 15 20v19L42 61H30l-9-13Z" fill="url(#m)" stroke="#fff8c7" stroke-width="1.8"/>
+  <path d="M24 30h24l-5 10H29Zm12-19v19M30 45l6 5 6-5" fill="none" stroke="#7c5e20" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M18 31h36M25 55l-7-3M47 55l7-3" fill="none" stroke="#f3d77c" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="36" cy="20" r="3" fill="#fff4a8"/>
+</svg>

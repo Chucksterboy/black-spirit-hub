@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-label="Scorched Belt Ornament">
+  <defs><radialGradient id="b" cx="50%" cy="45%" r="68%"><stop stop-color="#431a11"/><stop offset="1" stop-color="#100806"/></radialGradient><linearGradient id="f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff09a"/><stop offset=".42" stop-color="#ff7a1a"/><stop offset="1" stop-color="#8b1712"/></linearGradient></defs>
+  <rect x="2" y="2" width="68" height="68" rx="14" fill="url(#b)" stroke="#ff7849" stroke-opacity=".62"/>
+  <path d="M17 24h38v12H17z" fill="#5b2d20" stroke="#f5b75b" stroke-width="2.4"/><path d="M27 18h18v29L36 61l-9-14Z" fill="url(#f)" stroke="#ffd477" stroke-width="2"/>
+  <path d="m36 24 5 8-5 6-5-6Z" fill="#38120d" stroke="#fff0a1" stroke-width="1.5"/><path d="M29 48h14M32 53h8" stroke="#7c140e" stroke-width="2" stroke-linecap="round"/>
+  <path d="M20 20c4-6 8-6 11-8M52 20c-4-6-8-6-11-8" fill="none" stroke="#ff9b45" stroke-width="2" stroke-linecap="round"/>
+</svg>
