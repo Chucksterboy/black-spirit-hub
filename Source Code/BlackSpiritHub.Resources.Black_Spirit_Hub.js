@@ -2243,9 +2243,419 @@ document.addEventListener("click", async event => {
   }
 });
 
+/* RECIPE_BOOK_CORE_START */
+const RECIPE_BOOK_PAGE_SIZE=24;
+const RECIPE_BOOK_ASSET_ROOT="https://recipebook.bdo.local/";
+const RECIPE_BOOK_TYPE_LABELS=Object.freeze({
+  COOK:"Cooking",COOKING:"Cooking",ALCHEMY:"Alchemy",SIMPLE_COOK:"Simple Cooking",SIMPLE_COOKING:"Simple Cooking",SIMPLE_ALCHEMY:"Simple Alchemy",
+  HEAT:"Heating",HEATING:"Heating",GRIND:"Grinding",GRINDING:"Grinding",SHAKE:"Shaking",SHAKING:"Shaking",DRY:"Drying",DRYING:"Drying",
+  THINNING:"Filtering",FILTER:"Filtering",FILTERING:"Filtering",FIREWOOD:"Chopping",CHOP:"Chopping",CHOPPING:"Chopping",CRAFT:"Manufacture",
+  MANUFACTURE:"Manufacture",GUILD:"Guild Processing",GUILD_PROCESSING:"Guild Processing",ROYALGIFT_COOK:"Imperial Cuisine",IMPERIAL_CUISINE:"Imperial Cuisine",
+  ROYALGIFT_ALCHEMY:"Imperial Alchemy",IMPERIAL_ALCHEMY:"Imperial Alchemy",HOUSE:"Workshop",WORKSHOP:"Workshop"
+});
+function recipeBookIsPlainObject(value){return Boolean(value)&&typeof value==="object"&&!Array.isArray(value)}
+function recipeBookSearchNorm(value){
+  return String(value??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[’']s\b/g,"").replace(/&/g," and ").replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," ");
+}
+function recipeBookSearchTokens(value){return [...new Set(recipeBookSearchNorm(value).split(" ").filter(Boolean))]}
+function recipeBookTypeKey(value){return String(value??"").trim().toUpperCase().replace(/[\s-]+/g,"_")}
+function recipeBookTypeLabel(value){
+  const key=recipeBookTypeKey(value);
+  if(RECIPE_BOOK_TYPE_LABELS[key])return RECIPE_BOOK_TYPE_LABELS[key];
+  return key.split("_").filter(Boolean).map(word=>word.charAt(0)+word.slice(1).toLowerCase()).join(" ")||"Other Crafting";
+}
+function recipeBookSafeIconPath(value){
+  let path=String(value??"").trim().replace(/\\/g,"/");
+  if(!path||/^[a-z][a-z\d+.-]*:/i.test(path)||path.startsWith("//")||path.startsWith("/")||path.split("/").includes(".."))return "";
+  path=path.replace(/^\.\//,"");
+  if(path.startsWith("Assets/RecipeBook/"))path=path.slice("Assets/RecipeBook/".length);
+  else if(path.startsWith("RecipeBook/"))path=path.slice("RecipeBook/".length);
+  if(!/^icons\/(?:items\/[a-f\d]{64}\.webp|item-fallback\.svg)$/i.test(path))return "";
+  return `${RECIPE_BOOK_ASSET_ROOT}${path}`;
+}
+function recipeBookAssert(condition,message){if(!condition)throw new Error(`Recipe catalog is invalid: ${message}`)}
+function recipeBookOptionalEnhancement(value,path){
+  if(value===undefined)return undefined;
+  recipeBookAssert(Number.isInteger(value)&&value>=0&&value<=99,`${path} must be an integer from 0 to 99`);
+  return value;
+}
+function recipeBookPrepareData(payload){
+  recipeBookAssert(recipeBookIsPlainObject(payload),"the root must be an object");
+  recipeBookAssert(payload.schemaVersion===1,"schemaVersion must be 1");
+  recipeBookAssert(recipeBookIsPlainObject(payload.items),"items must be an object keyed by item ID");
+  recipeBookAssert(Array.isArray(payload.recipes),"recipes must be an array");
+  const items=Object.create(null),itemEntries=Object.entries(payload.items);
+  recipeBookAssert(itemEntries.length>0,"items cannot be empty");
+  for(const [rawId,rawItem] of itemEntries){
+    const id=String(rawId).trim();
+    recipeBookAssert(Boolean(id),"an item ID is empty");
+    recipeBookAssert(recipeBookIsPlainObject(rawItem),`item ${id} must be an object`);
+    const name=typeof rawItem.name==="string"?rawItem.name.trim():"";
+    recipeBookAssert(Boolean(name),`item ${id} has no name`);
+    recipeBookAssert(Number.isInteger(rawItem.grade)&&rawItem.grade>=0&&rawItem.grade<=8,`item ${id} has an invalid grade`);
+    recipeBookAssert(typeof rawItem.icon==="string",`item ${id} has no icon field`);
+    recipeBookAssert(rawItem.description===undefined||typeof rawItem.description==="string",`item ${id} has an invalid description`);
+    items[id]=Object.freeze({id,name,description:String(rawItem.description||"").trim(),grade:rawItem.grade,icon:rawItem.icon.trim(),search:recipeBookSearchNorm(name)});
+  }
+  const recipeIds=new Set(),recipes=payload.recipes.map((rawRecipe,index)=>{
+    const path=`recipes[${index}]`;
+    recipeBookAssert(recipeBookIsPlainObject(rawRecipe),`${path} must be an object`);
+    const id=String(rawRecipe.id??"").trim(),outputId=String(rawRecipe.outputId??"").trim(),type=typeof rawRecipe.type==="string"?rawRecipe.type.trim():"";
+    recipeBookAssert(Boolean(id),`${path}.id is empty`);
+    recipeBookAssert(!recipeIds.has(id),`${path}.id duplicates ${id}`);
+    recipeIds.add(id);
+    recipeBookAssert(Boolean(outputId)&&Object.hasOwn(items,outputId),`${path}.outputId does not reference an item`);
+    recipeBookAssert(Boolean(type),`${path}.type is empty`);
+    recipeBookAssert(rawRecipe.station===undefined||typeof rawRecipe.station==="string",`${path}.station must be a string`);
+    recipeBookAssert(Array.isArray(rawRecipe.inputs)&&rawRecipe.inputs.length>0,`${path}.inputs must not be empty`);
+    const inputs=rawRecipe.inputs.map((rawInput,inputIndex)=>{
+      const inputPath=`${path}.inputs[${inputIndex}]`;
+      recipeBookAssert(recipeBookIsPlainObject(rawInput),`${inputPath} must be an object`);
+      const itemId=String(rawInput.itemId??"").trim();
+      recipeBookAssert(Boolean(itemId)&&Object.hasOwn(items,itemId),`${inputPath}.itemId does not reference an item`);
+      recipeBookAssert(Number.isFinite(rawInput.count)&&rawInput.count>0,`${inputPath}.count must be greater than zero`);
+      const enhancement=recipeBookOptionalEnhancement(rawInput.enhancement,`${inputPath}.enhancement`);
+      return Object.freeze({itemId,count:rawInput.count,enhancement,key:recipeBookIngredientKey(itemId,enhancement)});
+    });
+    const output=items[outputId],station=(rawRecipe.station||"").trim();
+    return Object.freeze({
+      id,outputId,outputEnhancement:recipeBookOptionalEnhancement(rawRecipe.outputEnhancement,`${path}.outputEnhancement`),type,station,inputs:Object.freeze(inputs),
+      outputSearch:output.search,ingredientSearch:inputs.map(input=>items[input.itemId].search).join(" ")
+    });
+  });
+  recipeBookAssert(recipes.length>0,"recipes cannot be empty");
+  recipes.sort((left,right)=>items[left.outputId].name.localeCompare(items[right.outputId].name,undefined,{sensitivity:"base"})||recipeBookTypeLabel(left.type).localeCompare(recipeBookTypeLabel(right.type))||left.id.localeCompare(right.id,undefined,{numeric:true}));
+  const types=[...new Set(recipes.map(recipe=>recipe.type))].sort((left,right)=>recipeBookTypeLabel(left).localeCompare(recipeBookTypeLabel(right))||left.localeCompare(right));
+  const resourceLookup=Object.create(null),recipesUsingKey=Object.create(null),recipesProducingKey=Object.create(null);
+  for(const recipe of recipes){
+    const outputKey=recipeBookIngredientKey(recipe.outputId,recipe.outputEnhancement);(recipesProducingKey[outputKey]||=[]).push(recipe);
+    for(const input of recipe.inputs)(recipesUsingKey[input.key]||=[]).push(Object.freeze({recipe,count:input.count}));
+  }
+  for(const recipe of recipes)for(const input of recipe.inputs){
+    if(!resourceLookup[input.key])resourceLookup[input.key]={key:input.key,itemId:input.itemId,enhancement:input.enhancement||0,uses:0};
+    resourceLookup[input.key].uses++;
+  }
+  const resourceItems=Object.values(resourceLookup).map(candidate=>Object.freeze({...candidate,search:`${items[candidate.itemId].search} ${candidate.itemId}`})).sort((left,right)=>items[left.itemId].name.localeCompare(items[right.itemId].name,undefined,{sensitivity:"base"})||left.enhancement-right.enhancement||Number(left.itemId)-Number(right.itemId));
+  for(const candidate of resourceItems)resourceLookup[candidate.key]=candidate;
+  for(const index of [recipesUsingKey,recipesProducingKey])for(const key of Object.keys(index))index[key]=Object.freeze(index[key]);
+  const source=recipeBookIsPlainObject(payload.source)?Object.freeze({...payload.source}):Object.freeze({});
+  const counts=recipeBookIsPlainObject(payload.counts)?Object.freeze({...payload.counts}):Object.freeze({});
+  return Object.freeze({items:Object.freeze(items),recipes:Object.freeze(recipes),types:Object.freeze(types),resourceItems:Object.freeze(resourceItems),resourceLookup:Object.freeze(resourceLookup),recipesUsingKey:Object.freeze(recipesUsingKey),recipesProducingKey:Object.freeze(recipesProducingKey),source,counts});
+}
+function recipeBookFilterRecipes(data,{query="",mode="name",type=""}={}){
+  const tokens=recipeBookSearchTokens(query),searchMode=mode==="ingredient"?"ingredient":"name";
+  return data.recipes.filter(recipe=>{
+    if(type&&recipe.type!==type)return false;
+    const target=searchMode==="ingredient"?recipe.ingredientSearch:recipe.outputSearch;
+    return tokens.every(token=>target.includes(token));
+  });
+}
+function recipeBookIconDisplaySize(naturalWidth,naturalHeight,kind="ingredient"){
+  const width=Number(naturalWidth),height=Number(naturalHeight),cap=kind==="output"?44:34;
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return Object.freeze({width:cap,height:cap});
+  const scale=Math.min(1,cap/width,cap/height);
+  return Object.freeze({width:Math.max(1,Math.floor(width*scale)),height:Math.max(1,Math.floor(height*scale))});
+}
+function recipeBookIngredientKey(itemId,enhancement){return `${String(itemId??"").trim()}:${Number.isInteger(enhancement)&&enhancement>0?enhancement:0}`}
+function recipeBookResourceAmount(value){const amount=Number(value);return Number.isSafeInteger(amount)&&amount>0&&amount<=999999999999?amount:0}
+function recipeBookSanitizeResources(value,data){
+  const clean=Object.create(null);if(!recipeBookIsPlainObject(value)||!data?.resourceLookup)return clean;
+  for(const [key,valueAmount] of Object.entries(value)){const amount=recipeBookResourceAmount(valueAmount);if(amount&&Object.hasOwn(data.resourceLookup,key))clean[key]=amount}
+  return clean;
+}
+function recipeBookResourceCandidates(data,query="",limit=10){
+  if(!data?.resourceItems)return[];
+  const tokens=recipeBookSearchTokens(query),normalizedQuery=recipeBookSearchNorm(query),cap=Math.max(1,Math.min(30,Math.floor(Number(limit)||10)));
+  const matches=data.resourceItems.filter(candidate=>tokens.length&&tokens.every(token=>candidate.search.includes(token))).sort((left,right)=>right.uses-left.uses||data.items[left.itemId].name.localeCompare(data.items[right.itemId].name,undefined,{sensitivity:"base"})||left.enhancement-right.enhancement||Number(left.itemId)-Number(right.itemId));
+  const exactNameMatches=matches.filter(candidate=>data.items[candidate.itemId].search===normalizedQuery);
+  return (exactNameMatches.length?exactNameMatches:matches).slice(0,exactNameMatches.length?100:cap);
+}
+function recipeBookRecipeRequirements(recipe,resources={}){
+  const required=Object.create(null);for(const input of recipe.inputs)required[input.key]=(required[input.key]||0)+input.count;
+  return Object.entries(required).map(([key,count])=>Object.freeze({key,count,owned:recipeBookResourceAmount(resources[key])}));
+}
+function recipeBookRecipeCraftCount(recipe,resources={}){
+  const requirements=recipeBookRecipeRequirements(recipe,resources);if(!requirements.length)return 0;
+  return Math.max(0,Math.min(...requirements.map(requirement=>Math.floor(requirement.owned/requirement.count))));
+}
+function recipeBookClampCraftAmount(value,maxCrafts){
+  const max=recipeBookResourceAmount(maxCrafts);if(!max)return 0;
+  const amount=Number(value);return Number.isSafeInteger(amount)?Math.min(max,Math.max(1,amount)):max;
+}
+function recipeBookSanitizeCraftPlans(value){
+  const clean=Object.create(null);if(!recipeBookIsPlainObject(value))return clean;
+  for(const [recipeId,rawAmount] of Object.entries(value)){const amount=recipeBookResourceAmount(rawAmount);if(recipeId&&amount)clean[recipeId]=amount}
+  return clean;
+}
+function recipeBookCraftMaterialUsage(perCraft,craftAmount,owned){
+  const count=Number(perCraft),amount=Number(craftAmount),available=recipeBookResourceAmount(owned);
+  const used=Number.isFinite(count)&&count>0&&Number.isSafeInteger(amount)&&amount>0?count*amount:0;
+  return Object.freeze({used,remaining:Math.max(0,available-used)});
+}
+function recipeBookItemUsage(data,itemId,enhancement=0,limit=4){
+  const key=recipeBookIngredientKey(itemId,enhancement),uses=data?.recipesUsingKey?.[key]||[],producedBy=data?.recipesProducingKey?.[key]||[],groups=new Map();
+  for(const entry of uses){
+    const outputKey=recipeBookIngredientKey(entry.recipe.outputId,entry.recipe.outputEnhancement),current=groups.get(outputKey);
+    if(current){current.recipeCount++;current.minimum=Math.min(current.minimum,entry.count);current.maximum=Math.max(current.maximum,entry.count)}
+    else groups.set(outputKey,{outputKey,outputId:entry.recipe.outputId,outputEnhancement:entry.recipe.outputEnhancement||0,type:entry.recipe.type,station:entry.recipe.station||recipeBookTypeLabel(entry.recipe.type),recipeCount:1,minimum:entry.count,maximum:entry.count});
+  }
+  const outputs=[...groups.values()].sort((left,right)=>right.recipeCount-left.recipeCount||data.items[left.outputId].name.localeCompare(data.items[right.outputId].name,undefined,{sensitivity:"base"})),cap=Math.max(1,Math.min(6,Math.floor(Number(limit)||4)));
+  return Object.freeze({key,itemId:String(itemId),enhancement:Number(enhancement)||0,recipeCount:uses.length,uniqueOutputCount:outputs.length,outputs:Object.freeze(outputs.slice(0,cap).map(output=>Object.freeze(output))),producedByCount:producedBy.length,remainingOutputCount:Math.max(0,outputs.length-cap)});
+}
+function recipeBookCraftableRecipes(data,resources={},options={}){
+  if(!data?.recipes)return[];
+  const tokens=recipeBookSearchTokens(options.query||""),type=String(options.type||"");
+  return data.recipes.reduce((results,recipe)=>{
+    if(type&&recipe.type!==type)return results;
+    const output=data.items[recipe.outputId];if(tokens.length&&!tokens.every(token=>output.search.includes(token)))return results;
+    const maxCrafts=recipeBookRecipeCraftCount(recipe,resources);if(maxCrafts>0)results.push(Object.freeze({recipe,maxCrafts,requirements:Object.freeze(recipeBookRecipeRequirements(recipe,resources))}));
+    return results;
+  },[]).sort((left,right)=>right.maxCrafts-left.maxCrafts||data.items[left.recipe.outputId].name.localeCompare(data.items[right.recipe.outputId].name,undefined,{sensitivity:"base"})||left.recipe.id.localeCompare(right.recipe.id,undefined,{numeric:true}));
+}
+/* RECIPE_BOOK_CORE_END */
+
+const recipeBookEl={
+  view:document.getElementById("recipeBookView"),tooltip:document.getElementById("recipeBookItemTooltip"),tabs:[...document.querySelectorAll("[data-recipe-book-section]")],panels:[...document.querySelectorAll(".recipeBookWorkspacePanel")],form:document.getElementById("recipeBookSearchForm"),mode:document.getElementById("recipeBookSearchMode"),search:document.getElementById("recipeBookSearchInput"),searchButton:document.getElementById("recipeBookSearchButton"),clear:document.getElementById("recipeBookClear"),type:document.getElementById("recipeBookTypeFilter"),hint:document.getElementById("recipeBookSearchHint"),status:document.getElementById("recipeBookDataStatus"),summary:document.getElementById("recipeBookResultSummary"),pageSummary:document.getElementById("recipeBookPageSummary"),message:document.getElementById("recipeBookMessage"),retry:document.getElementById("recipeBookRetry"),grid:document.getElementById("recipeBookGrid"),pagination:document.getElementById("recipeBookPagination"),previous:document.getElementById("recipeBookPreviousPage"),next:document.getElementById("recipeBookNextPage"),pageNumbers:document.getElementById("recipeBookPageNumbers"),resourceForm:document.getElementById("recipeBookResourceForm"),resourceSearch:document.getElementById("recipeBookResourceSearch"),resourceSuggestions:document.getElementById("recipeBookResourceSuggestions"),resourceQuantity:document.getElementById("recipeBookResourceQuantity"),resourceAdd:document.getElementById("recipeBookResourceAdd"),resourceSelection:document.getElementById("recipeBookResourceSelection"),resourceList:document.getElementById("recipeBookResourceList"),resourceSummary:document.getElementById("recipeBookResourceSummary"),craftableBadge:document.getElementById("recipeBookCraftablesBadge"),craftableSummary:document.getElementById("recipeBookCraftableSummary"),craftableSearch:document.getElementById("recipeBookCraftableSearch"),craftableType:document.getElementById("recipeBookCraftableType"),craftableGrid:document.getElementById("recipeBookCraftableGrid"),craftablePagination:document.getElementById("recipeBookCraftablePagination"),craftablePrevious:document.getElementById("recipeBookCraftablePrevious"),craftableNext:document.getElementById("recipeBookCraftableNext"),craftablePages:document.getElementById("recipeBookCraftablePages")
+};
+const recipeBookState={initialized:false,loading:false,data:null,filtered:[],mode:"name",type:"",query:"",page:1,searchTimer:null,section:"catalog",resources:Object.create(null),selectedResourceKey:"",craftables:[],craftableQuery:"",craftableType:"",craftablePage:1,craftableTimer:null,craftPlans:Object.create(null),tooltipTarget:null,tooltipOpenTimer:null,tooltipCloseTimer:null};
+const RECIPE_BOOK_RESOURCES_SETTING="recipeBookResources";
+const RECIPE_BOOK_CRAFT_PLANS_SETTING="recipeBookCraftPlans";
+function recipeBookSetStatus(message,state="ready"){
+  if(!recipeBookEl.status)return;
+  recipeBookEl.status.dataset.state=state;
+  const copy=recipeBookEl.status.querySelector("span");
+  if(copy)copy.textContent=message;
+}
+function recipeBookShowError(message){
+  if(recipeBookEl.message){const copy=recipeBookEl.message.querySelector("span");if(copy)copy.textContent=message;recipeBookEl.message.hidden=false}
+  if(recipeBookEl.grid){recipeBookEl.grid.setAttribute("aria-busy","false");recipeBookEl.grid.innerHTML='<div class="recipeBookEmpty"><span aria-hidden="true">!</span><strong>The recipe book could not be opened</strong><p>The rest of Black Spirit Hub is still available.</p></div>'}
+  if(recipeBookEl.summary)recipeBookEl.summary.textContent="Recipe catalog unavailable";
+  if(recipeBookEl.pagination)recipeBookEl.pagination.hidden=true;
+  recipeBookSetStatus("Offline catalog unavailable","error");
+}
+function recipeBookFormatCount(value){return Number(value).toLocaleString(undefined,{maximumFractionDigits:2})}
+function recipeBookEnhancementLabel(value){return Number.isInteger(value)&&value>0?`+${value}`:""}
+function recipeBookSplitItemKey(value){const match=String(value||"").match(/^([^:]+):(\d+)$/);return match?{itemId:match[1],enhancement:Number(match[2])}:{itemId:"",enhancement:0}}
+function recipeBookItemTargetAttributes(itemId,enhancement=0){return `data-recipe-book-item-key="${escapeHtml(recipeBookIngredientKey(itemId,enhancement))}" tabindex="0"`}
+function recipeBookIconMarkup(item,sizeClass,alt,enhancement){
+  const path=recipeBookSafeIconPath(item.icon),badge=recipeBookEnhancementLabel(enhancement);
+  return `<span class="recipeBookItemIcon ${escapeHtml(sizeClass)} grade${item.grade}"><span class="recipeBookIconFallback" aria-hidden="true">✦</span>${path?`<img src="${escapeHtml(path)}" alt="" aria-hidden="true" loading="lazy" decoding="async">`:""}${badge?`<b class="recipeBookEnhancement">${escapeHtml(badge)}</b>`:""}</span>`;
+}
+function recipeBookTooltipMarkup(itemId,enhancement){
+  const data=recipeBookState.data,item=data?.items?.[itemId];if(!item)return"";
+  const usage=recipeBookItemUsage(data,itemId,enhancement,4),name=`${recipeBookEnhancementLabel(enhancement)}${enhancement?" ":""}${item.name}`,description=item.description||"No client description is available for this item.";
+  const outputs=usage.outputs.map(output=>{const crafted=data.items[output.outputId],count=output.minimum===output.maximum?`×${recipeBookFormatCount(output.minimum)}`:`×${recipeBookFormatCount(output.minimum)}–${recipeBookFormatCount(output.maximum)}`;return `<li>${recipeBookIconMarkup(crafted,"ingredient","",output.outputEnhancement)}<span><strong>${escapeHtml(recipeBookEnhancementLabel(output.outputEnhancement))}${output.outputEnhancement?" ":""}${escapeHtml(crafted.name)}</strong><small>${escapeHtml(recipeBookTypeLabel(output.type))} · needs ${escapeHtml(count)}</small></span></li>`}).join("");
+  const usageSection=usage.recipeCount?`<div class="recipeBookTooltipUsage"><strong>Used to craft</strong><p>Appears in ${recipeBookFormatCount(usage.recipeCount)} recipe variant${usage.recipeCount===1?"":"s"} across ${recipeBookFormatCount(usage.uniqueOutputCount)} crafted item${usage.uniqueOutputCount===1?"":"s"}.</p>${outputs?`<ul>${outputs}</ul>`:""}${usage.remainingOutputCount?`<small>+${recipeBookFormatCount(usage.remainingOutputCount)} more crafted items. Use Ingredient search for the full list.</small>`:""}</div>`:"";
+  return `<div class="recipeBookTooltipHeader">${recipeBookIconMarkup(item,"output","",enhancement)}<div><span>ITEM ${escapeHtml(itemId)}</span><strong>${escapeHtml(name)}</strong><small>${usage.producedByCount?`Produced by ${recipeBookFormatCount(usage.producedByCount)} recipe variant${usage.producedByCount===1?"":"s"}`:"Material information"}</small></div></div><p class="recipeBookTooltipDescription">${escapeHtml(description)}</p>${usageSection}`;
+}
+function recipeBookPositionTooltip(target){
+  const tooltip=recipeBookEl.tooltip;if(!tooltip||tooltip.hidden||!target?.isConnected)return;
+  const targetRect=target.getBoundingClientRect(),tooltipRect=tooltip.getBoundingClientRect(),gap=12,margin=12,statusBar=44;
+  let left=targetRect.right+gap;if(left+tooltipRect.width>innerWidth-margin)left=targetRect.left-tooltipRect.width-gap;
+  left=Math.max(margin,Math.min(left,innerWidth-tooltipRect.width-margin));let top=targetRect.top+(targetRect.height-tooltipRect.height)/2;
+  top=Math.max(margin,Math.min(top,innerHeight-tooltipRect.height-statusBar));tooltip.style.left=`${Math.round(left)}px`;tooltip.style.top=`${Math.round(top)}px`;
+}
+function recipeBookHideTooltip(){
+  clearTimeout(recipeBookState.tooltipOpenTimer);clearTimeout(recipeBookState.tooltipCloseTimer);const target=recipeBookState.tooltipTarget,tooltip=recipeBookEl.tooltip;if(target)target.removeAttribute("aria-describedby");recipeBookState.tooltipTarget=null;if(tooltip){tooltip.hidden=true;tooltip.innerHTML=""}
+}
+function recipeBookShowTooltip(target){
+  const tooltip=recipeBookEl.tooltip,data=recipeBookState.data;if(!tooltip||!data||!target?.isConnected)return;const {itemId,enhancement}=recipeBookSplitItemKey(target.dataset.recipeBookItemKey),markup=recipeBookTooltipMarkup(itemId,enhancement);if(!markup)return;
+  if(recipeBookState.tooltipTarget&&recipeBookState.tooltipTarget!==target)recipeBookState.tooltipTarget.removeAttribute("aria-describedby");recipeBookState.tooltipTarget=target;tooltip.innerHTML=markup;tooltip.hidden=false;target.setAttribute("aria-describedby",tooltip.id);recipeBookPositionTooltip(target);
+}
+function recipeBookFitIcon(image){
+  if(!(image instanceof HTMLImageElement))return;
+  const wrap=image.closest(".recipeBookItemIcon");if(!wrap)return;
+  const size=recipeBookIconDisplaySize(image.naturalWidth,image.naturalHeight,wrap.classList.contains("output")?"output":"ingredient");
+  image.style.width=`${size.width}px`;image.style.height=`${size.height}px`;
+}
+function recipeBookSetSection(section,{focus=false}={}){
+  recipeBookHideTooltip();
+  const next=["catalog","resources","craftables"].includes(section)?section:"catalog";recipeBookState.section=next;
+  for(const button of recipeBookEl.tabs){const active=button.dataset.recipeBookSection===next;button.classList.toggle("active",active);button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;if(active&&focus)button.focus()}
+  const panelIds={catalog:"recipeBookCatalogPanel",resources:"recipeBookResourcesPanel",craftables:"recipeBookCraftablesPanel"};
+  for(const panel of recipeBookEl.panels)panel.hidden=panel.id!==panelIds[next];
+  if(next==="resources")recipeBookRenderResources();else if(next==="craftables")recipeBookRenderCraftables();
+}
+function recipeBookCandidateName(candidate){const item=recipeBookState.data?.items[candidate.itemId];return `${recipeBookEnhancementLabel(candidate.enhancement)}${candidate.enhancement?" ":""}${item?.name||"Unknown item"}`}
+function recipeBookRenderResourceSuggestions(){
+  if(!recipeBookEl.resourceSuggestions||!recipeBookState.data)return;
+  const query=recipeBookEl.resourceSearch?.value||"",candidates=recipeBookResourceCandidates(recipeBookState.data,query,12);
+  recipeBookEl.resourceSearch?.removeAttribute("aria-activedescendant");
+  recipeBookEl.resourceSuggestions.hidden=!candidates.length;recipeBookEl.resourceSearch?.setAttribute("aria-expanded",String(Boolean(candidates.length)));
+  recipeBookEl.resourceSuggestions.innerHTML=candidates.map((candidate,index)=>{const item=recipeBookState.data.items[candidate.itemId];return `<button id="recipeBookResourceOption-${index}" class="recipeBookResourceSuggestion" type="button" role="option" aria-selected="false" data-resource-key="${escapeHtml(candidate.key)}" data-recipe-book-item-key="${escapeHtml(candidate.key)}">${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<span><strong class="recipeBookResourceName">${escapeHtml(recipeBookCandidateName(candidate))}</strong><small class="recipeBookResourceMeta"><span class="recipeBookItemId">Item ID: ${escapeHtml(candidate.itemId)}</span><span class="recipeBookUsedIn">Used in ${recipeBookFormatCount(candidate.uses)} recipe${candidate.uses===1?"":"s"}</span></small></span></button>`}).join("");
+}
+function recipeBookRenderResourceSelection(){
+  if(!recipeBookEl.resourceSelection||!recipeBookState.data)return;
+  const candidate=recipeBookState.data.resourceLookup[recipeBookState.selectedResourceKey];
+  if(!candidate){recipeBookEl.resourceSelection.classList.remove("selected");recipeBookEl.resourceSelection.removeAttribute("data-recipe-book-item-key");recipeBookEl.resourceSelection.removeAttribute("tabindex");recipeBookEl.resourceSelection.innerHTML='<span aria-hidden="true">◇</span><p>Search for an ingredient, then select it from the results.</p>';if(recipeBookEl.resourceQuantity)recipeBookEl.resourceQuantity.disabled=true;if(recipeBookEl.resourceAdd)recipeBookEl.resourceAdd.disabled=true;return}
+  const item=recipeBookState.data.items[candidate.itemId],current=recipeBookState.resources[candidate.key]||0;
+  recipeBookEl.resourceSelection.classList.add("selected");recipeBookEl.resourceSelection.setAttribute("data-recipe-book-item-key",candidate.key);recipeBookEl.resourceSelection.tabIndex=0;recipeBookEl.resourceSelection.innerHTML=`${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<p><strong class="recipeBookResourceName">${escapeHtml(recipeBookCandidateName(candidate))}</strong><small class="recipeBookResourceMeta"><span class="recipeBookItemId">Item ID: ${escapeHtml(candidate.itemId)}</span><span class="recipeBookUsedIn">Used in ${recipeBookFormatCount(candidate.uses)} recipe${candidate.uses===1?"":"s"}</span><span class="recipeBookStoredState">${current?`${recipeBookFormatCount(current)} currently stored · Add will update this total`:"Enter the quantity you currently own"}</span></small></p>`;
+  if(recipeBookEl.resourceQuantity)recipeBookEl.resourceQuantity.disabled=false;if(recipeBookEl.resourceAdd)recipeBookEl.resourceAdd.disabled=false;
+}
+function recipeBookPersistResources(){persistSetting(RECIPE_BOOK_RESOURCES_SETTING,{...recipeBookState.resources})}
+function recipeBookPersistCraftPlans(){persistSetting(RECIPE_BOOK_CRAFT_PLANS_SETTING,{...recipeBookState.craftPlans})}
+function recipeBookRefreshCraftables(){
+  if(!recipeBookState.data)return;
+  recipeBookState.craftables=recipeBookCraftableRecipes(recipeBookState.data,recipeBookState.resources,{query:recipeBookState.craftableQuery,type:recipeBookState.craftableType});
+  const total=recipeBookState.craftables.length;if(recipeBookEl.craftableBadge)recipeBookEl.craftableBadge.textContent=recipeBookFormatCount(total);
+  const pages=Math.max(1,Math.ceil(total/RECIPE_BOOK_PAGE_SIZE));recipeBookState.craftablePage=Math.min(Math.max(1,recipeBookState.craftablePage),pages);
+}
+function recipeBookRenderResources(){
+  recipeBookHideTooltip();
+  if(!recipeBookState.data||!recipeBookEl.resourceList)return;
+  const entries=Object.entries(recipeBookState.resources).map(([key,amount])=>({candidate:recipeBookState.data.resourceLookup[key],amount})).filter(entry=>entry.candidate).sort((left,right)=>recipeBookCandidateName(left.candidate).localeCompare(recipeBookCandidateName(right.candidate),undefined,{sensitivity:"base"}));
+  if(recipeBookEl.resourceSummary)recipeBookEl.resourceSummary.textContent=entries.length?`${recipeBookFormatCount(entries.length)} resource${entries.length===1?"":"s"} tracked`:"No resources added";
+  recipeBookEl.resourceList.innerHTML=entries.length?entries.map(({candidate,amount})=>{const item=recipeBookState.data.items[candidate.itemId],name=recipeBookCandidateName(candidate);return `<article class="recipeBookResourceCard" data-resource-key="${escapeHtml(candidate.key)}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<div class="recipeBookResourceCopy"><strong class="recipeBookResourceName">${escapeHtml(name)}</strong><small class="recipeBookResourceMeta"><span class="recipeBookItemId">Item ID: ${escapeHtml(candidate.itemId)}</span><span class="recipeBookUsedIn">Used in ${recipeBookFormatCount(candidate.uses)} recipes</span></small></div><div class="recipeBookResourceControls"><input type="number" min="1" max="999999999999" step="1" inputmode="numeric" value="${amount}" data-resource-quantity="${escapeHtml(candidate.key)}" aria-label="Quantity owned for ${escapeHtml(name)}"><button class="recipeBookResourceRemove" type="button" data-resource-remove="${escapeHtml(candidate.key)}" aria-label="Remove ${escapeHtml(name)}" title="Remove">×</button></div></article>`}).join(""):'<div class="recipeBookEmpty"><span aria-hidden="true">◇</span><strong>Your resource list is empty</strong><p>Add materials above to discover what you can craft.</p></div>';
+  recipeBookRefreshCraftables();if(recipeBookState.section==="craftables")recipeBookRenderCraftables();
+}
+function recipeBookCraftableCardMarkup(entry){
+  const {recipe,maxCrafts,requirements}=entry,data=recipeBookState.data,output=data.items[recipe.outputId],typeLabel=recipeBookTypeLabel(recipe.type),outputEnhancement=recipeBookEnhancementLabel(recipe.outputEnhancement),savedAmount=recipeBookState.craftPlans[recipe.id],craftAmount=recipeBookClampCraftAmount(savedAmount,maxCrafts),progress=maxCrafts<=1?100:Math.round(((craftAmount-1)/(maxCrafts-1))*100),disabled=maxCrafts===1?" disabled":"";
+  const ingredients=requirements.map(requirement=>{const candidate=data.resourceLookup[requirement.key],item=data.items[candidate.itemId],usage=recipeBookCraftMaterialUsage(requirement.count,craftAmount,requirement.owned);return `<li data-craft-requirement data-per-craft="${requirement.count}" data-owned="${requirement.owned}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<span class="recipeBookIngredientCopy"><strong>${escapeHtml(recipeBookCandidateName(candidate))}</strong><small class="recipeBookIngredientPer">Per craft <b>×${escapeHtml(recipeBookFormatCount(requirement.count))}</b></small></span><span class="recipeBookIngredientStock"><b class="recipeBookOwnedAmount">${escapeHtml(recipeBookFormatCount(requirement.owned))} owned</b><small class="recipeBookConsumedAmount"><span data-craft-used>${escapeHtml(recipeBookFormatCount(usage.used))} used</span><span data-craft-remaining>${escapeHtml(recipeBookFormatCount(usage.remaining))} left</span></small></span></li>`}).join("");
+  return `<article class="recipeBookCard" data-recipe-id="${escapeHtml(recipe.id)}"><header ${recipeBookItemTargetAttributes(recipe.outputId,recipe.outputEnhancement)}>${recipeBookIconMarkup(output,"output","",recipe.outputEnhancement)}<div class="recipeBookCardTitle"><span>${escapeHtml(typeLabel)}</span><h3>${outputEnhancement?`<em>${escapeHtml(outputEnhancement)}</em> `:""}${escapeHtml(output.name)}</h3><small>${escapeHtml(recipe.station||typeLabel)}</small></div><div class="recipeBookCraftCount"><strong>×${escapeHtml(recipeBookFormatCount(maxCrafts))}</strong><small>max crafts</small></div></header><fieldset class="recipeBookCraftPlanner" data-craft-plan data-recipe-id="${escapeHtml(recipe.id)}" data-craft-amount="${craftAmount}" data-max-crafts="${maxCrafts}"><legend class="recipeBookSrOnly">Plan craft batches for ${escapeHtml(output.name)}</legend><div class="recipeBookCraftPlannerHead"><span>Craft amount</span><output><b data-craft-plan-value>×${escapeHtml(recipeBookFormatCount(craftAmount))}</b><small>of ${escapeHtml(recipeBookFormatCount(maxCrafts))} max</small></output></div><div class="recipeBookCraftPlannerControls"><label class="recipeBookCraftRange"><span class="recipeBookSrOnly">Drag craft amount for ${escapeHtml(output.name)}</span><input type="range" min="1" max="${maxCrafts}" step="1" value="${craftAmount}" data-craft-plan-range aria-label="Craft amount for ${escapeHtml(output.name)}" aria-valuetext="${craftAmount} of ${maxCrafts} craft batches" style="--craft-progress:${progress}%"${disabled}></label><label class="recipeBookCraftExact"><span>Exact</span><input type="number" min="1" max="${maxCrafts}" step="1" inputmode="numeric" value="${craftAmount}" data-craft-plan-number aria-label="Exact craft amount for ${escapeHtml(output.name)}"${disabled}></label></div></fieldset><div class="recipeBookIngredientHead"><span>Covered materials</span><b>${requirements.length}</b></div><ul>${ingredients}</ul></article>`;
+}
+function recipeBookUpdateCraftPlanner(control,{commit=false}={}){
+  const planner=control?.closest?.("[data-craft-plan]");if(!planner)return;
+  const maxCrafts=recipeBookResourceAmount(planner.dataset.maxCrafts),raw=String(control.value??"").trim(),parsed=Number(raw),valid=raw!==""&&Number.isSafeInteger(parsed);
+  if(!valid&&!commit)return;
+  const craftAmount=recipeBookClampCraftAmount(valid?parsed:planner.dataset.craftAmount,maxCrafts);if(!craftAmount)return;
+  const recipeId=planner.dataset.recipeId;recipeBookState.craftPlans[recipeId]=craftAmount;planner.dataset.craftAmount=String(craftAmount);
+  const range=planner.querySelector("[data-craft-plan-range]"),number=planner.querySelector("[data-craft-plan-number]"),value=planner.querySelector("[data-craft-plan-value]"),progress=maxCrafts<=1?100:((craftAmount-1)/(maxCrafts-1))*100;
+  if(range){range.value=String(craftAmount);range.style.setProperty("--craft-progress",`${progress}%`);range.setAttribute("aria-valuetext",`${craftAmount} of ${maxCrafts} craft batches`)}
+  if(number)number.value=String(craftAmount);if(value)value.textContent=`×${recipeBookFormatCount(craftAmount)}`;
+  for(const row of planner.closest(".recipeBookCard")?.querySelectorAll("[data-craft-requirement]")||[]){const usage=recipeBookCraftMaterialUsage(row.dataset.perCraft,craftAmount,row.dataset.owned),used=row.querySelector("[data-craft-used]"),remaining=row.querySelector("[data-craft-remaining]");if(used)used.textContent=`${recipeBookFormatCount(usage.used)} used`;if(remaining)remaining.textContent=`${recipeBookFormatCount(usage.remaining)} left`}
+  if(commit)recipeBookPersistCraftPlans();
+}
+function recipeBookRenderCraftables(){
+  recipeBookHideTooltip();
+  if(!recipeBookState.data||!recipeBookEl.craftableGrid)return;recipeBookRefreshCraftables();
+  const total=recipeBookState.craftables.length,pages=Math.max(1,Math.ceil(total/RECIPE_BOOK_PAGE_SIZE)),start=(recipeBookState.craftablePage-1)*RECIPE_BOOK_PAGE_SIZE,end=Math.min(start+RECIPE_BOOK_PAGE_SIZE,total),resourceCount=Object.keys(recipeBookState.resources).length;
+  if(recipeBookEl.craftableSummary)recipeBookEl.craftableSummary.textContent=total?`${recipeBookFormatCount(total)} craftable recipe${total===1?"":"s"}`:resourceCount?"No complete recipes yet":"Add resources to begin";
+  recipeBookEl.craftableGrid.innerHTML=total?recipeBookState.craftables.slice(start,end).map(recipeBookCraftableCardMarkup).join(""):`<div class="recipeBookEmpty"><span aria-hidden="true">✦</span><strong>${resourceCount?"Nothing is fully craftable yet":"No craftables yet"}</strong><p>${resourceCount?"Add the missing ingredients or increase the quantities in My Resources.":"Add the materials you own under My Resources."}</p><button type="button" data-recipe-book-section-link="resources">Open My Resources</button></div>`;
+  if(recipeBookEl.craftablePagination){recipeBookEl.craftablePagination.hidden=pages<=1||!total;recipeBookEl.craftablePrevious.disabled=recipeBookState.craftablePage<=1;recipeBookEl.craftableNext.disabled=recipeBookState.craftablePage>=pages}
+  if(recipeBookEl.craftablePages)recipeBookEl.craftablePages.innerHTML=recipeBookPageWindow(recipeBookState.craftablePage,pages).map(page=>page==="ellipsis"?'<i aria-hidden="true">…</i>':`<button type="button" data-craftable-page="${page}" class="${page===recipeBookState.craftablePage?"active":""}" ${page===recipeBookState.craftablePage?'aria-current="page"':""} aria-label="Craftables page ${page}">${page}</button>`).join("");
+}
+function recipeBookCardMarkup(recipe,tokens){
+  const data=recipeBookState.data,output=data.items[recipe.outputId],typeLabel=recipeBookTypeLabel(recipe.type),outputEnhancement=recipeBookEnhancementLabel(recipe.outputEnhancement);
+  const ingredients=recipe.inputs.map(input=>{
+    const item=data.items[input.itemId],isMatch=recipeBookState.mode==="ingredient"&&tokens.length&&tokens.some(token=>item.search.includes(token));
+    return `<li class="${isMatch?"matchesQuery":""}" ${recipeBookItemTargetAttributes(input.itemId,input.enhancement)}>${recipeBookIconMarkup(item,"ingredient",item.name,input.enhancement)}<span class="recipeBookIngredientCopy"><strong>${escapeHtml(item.name)}</strong><small>${isMatch?"Matching ingredient":"Ingredient"}</small></span><b class="recipeBookIngredientCount">×${escapeHtml(recipeBookFormatCount(input.count))}</b></li>`;
+  }).join("");
+  const station=recipe.station||typeLabel;
+  return `<article class="recipeBookCard" data-recipe-id="${escapeHtml(recipe.id)}"><header ${recipeBookItemTargetAttributes(recipe.outputId,recipe.outputEnhancement)}>${recipeBookIconMarkup(output,"output",output.name,recipe.outputEnhancement)}<div class="recipeBookCardTitle"><span>${escapeHtml(typeLabel)}</span><h3>${outputEnhancement?`<em>${escapeHtml(outputEnhancement)}</em> `:""}${escapeHtml(output.name)}</h3><small>${escapeHtml(station)}</small></div></header><div class="recipeBookIngredientHead"><span>Ingredients</span><b>${recipe.inputs.length}</b></div><ul>${ingredients}</ul></article>`;
+}
+function recipeBookPageWindow(current,total){
+  if(total<=7)return Array.from({length:total},(_,index)=>index+1);
+  const pages=new Set([1,total,current-1,current,current+1]);
+  if(current<=3){pages.add(2);pages.add(3);pages.add(4)}
+  if(current>=total-2){pages.add(total-1);pages.add(total-2);pages.add(total-3)}
+  const sorted=[...pages].filter(page=>page>=1&&page<=total).sort((a,b)=>a-b),result=[];
+  sorted.forEach((page,index)=>{if(index&&page-sorted[index-1]>1)result.push("ellipsis");result.push(page)});
+  return result;
+}
+function recipeBookRender({focusResults=false}={}){
+  recipeBookHideTooltip();
+  const data=recipeBookState.data;if(!data)return;
+  recipeBookState.filtered=recipeBookFilterRecipes(data,{query:recipeBookState.query,mode:recipeBookState.mode,type:recipeBookState.type});
+  const total=recipeBookState.filtered.length,totalPages=Math.max(1,Math.ceil(total/RECIPE_BOOK_PAGE_SIZE));
+  recipeBookState.page=Math.min(Math.max(1,recipeBookState.page),totalPages);
+  const start=(recipeBookState.page-1)*RECIPE_BOOK_PAGE_SIZE,end=Math.min(start+RECIPE_BOOK_PAGE_SIZE,total),tokens=recipeBookSearchTokens(recipeBookState.query);
+  if(recipeBookEl.grid){
+    recipeBookEl.grid.setAttribute("aria-busy","false");
+    recipeBookEl.grid.innerHTML=total?recipeBookState.filtered.slice(start,end).map(recipe=>recipeBookCardMarkup(recipe,tokens)).join(""):`<div class="recipeBookEmpty"><span aria-hidden="true">⌕</span><strong>No recipes matched</strong><p>${recipeBookState.mode==="ingredient"?"Try a different ingredient or choose another craft category.":"Try fewer words or search by ingredient instead."}</p></div>`;
+  }
+  const query=recipeBookState.query.trim(),typeLabel=recipeBookState.type?recipeBookTypeLabel(recipeBookState.type):"";
+  if(recipeBookEl.summary)recipeBookEl.summary.textContent=query?`${recipeBookFormatCount(total)} recipe${total===1?"":"s"} found for “${query}”`:typeLabel?`${recipeBookFormatCount(total)} ${typeLabel} recipe${total===1?"":"s"}`:`${recipeBookFormatCount(total)} current recipe${total===1?"":"s"}`;
+  if(recipeBookEl.pageSummary)recipeBookEl.pageSummary.textContent=total?`Showing ${recipeBookFormatCount(start+1)}–${recipeBookFormatCount(end)} of ${recipeBookFormatCount(total)}`:"0 results";
+  if(recipeBookEl.pagination){recipeBookEl.pagination.hidden=totalPages<=1||!total;recipeBookEl.previous.disabled=recipeBookState.page<=1;recipeBookEl.next.disabled=recipeBookState.page>=totalPages}
+  if(recipeBookEl.pageNumbers)recipeBookEl.pageNumbers.innerHTML=recipeBookPageWindow(recipeBookState.page,totalPages).map(page=>page==="ellipsis"?'<i aria-hidden="true">…</i>':`<button type="button" data-recipe-book-page="${page}" class="${page===recipeBookState.page?"active":""}" ${page===recipeBookState.page?'aria-current="page"':""} aria-label="Page ${page}">${page}</button>`).join("");
+  if(recipeBookEl.clear)recipeBookEl.clear.hidden=!recipeBookState.query;
+  if(focusResults)document.querySelector(".recipeBookResultsHead")?.scrollIntoView({behavior:document.body.dataset.motion==="reduced"?"auto":"smooth",block:"start"});
+}
+function recipeBookApplySearch({focusResults=false}={}){
+  recipeBookState.query=recipeBookEl.search?.value||"";
+  recipeBookState.page=1;
+  recipeBookRender({focusResults});
+}
+function recipeBookSetMode(mode){
+  recipeBookState.mode=mode==="ingredient"?"ingredient":"name";
+  if(recipeBookEl.search)recipeBookEl.search.placeholder=recipeBookState.mode==="ingredient"?"Search an ingredient, e.g. Wolf's Blood...":"Search a recipe name...";
+  if(recipeBookEl.hint)recipeBookEl.hint.textContent=recipeBookState.mode==="ingredient"?"Find every recipe containing all of the ingredient words you enter.":"Find recipes whose crafted item contains every word you enter.";
+  recipeBookState.page=1;recipeBookRender();
+}
+function recipeBookPopulateTypes(){
+  if(!recipeBookEl.type||!recipeBookState.data)return;
+  recipeBookEl.type.innerHTML='<option value="">All categories</option>'+recipeBookState.data.types.map(type=>`<option value="${escapeHtml(type)}">${escapeHtml(recipeBookTypeLabel(type))}</option>`).join("");
+}
+async function recipeBookLoadData(){
+  if(recipeBookState.loading)return;
+  recipeBookState.loading=true;
+  if(recipeBookEl.message)recipeBookEl.message.hidden=true;
+  if(recipeBookEl.grid){recipeBookEl.grid.setAttribute("aria-busy","true");recipeBookEl.grid.innerHTML='<div class="recipeBookLoading"><i></i><strong>Opening the recipe book...</strong><span>Validating recipes and preparing the search index.</span></div>'}
+  recipeBookSetStatus("Loading offline recipe catalog...","loading");
+  try{
+    const response=await fetch(`${RECIPE_BOOK_ASSET_ROOT}recipes.json`,{cache:"no-cache",headers:{Accept:"application/json"}});
+    if(!response.ok)throw new Error(`Recipe data returned ${response.status}`);
+    recipeBookState.data=recipeBookPrepareData(await response.json());
+    recipeBookState.resources=recipeBookSanitizeResources(readSetting(RECIPE_BOOK_RESOURCES_SETTING,{}),recipeBookState.data);
+    recipeBookState.craftPlans=recipeBookSanitizeCraftPlans(readSetting(RECIPE_BOOK_CRAFT_PLANS_SETTING,{}));
+    recipeBookPopulateTypes();
+    if(recipeBookEl.craftableType)recipeBookEl.craftableType.innerHTML='<option value="">All categories</option>'+recipeBookState.data.types.map(type=>`<option value="${escapeHtml(type)}">${escapeHtml(recipeBookTypeLabel(type))}</option>`).join("");
+    for(const control of [recipeBookEl.search,recipeBookEl.searchButton,recipeBookEl.type,recipeBookEl.resourceSearch,recipeBookEl.craftableSearch,recipeBookEl.craftableType])if(control)control.disabled=false;
+    const iconCount=Number(recipeBookState.data.counts.uniqueIcons)||Object.values(recipeBookState.data.items).filter(item=>recipeBookSafeIconPath(item.icon)).length;
+    recipeBookSetStatus(`${recipeBookFormatCount(recipeBookState.data.recipes.length)} recipes · ${recipeBookFormatCount(iconCount)} cached images`,"ready");
+    recipeBookState.page=1;recipeBookRender();recipeBookRenderResources();recipeBookSetSection(recipeBookState.section);
+  }catch(error){
+    recipeBookState.data=null;
+    recipeBookShowError(error?.message||"The bundled recipe data could not be read.");
+  }finally{recipeBookState.loading=false}
+}
+function initializeRecipeBook(){
+  if(recipeBookState.initialized)return;
+  recipeBookState.initialized=true;
+  recipeBookEl.form?.addEventListener("submit",event=>{event.preventDefault();clearTimeout(recipeBookState.searchTimer);recipeBookApplySearch()});
+  recipeBookEl.search?.addEventListener("input",()=>{if(recipeBookEl.clear)recipeBookEl.clear.hidden=!recipeBookEl.search.value;clearTimeout(recipeBookState.searchTimer);recipeBookState.searchTimer=setTimeout(()=>recipeBookApplySearch(),90)});
+  recipeBookEl.search?.addEventListener("keydown",event=>{if(event.key==="Escape"&&recipeBookEl.search.value){event.preventDefault();recipeBookEl.search.value="";recipeBookApplySearch();recipeBookEl.search.focus()}});
+  recipeBookEl.clear?.addEventListener("click",()=>{recipeBookEl.search.value="";recipeBookApplySearch();recipeBookEl.search.focus()});
+  recipeBookEl.mode?.addEventListener("change",event=>{if(event.target.matches('input[name="recipeBookMode"]'))recipeBookSetMode(event.target.value)});
+  recipeBookEl.type?.addEventListener("change",()=>{recipeBookState.type=recipeBookEl.type.value;recipeBookState.page=1;recipeBookRender()});
+  recipeBookEl.retry?.addEventListener("click",recipeBookLoadData);
+  recipeBookEl.previous?.addEventListener("click",()=>{if(recipeBookState.page>1){recipeBookState.page--;recipeBookRender({focusResults:true})}});
+  recipeBookEl.next?.addEventListener("click",()=>{const pages=Math.ceil(recipeBookState.filtered.length/RECIPE_BOOK_PAGE_SIZE);if(recipeBookState.page<pages){recipeBookState.page++;recipeBookRender({focusResults:true})}});
+  recipeBookEl.pageNumbers?.addEventListener("click",event=>{const button=event.target.closest("[data-recipe-book-page]");if(!button)return;recipeBookState.page=Number(button.dataset.recipeBookPage)||1;recipeBookRender({focusResults:true})});
+  for(const tab of recipeBookEl.tabs)tab.addEventListener("click",()=>recipeBookSetSection(tab.dataset.recipeBookSection));
+  recipeBookEl.view?.querySelector(".recipeBookWorkspaceTabs")?.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;event.preventDefault();const tabs=recipeBookEl.tabs,current=Math.max(0,tabs.indexOf(document.activeElement));let next=event.key==="Home"?0:event.key==="End"?tabs.length-1:event.key==="ArrowRight"?(current+1)%tabs.length:(current-1+tabs.length)%tabs.length;recipeBookSetSection(tabs[next].dataset.recipeBookSection,{focus:true})});
+  recipeBookEl.view?.addEventListener("click",event=>{const link=event.target.closest("[data-recipe-book-section-link]");if(link)recipeBookSetSection(link.dataset.recipeBookSectionLink,{focus:true})});
+  recipeBookEl.resourceSearch?.addEventListener("input",()=>{recipeBookState.selectedResourceKey="";recipeBookRenderResourceSelection();recipeBookRenderResourceSuggestions()});
+  recipeBookEl.resourceSearch?.addEventListener("focus",recipeBookRenderResourceSuggestions);
+  recipeBookEl.resourceSearch?.addEventListener("keydown",event=>{const options=[...recipeBookEl.resourceSuggestions.querySelectorAll("[data-resource-key]")];if(event.key==="Escape"){recipeBookEl.resourceSuggestions.hidden=true;recipeBookEl.resourceSearch.setAttribute("aria-expanded","false");recipeBookEl.resourceSearch.removeAttribute("aria-activedescendant");return}if(!options.length)return;let index=options.findIndex(option=>option.getAttribute("aria-selected")==="true");if(event.key==="ArrowDown"||event.key==="ArrowUp"){event.preventDefault();index=event.key==="ArrowDown"?(index+1)%options.length:(index-1+options.length)%options.length;options.forEach((option,optionIndex)=>option.setAttribute("aria-selected",String(optionIndex===index)));recipeBookEl.resourceSearch.setAttribute("aria-activedescendant",options[index].id);options[index].scrollIntoView({block:"nearest"})}else if(event.key==="Enter"&&index>=0){event.preventDefault();options[index].click()}});
+  recipeBookEl.resourceSuggestions?.addEventListener("click",event=>{const button=event.target.closest("[data-resource-key]");if(!button)return;recipeBookState.selectedResourceKey=button.dataset.resourceKey;const candidate=recipeBookState.data.resourceLookup[recipeBookState.selectedResourceKey];recipeBookEl.resourceSearch.value=recipeBookCandidateName(candidate);recipeBookEl.resourceSuggestions.hidden=true;recipeBookEl.resourceSearch.setAttribute("aria-expanded","false");recipeBookEl.resourceSearch.removeAttribute("aria-activedescendant");recipeBookEl.resourceQuantity.value=recipeBookState.resources[candidate.key]||1;recipeBookEl.resourceAdd.textContent=recipeBookState.resources[candidate.key]?"Update":"Add";recipeBookRenderResourceSelection();recipeBookEl.resourceQuantity.focus();recipeBookEl.resourceQuantity.select()});
+  recipeBookEl.resourceForm?.addEventListener("submit",event=>{event.preventDefault();const key=recipeBookState.selectedResourceKey,amount=recipeBookResourceAmount(recipeBookEl.resourceQuantity.value);if(!key||!recipeBookState.data.resourceLookup[key]||!amount){NotificationService.ShowWarning("Choose an ingredient and enter a whole quantity of at least 1.","My Resources");return}recipeBookState.resources[key]=amount;recipeBookPersistResources();recipeBookRenderResources();recipeBookEl.resourceAdd.textContent="Update";recipeBookRenderResourceSelection();NotificationService.ShowSuccess(`${recipeBookCandidateName(recipeBookState.data.resourceLookup[key])} saved to My Resources.`,"Resource saved")});
+  recipeBookEl.resourceList?.addEventListener("change",event=>{const input=event.target.closest("[data-resource-quantity]");if(!input)return;const amount=recipeBookResourceAmount(input.value);if(!amount){input.value=recipeBookState.resources[input.dataset.resourceQuantity];NotificationService.ShowWarning("Resource quantities must be whole numbers of at least 1.","My Resources");return}recipeBookState.resources[input.dataset.resourceQuantity]=amount;recipeBookPersistResources();recipeBookRenderResources()});
+  recipeBookEl.resourceList?.addEventListener("click",event=>{const button=event.target.closest("[data-resource-remove]");if(!button)return;const candidate=recipeBookState.data.resourceLookup[button.dataset.resourceRemove];delete recipeBookState.resources[button.dataset.resourceRemove];recipeBookPersistResources();if(recipeBookState.selectedResourceKey===button.dataset.resourceRemove){recipeBookState.selectedResourceKey="";recipeBookEl.resourceSearch.value="";recipeBookEl.resourceAdd.textContent="Add";recipeBookRenderResourceSelection()}recipeBookRenderResources();NotificationService.ShowInfo(`${recipeBookCandidateName(candidate)} removed.`,"Resource removed")});
+  recipeBookEl.craftableSearch?.addEventListener("input",()=>{clearTimeout(recipeBookState.craftableTimer);recipeBookState.craftableTimer=setTimeout(()=>{recipeBookState.craftableQuery=recipeBookEl.craftableSearch.value;recipeBookState.craftablePage=1;recipeBookRenderCraftables()},90)});
+  recipeBookEl.craftableType?.addEventListener("change",()=>{recipeBookState.craftableType=recipeBookEl.craftableType.value;recipeBookState.craftablePage=1;recipeBookRenderCraftables()});
+  recipeBookEl.craftableGrid?.addEventListener("input",event=>{const control=event.target.closest("[data-craft-plan-range],[data-craft-plan-number]");if(control)recipeBookUpdateCraftPlanner(control)});
+  recipeBookEl.craftableGrid?.addEventListener("change",event=>{const control=event.target.closest("[data-craft-plan-range],[data-craft-plan-number]");if(control)recipeBookUpdateCraftPlanner(control,{commit:true})});
+  recipeBookEl.craftablePrevious?.addEventListener("click",()=>{if(recipeBookState.craftablePage>1){recipeBookState.craftablePage--;recipeBookRenderCraftables()}});recipeBookEl.craftableNext?.addEventListener("click",()=>{const pages=Math.ceil(recipeBookState.craftables.length/RECIPE_BOOK_PAGE_SIZE);if(recipeBookState.craftablePage<pages){recipeBookState.craftablePage++;recipeBookRenderCraftables()}});recipeBookEl.craftablePages?.addEventListener("click",event=>{const button=event.target.closest("[data-craftable-page]");if(!button)return;recipeBookState.craftablePage=Number(button.dataset.craftablePage)||1;recipeBookRenderCraftables()});
+  recipeBookEl.grid?.addEventListener("load",event=>recipeBookFitIcon(event.target),true);
+  for(const root of [recipeBookEl.resourceSuggestions,recipeBookEl.resourceSelection,recipeBookEl.resourceList,recipeBookEl.craftableGrid,recipeBookEl.tooltip])root?.addEventListener("load",event=>recipeBookFitIcon(event.target),true);
+  recipeBookEl.grid?.addEventListener("error",event=>{if(event.target instanceof HTMLImageElement){const wrap=event.target.closest(".recipeBookItemIcon");if(wrap)wrap.classList.add("iconMissing");event.target.hidden=true}},true);
+  for(const root of [recipeBookEl.resourceSuggestions,recipeBookEl.resourceSelection,recipeBookEl.resourceList,recipeBookEl.craftableGrid,recipeBookEl.tooltip])root?.addEventListener("error",event=>{if(event.target instanceof HTMLImageElement){const wrap=event.target.closest(".recipeBookItemIcon");if(wrap)wrap.classList.add("iconMissing");event.target.hidden=true}},true);
+  recipeBookEl.view?.addEventListener("pointerover",event=>{if(event.pointerType==="touch")return;const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(!target||(interactive&&interactive!==target)||target.contains(event.relatedTarget))return;clearTimeout(recipeBookState.tooltipCloseTimer);recipeBookState.tooltipOpenTimer=setTimeout(()=>recipeBookShowTooltip(target),130)});
+  recipeBookEl.view?.addEventListener("pointerout",event=>{const target=event.target.closest("[data-recipe-book-item-key]");if(!target||target.contains(event.relatedTarget))return;clearTimeout(recipeBookState.tooltipOpenTimer);recipeBookState.tooltipCloseTimer=setTimeout(recipeBookHideTooltip,80)});
+  recipeBookEl.view?.addEventListener("focusin",event=>{const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(target&&(!interactive||interactive===target))recipeBookShowTooltip(target)});
+  recipeBookEl.view?.addEventListener("focusout",event=>{const target=event.target.closest("[data-recipe-book-item-key]");if(target===recipeBookState.tooltipTarget&&!target.contains(event.relatedTarget))recipeBookHideTooltip()});
+  recipeBookEl.view?.addEventListener("click",event=>{const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(!target||(interactive&&interactive!==target))return;if(recipeBookState.tooltipTarget===target&&!recipeBookEl.tooltip.hidden)recipeBookHideTooltip();else recipeBookShowTooltip(target)});
+  recipeBookEl.view?.addEventListener("keydown",event=>{if(event.key==="Escape"&&!recipeBookEl.tooltip?.hidden){event.preventDefault();recipeBookHideTooltip()}});
+  addEventListener("scroll",()=>{if(recipeBookState.tooltipTarget&&!recipeBookEl.tooltip?.hidden)recipeBookPositionTooltip(recipeBookState.tooltipTarget)},{passive:true});
+  addEventListener("resize",()=>{if(recipeBookState.tooltipTarget&&!recipeBookEl.tooltip?.hidden)recipeBookPositionTooltip(recipeBookState.tooltipTarget)});
+  recipeBookSetSection("catalog");
+  recipeBookLoadData();
+}
+
 let appViewTransitionTimer=null;
 let activeAppViewId=document.querySelector(".appView.active")?.id||"homeView";
-const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",dehkiaFuelView:"Assets/CinematicBackgrounds/cinematic-09.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg"});
+const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",dehkiaFuelView:"Assets/CinematicBackgrounds/cinematic-09.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg",recipeBookView:"Assets/CinematicBackgrounds/cinematic-06.jpg"});
 function updateCinematicBackground(viewId){const url=CINEMATIC_BACKGROUNDS[viewId]||CINEMATIC_BACKGROUNDS.homeView;document.body.style.setProperty("--cinematic-bg",`url("${url}")`)}
 function tickActiveAppView(){if(document.hidden)return;if(activeAppViewId==="homeView")updateHomeTimers(normalizedHomeSettings());else if(activeAppViewId==="resetTimersView")renderResetTimers(normalizedResetSettings());else if(activeAppViewId==="eventsView"&&eventsState.events.length)updateEventTimelineClock()}
 clearInterval(window.__bdoActiveViewTicker);
@@ -2350,6 +2760,7 @@ function initializeAppView(viewId){
   if(viewId === "resetTimersView") initializeResetTimers();
   if(viewId === "bracketsView") initializeBrackets();
   if(viewId === "masteryBracketsView") initializeMasteryBrackets();
+  if(viewId === "recipeBookView") initializeRecipeBook();
   if(viewId === "lightstoneSetsView") initializeLightstoneSets();
   if(viewId === "settingsView") initializeAppBehaviorSettings({showError:true});
 }

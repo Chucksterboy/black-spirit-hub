@@ -23,6 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
+	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
 	private sealed class CTaskbarList
@@ -931,6 +932,15 @@ internal sealed class CalculatorForm : Form
 	private void ConfigureMainWebView(CoreWebView2 core)
 	{
 		core.SetVirtualHostNameToFolderMapping(LocalAppHost, paths.Root, CoreWebView2HostResourceAccessKind.DenyCors);
+		string recipeBookAssets = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
+		if (!Directory.Exists(recipeBookAssets))
+		{
+			throw new DirectoryNotFoundException("The offline Recipe Book assets are missing.");
+		}
+		core.SetVirtualHostNameToFolderMapping(
+			RecipeBookHost,
+			recipeBookAssets,
+			CoreWebView2HostResourceAccessKind.Allow);
 		core.Settings.AreDevToolsEnabled = false;
 		core.Settings.AreDefaultContextMenusEnabled = false;
 		core.Settings.IsStatusBarEnabled = false;

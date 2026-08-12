@@ -48,7 +48,12 @@ function Assert-AppPublish {
 		"Assets\AppIcon\app-icon.png",
 		"Assets\AppIcon\app-icon-ui.png",
 		"Assets\Alarm.mp3",
-		"Assets\GrindTracker\grind-spots.js"
+		"Assets\GrindTracker\grind-spots.js",
+		"Assets\RecipeBook\recipes.json",
+		"Assets\RecipeBook\manifest.json",
+		"Assets\RecipeBook\bundle-id.txt",
+		"Assets\RecipeBook\NOTICE.txt",
+		"Assets\RecipeBook\icons\item-fallback.svg"
 	)) {
 		$path = Join-Path $PublishRoot $relativePath
 		if (!(Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) {
@@ -334,6 +339,9 @@ try {
 			"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 			"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 			"Assets\Alarm.mp3",
+			"Assets\RecipeBook\recipes.json",
+			"Assets\RecipeBook\manifest.json",
+			"Assets\RecipeBook\bundle-id.txt",
 			"WebView2Loader.dll",
 			"e_sqlite3.dll"
 		)) {

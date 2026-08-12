@@ -19,6 +19,12 @@ $htmlPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.htm
 $cssPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.css"
 $scriptPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.js"
 $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
+$recipeBookRoot = Join-Path $sourceRoot "Assets\RecipeBook"
+$recipeBookDataPath = Join-Path $recipeBookRoot "recipes.json"
+$recipeBookManifestPath = Join-Path $recipeBookRoot "manifest.json"
+$recipeBookBundleIdPath = Join-Path $recipeBookRoot "bundle-id.txt"
+$recipeBookFilterReportPath = Join-Path $recipeBookRoot "filter-report.json"
+$recipeBookNoticePath = Join-Path $recipeBookRoot "NOTICE.txt"
 $alarmPath = Join-Path $sourceRoot "Assets\Alarm.mp3"
 $appIconPath = Join-Path $sourceRoot "app.ico"
 $runtimeIconPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.ico"
@@ -29,6 +35,7 @@ $installerIconPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstal
 $iconMasterPath = Join-Path $repoRoot "Branding\AppIcon\midnight-sigil-source.png"
 $releaseScriptPath = Join-Path $repoRoot "scripts\release.ps1"
 $nativeInstallerBuildScriptPath = Join-Path $repoRoot "scripts\build-native-installer.ps1"
+$legacyInstallerProgramPath = Join-Path $sourceRoot "InstallerSource\BlackSpiritHubInstaller\Program.cs"
 $nativeInstallerSourcePath = Join-Path $sourceRoot "InstallerSource\InnoSetup\BlackSpiritHub.iss"
 $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
@@ -39,6 +46,8 @@ $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
 $dehkiaFuelJsTestPath = Join-Path $repoRoot "scripts\test-dehkia-fuel-frontend.mjs"
 $startupSplashJsTestPath = Join-Path $repoRoot "scripts\test-startup-splash.mjs"
+$recipeBookJsTestPath = Join-Path $repoRoot "scripts\test-recipe-book.mjs"
+$recipeBookBuildScriptPath = Join-Path $repoRoot "scripts\build-recipe-book-data.mjs"
 $dehkiaFuelIconVerifyScriptPath = Join-Path $repoRoot "scripts\verify-dehkia-fuel-icons.ps1"
 $classIconRefreshScriptPath = Join-Path $repoRoot "scripts\update-class-icons.ps1"
 
@@ -47,7 +56,18 @@ if (!$SkipBuild) {
 	if ($LASTEXITCODE -ne 0) { throw "Application build failed." }
 }
 
-foreach ($path in @($htmlPath, $cssPath, $scriptPath, $grindDataPath, $alarmPath)) {
+foreach ($path in @(
+	$htmlPath,
+	$cssPath,
+	$scriptPath,
+	$grindDataPath,
+	$alarmPath,
+	$recipeBookDataPath,
+	$recipeBookManifestPath,
+	$recipeBookBundleIdPath,
+	$recipeBookFilterReportPath,
+	$recipeBookNoticePath
+)) {
 	if (!(Test-Path -LiteralPath $path)) { throw "Required UI asset is missing: $path" }
 }
 if (!(Test-Path -LiteralPath $dehkiaFuelIconVerifyScriptPath -PathType Leaf)) {
@@ -56,6 +76,89 @@ if (!(Test-Path -LiteralPath $dehkiaFuelIconVerifyScriptPath -PathType Leaf)) {
 & $dehkiaFuelIconVerifyScriptPath
 if ((Get-Item -LiteralPath $alarmPath).Length -lt 32000) {
 	throw "Alarm.mp3 is unexpectedly small or empty."
+}
+
+$recipeBookManifestBytes = [System.IO.File]::ReadAllBytes($recipeBookManifestPath)
+$recipeBookManifestHash = (Get-FileHash -LiteralPath $recipeBookManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$recipeBookBundleId = (Get-Content -LiteralPath $recipeBookBundleIdPath -Raw).Trim().ToLowerInvariant()
+if ($recipeBookBundleId -ne $recipeBookManifestHash) {
+	throw "The Recipe Book completion marker does not match its manifest."
+}
+$recipeBookManifest = Get-Content -LiteralPath $recipeBookManifestPath -Raw | ConvertFrom-Json
+$recipeBookData = Get-Content -LiteralPath $recipeBookDataPath -Raw | ConvertFrom-Json
+if ([int]$recipeBookManifest.schemaVersion -ne 1 -or [int]$recipeBookData.schemaVersion -ne 1) {
+	throw "The Recipe Book schema version is unsupported."
+}
+function Assert-RecipeBookManifestEntry {
+	param(
+		[Parameter(Mandatory = $true)]$Entry,
+		[Parameter(Mandatory = $true)][string]$ExpectedPrefix
+	)
+	$relativePath = ([string]$Entry.path).Replace("\", "/")
+	if ([string]::IsNullOrWhiteSpace($relativePath) -or
+		!$relativePath.StartsWith($ExpectedPrefix, [StringComparison]::Ordinal) -or
+		$relativePath.StartsWith("/", [StringComparison]::Ordinal) -or
+		$relativePath.Contains(":") -or
+		$relativePath.Split("/") -contains "..") {
+		throw "The Recipe Book manifest contains an unsafe path: $relativePath"
+	}
+	$rootPrefix = [System.IO.Path]::GetFullPath($recipeBookRoot).TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar
+	$absolutePath = [System.IO.Path]::GetFullPath((Join-Path $recipeBookRoot $relativePath.Replace("/", [System.IO.Path]::DirectorySeparatorChar)))
+	if (!$absolutePath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+		!(Test-Path -LiteralPath $absolutePath -PathType Leaf)) {
+		throw "A Recipe Book manifest file is missing or escaped its bundle: $relativePath"
+	}
+	$file = Get-Item -LiteralPath $absolutePath
+	if ([long]$Entry.bytes -ne $file.Length) {
+		throw "Recipe Book file size changed: $relativePath"
+	}
+	$hash = (Get-FileHash -LiteralPath $absolutePath -Algorithm SHA256).Hash.ToLowerInvariant()
+	if ($hash -ne ([string]$Entry.sha256).ToLowerInvariant()) {
+		throw "Recipe Book file digest changed: $relativePath"
+	}
+	return $relativePath
+}
+[void](Assert-RecipeBookManifestEntry -Entry $recipeBookManifest.dataset -ExpectedPrefix "recipes.json")
+[void](Assert-RecipeBookManifestEntry -Entry $recipeBookManifest.filterReport -ExpectedPrefix "filter-report.json")
+$recipeBookDeclaredIcons = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+if ([string]$recipeBookManifest.icons.encoding -ne "lossless") {
+	throw "Recipe Book item artwork must remain lossless."
+}
+foreach ($entry in @($recipeBookManifest.icons.files)) {
+	$relativePath = Assert-RecipeBookManifestEntry -Entry $entry -ExpectedPrefix "icons/"
+	if (!$recipeBookDeclaredIcons.Add($relativePath)) {
+		throw "The Recipe Book manifest declares an icon twice: $relativePath"
+	}
+	if ($relativePath.EndsWith(".webp", [StringComparison]::OrdinalIgnoreCase) -and
+		([string]$entry.encoding -ne "lossless" -or [int]$entry.width -le 0 -or [int]$entry.width -ne [int]$entry.height)) {
+		throw "Recipe Book item artwork is lossy, invalid, or non-square: $relativePath"
+	}
+}
+if ($recipeBookDeclaredIcons.Count -ne [int]$recipeBookManifest.icons.uniqueFiles) {
+	throw "The Recipe Book manifest icon count is inconsistent."
+}
+$recipeBookRootPrefix = [System.IO.Path]::GetFullPath($recipeBookRoot).TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar
+$recipeBookActualIcons = Get-ChildItem -LiteralPath (Join-Path $recipeBookRoot "icons") -Recurse -File | ForEach-Object {
+	$fullPath = [System.IO.Path]::GetFullPath($_.FullName)
+	if (!$fullPath.StartsWith($recipeBookRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+		throw "A Recipe Book icon escaped its bundle directory."
+	}
+	$fullPath.Substring($recipeBookRootPrefix.Length).Replace("\", "/")
+}
+if ($recipeBookActualIcons.Count -ne $recipeBookDeclaredIcons.Count -or
+	@($recipeBookActualIcons | Where-Object { !$recipeBookDeclaredIcons.Contains($_) }).Count -ne 0) {
+	throw "The Recipe Book icon directory and signed manifest inventory differ."
+}
+$recipeBookItems = @($recipeBookData.items.PSObject.Properties)
+if ($recipeBookItems.Count -ne [int]$recipeBookData.counts.items -or
+	@($recipeBookData.recipes).Count -ne [int]$recipeBookData.counts.recipes -or
+	[int]$recipeBookData.counts.rawRecipes -ne ([int]$recipeBookData.counts.recipes + [int]$recipeBookData.counts.excludedRecipes)) {
+	throw "The Recipe Book dataset counts are inconsistent."
+}
+foreach ($item in $recipeBookItems) {
+	if (!$recipeBookDeclaredIcons.Contains([string]$item.Value.icon)) {
+		throw "Recipe Book item $($item.Name) references an unmanifested icon."
+	}
 }
 
 $iconPaths = @($appIconPath, $runtimeIconPath, $installerIconPath)
@@ -1050,6 +1153,12 @@ if ($html -notmatch '<button class="homeExternalLink" data-open-url="https://www
 if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
 	throw "GrindTracker, MasteryIcons, and DehkiaFuel assets must self-heal before the version-stamp early return."
 }
+if ($calculatorSource -notmatch 'private const string RecipeBookHost = "recipebook\.bdo\.local";' -or
+	$calculatorSource -notmatch '(?s)SetVirtualHostNameToFolderMapping\(\s*RecipeBookHost,\s*recipeBookAssets,\s*CoreWebView2HostResourceAccessKind\.Allow\)' -or
+	$programSource -notmatch '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets"\),\s*Path\.Combine\(paths\.Root, "Assets"\),\s*"RecipeBook"\);' -or
+	$programSource -match '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "RecipeBook"\)') {
+	throw "Recipe Book must be served from one installed offline bundle without a duplicate per-user asset copy."
+}
 if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore' -or
 	$programSource -match 'AppStateStore' -or
 	(Test-Path -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\AppStateStore.cs"))) {
@@ -1089,6 +1198,7 @@ if (!(Test-Path -LiteralPath $couponIconResolverSourcePath -PathType Leaf)) {
 $couponIconResolverSource = Get-Content -LiteralPath $couponIconResolverSourcePath -Raw
 $installerSource = Get-Content -LiteralPath $nativeInstallerSourcePath -Raw
 $nativeInstallerBuildScript = Get-Content -LiteralPath $nativeInstallerBuildScriptPath -Raw
+$legacyInstallerProgram = Get-Content -LiteralPath $legacyInstallerProgramPath -Raw
 $bossScheduleRefreshCallCount = [regex]::Matches($script, 'bridgeCall\("refreshBossSchedule"\)').Count
 if ($calculatorSource -match 'CancellationToken\.None') {
 	throw "CalculatorForm contains an uncancellable host operation."
@@ -1223,6 +1333,10 @@ if (!(Test-Path -LiteralPath $dehkiaFuelJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $startupSplashJsTestPath -PathType Leaf)) {
 	throw "The executable native startup splash regression test is missing."
 }
+if (!(Test-Path -LiteralPath $recipeBookJsTestPath -PathType Leaf) -or
+	!(Test-Path -LiteralPath $recipeBookBuildScriptPath -PathType Leaf)) {
+	throw "The Recipe Book data builder or executable frontend regression test is missing."
+}
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
 	& $nodeCommand.Source $bossScheduleJsTestPath
@@ -1261,6 +1375,14 @@ if ($nodeCommand) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "Native startup splash regression tests failed."
 	}
+	& $nodeCommand.Source --check $recipeBookBuildScriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Recipe Book data builder syntax validation failed."
+	}
+	& $nodeCommand.Source $recipeBookJsTestPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Recipe Book frontend and bundle integrity tests failed."
+	}
 }
 else {
 	Write-Host "Node.js was not found; executable UI JavaScript regression checks were skipped."
@@ -1285,6 +1407,17 @@ $releaseScript = Get-Content -LiteralPath $releaseScriptPath -Raw
 if ($releaseScript -notmatch 'Assets\\Alarm\.mp3' -or
 	$installerSource -notmatch 'Source:\s*"\{#AppFilesDir\}\\\*";[^\r\n]*recursesubdirs') {
 	throw "Release or installer validation no longer requires Alarm.mp3."
+}
+if ($releaseScript -notmatch 'Assets\\RecipeBook\\recipes\.json' -or
+	$releaseScript -notmatch 'Assets\\RecipeBook\\manifest\.json' -or
+	$releaseScript -notmatch 'Assets\\RecipeBook\\bundle-id\.txt' -or
+	$nativeInstallerBuildScript -notmatch 'Assets\\RecipeBook\\recipes\.json' -or
+	$nativeInstallerBuildScript -notmatch 'Assets\\RecipeBook\\manifest\.json' -or
+	$nativeInstallerBuildScript -notmatch 'Assets\\RecipeBook\\bundle-id\.txt' -or
+	$legacyInstallerProgram -notmatch 'Assets/RecipeBook/recipes\.json' -or
+	$legacyInstallerProgram -notmatch 'Assets/RecipeBook/manifest\.json' -or
+	$legacyInstallerProgram -notmatch 'Assets/RecipeBook/bundle-id\.txt') {
+	throw "Application publish and installer validation must require the offline Recipe Book bundle."
 }
 if ($releaseScript -match '--self-contained\s+false' -or
 	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -ne 1 -or

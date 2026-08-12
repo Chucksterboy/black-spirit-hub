@@ -126,24 +126,40 @@ function Assert-CredentialNotTracked {
 		[string]$Credential
 	)
 
-	$trackedFiles = & $GitPath -C $RepoRoot ls-files
+	$releaseFiles = & $GitPath -C $RepoRoot ls-files --cached --others --exclude-standard
 	if ($LASTEXITCODE -ne 0) {
-		throw "Could not inspect tracked files before release."
+		throw "Could not inspect files selected for release."
 	}
 
-	foreach ($relativePath in $trackedFiles) {
+	$textExtensions = [System.Collections.Generic.HashSet[string]]::new(
+		[StringComparer]::OrdinalIgnoreCase)
+	foreach ($extension in @(
+		".bat", ".cmd", ".config", ".cs", ".csproj", ".css", ".env", ".html",
+		".iss", ".js", ".json", ".md", ".mjs", ".props", ".ps1", ".psm1",
+		".sh", ".sln", ".targets", ".toml", ".txt", ".xml", ".yaml", ".yml"
+	)) {
+		[void]$textExtensions.Add($extension)
+	}
+	$textNames = [System.Collections.Generic.HashSet[string]]::new(
+		[StringComparer]::OrdinalIgnoreCase)
+	foreach ($name in @(".gitattributes", ".gitignore", "Dockerfile", "LICENSE", "README")) {
+		[void]$textNames.Add($name)
+	}
+
+	foreach ($relativePath in $releaseFiles) {
 		$path = Join-Path $RepoRoot $relativePath
 		if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
 			continue
 		}
 		$item = Get-Item -LiteralPath $path
-		if ($item.Length -gt 4MB) {
+		if ($item.Length -gt 4MB -or
+			(!$textExtensions.Contains($item.Extension) -and !$textNames.Contains($item.Name))) {
 			continue
 		}
 		try {
 			$text = [System.IO.File]::ReadAllText($path)
 			if ($text.IndexOf($Credential, [StringComparison]::Ordinal) -ge 0) {
-				throw "Release stopped because the BDO Alerts credential appears in a tracked source file."
+				throw "Release stopped because the BDO Alerts credential appears in a source file selected for release."
 			}
 		}
 		catch [System.Text.DecoderFallbackException] {
@@ -219,7 +235,12 @@ function Assert-AppPublishFiles {
 		"Assets\AppIcon\app-icon.png",
 		"Assets\AppIcon\app-icon-ui.png",
 		"Assets\Alarm.mp3",
-		"Assets\GrindTracker\grind-spots.js"
+		"Assets\GrindTracker\grind-spots.js",
+		"Assets\RecipeBook\recipes.json",
+		"Assets\RecipeBook\manifest.json",
+		"Assets\RecipeBook\bundle-id.txt",
+		"Assets\RecipeBook\NOTICE.txt",
+		"Assets\RecipeBook\icons\item-fallback.svg"
 	)
 	foreach ($relativePath in $requiredFiles) {
 		$path = Join-Path $PublishRoot $relativePath

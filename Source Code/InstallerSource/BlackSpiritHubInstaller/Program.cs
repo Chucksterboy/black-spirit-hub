@@ -596,7 +596,12 @@ internal sealed class InstallerForm : Form
 		"Assets/AppIcon/app-icon.png",
 		"Assets/AppIcon/app-icon-ui.png",
 		"Assets/Alarm.mp3",
-		"Assets/GrindTracker/grind-spots.js"
+		"Assets/GrindTracker/grind-spots.js",
+		"Assets/RecipeBook/recipes.json",
+		"Assets/RecipeBook/manifest.json",
+		"Assets/RecipeBook/bundle-id.txt",
+		"Assets/RecipeBook/NOTICE.txt",
+		"Assets/RecipeBook/icons/item-fallback.svg"
 	};
 
 	internal static void ValidatePayloadArchive(ZipArchive archive)

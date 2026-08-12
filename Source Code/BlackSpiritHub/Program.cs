@@ -297,6 +297,18 @@ internal static class Program
 			{
 				return 119;
 			}
+			string recipeBookRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
+			string[] requiredRecipeBookFiles = ["recipes.json", "manifest.json", "bundle-id.txt", "NOTICE.txt"];
+			if (requiredRecipeBookFiles.Any(fileName =>
+				!File.Exists(Path.Combine(recipeBookRoot, fileName)))
+				|| !Directory.Exists(Path.Combine(recipeBookRoot, "icons", "items"))
+				|| !Directory.EnumerateFiles(
+					Path.Combine(recipeBookRoot, "icons", "items"),
+					"*.webp",
+					SearchOption.TopDirectoryOnly).Any())
+			{
+				return 120;
+			}
 			using AppLogger logger = new(paths.LogPath);
 			return offline
 				? RunOfflineSmokeTestAsync(logger).GetAwaiter().GetResult()
@@ -791,7 +803,6 @@ internal static class Program
 		CopyDirectoryIfPresent(
 			Path.Combine(baseDirectory, "Assets", "DehkiaFuel"),
 			Path.Combine(paths.Root, "Assets", "DehkiaFuel"));
-
 		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
 			&& Directory.Exists(paths.ThemeAssetsPath)
 			&& File.Exists(versionStampPath)
@@ -802,7 +813,13 @@ internal static class Program
 		}
 
 		CopyFileIfChanged(Path.Combine(baseDirectory, "gold-coins.png"), Path.Combine(paths.Root, "gold-coins.png"));
-		CopyDirectoryIfPresent(Path.Combine(baseDirectory, "Assets"), Path.Combine(paths.Root, "Assets"));
+		// Recipe Book is served directly from its immutable installed folder through
+		// a dedicated WebView2 virtual host. Excluding it here avoids a second ~20 MB
+		// per-user copy while all other mutable UI assets keep their existing flow.
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "Assets"),
+			Path.Combine(paths.Root, "Assets"),
+			"RecipeBook");
 		CopyDirectoryIfPresent(Path.Combine(baseDirectory, "ThemeAssets"), paths.ThemeAssetsPath);
 		File.WriteAllText(versionStampPath, AppVersion.Current);
 		TryDeleteFile(Path.Combine(paths.Root, "BlackSpiritHub.Resources.Black_Spirit_Hub.html"));
@@ -3056,7 +3073,10 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 		}
 	}
 
-	private static void CopyDirectoryIfPresent(string sourceDirectory, string targetDirectory)
+	private static void CopyDirectoryIfPresent(
+		string sourceDirectory,
+		string targetDirectory,
+		string? excludedRelativeDirectory = null)
 	{
 		if (!Directory.Exists(sourceDirectory))
 		{
@@ -3066,6 +3086,15 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 		foreach (string sourcePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
 		{
 			string relativePath = Path.GetRelativePath(sourceDirectory, sourcePath);
+			if (!string.IsNullOrWhiteSpace(excludedRelativeDirectory)
+				&& (string.Equals(relativePath, excludedRelativeDirectory, StringComparison.OrdinalIgnoreCase)
+					|| relativePath.StartsWith(
+						excludedRelativeDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+							+ Path.DirectorySeparatorChar,
+						StringComparison.OrdinalIgnoreCase)))
+			{
+				continue;
+			}
 			CopyFileIfChanged(sourcePath, Path.Combine(targetDirectory, relativePath));
 		}
 	}

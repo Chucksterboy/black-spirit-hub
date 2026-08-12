@@ -1,0 +1,6 @@
+Black Spirit Hub Recipe Book
+
+Recipe facts, English item names and descriptions, and item icons were extracted from a legally installed Black Desert client for this non-commercial fan utility.
+Cached item artwork is stored as lossless WebP at its native client dimensions; non-square client preview artwork is replaced with the bundled fallback.
+Black Desert and all related game data and artwork are trademarks or copyrighted material of Pearl Abyss. Black Spirit Hub is unofficial and is not affiliated with or endorsed by Pearl Abyss.
+No BDO Codex, BDOlytics, or Black Desert Foundry editorial content or artwork is bundled.

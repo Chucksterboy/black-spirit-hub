@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.40">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.41">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -41,6 +41,7 @@
     <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Events</span></button>
     <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Brackets</span></button>
     <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Mastery Brackets</span></button>
+    <button class="navButton betaNavButton" data-app-view="recipeBookView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Recipe Book</span></button>
     <button class="navButton betaNavButton" data-app-view="dehkiaFuelView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Dehkia Fuel</span></button>
     <button class="navButton betaNavButton" data-app-view="lightstoneSetsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Lightstone Sets</span></button>
   </nav>
@@ -798,6 +799,117 @@
   </div>
 </section>
 
+<section id="recipeBookView" class="appView">
+  <div class="recipeBookShell">
+    <header class="recipeBookHeader">
+      <div class="recipeBookTitleBlock">
+        <span class="recipeBookEyebrow">LIFESKILL COMPENDIUM</span>
+        <h1>Recipe Book</h1>
+        <p>Search every current Cooking, Alchemy, Processing, and workshop recipe without leaving the app.</p>
+      </div>
+      <div class="recipeBookHeaderMark" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M12 10.5C20 8 27.3 10.2 32 15v39c-4.7-4.8-12-7-20-4.5v-39Z"></path><path d="M52 10.5C44 8 36.7 10.2 32 15v39c4.7-4.8 12-7 20-4.5v-39Z"></path><path d="M18 20h8M18 27h8M38 20h8M38 27h8"></path></svg>
+      </div>
+    </header>
+
+    <nav class="recipeBookWorkspaceTabs" role="tablist" aria-label="Recipe Book sections">
+      <button id="recipeBookCatalogTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="recipeBookCatalogPanel" data-recipe-book-section="catalog"><span class="recipeBookTabIcon catalog" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 5.2c3-1 5.8-.3 8.5 2v12.1c-2.7-2.3-5.5-3-8.5-2V5.2Z"></path><path d="M20.5 5.2c-3-1-5.8-.3-8.5 2v12.1c2.7-2.3 5.5-3 8.5-2V5.2Z"></path><path d="M6.5 9h2.8M14.7 9h2.8M6.5 12h2.8"></path></svg></span><span class="recipeBookTabLabel">Recipe Book</span></button>
+      <button id="recipeBookResourcesTab" type="button" role="tab" aria-selected="false" aria-controls="recipeBookResourcesPanel" data-recipe-book-section="resources"><span class="recipeBookTabIcon resources" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 8.5h14v11H5z"></path><path d="m7 8.5 1.5-4h7l1.5 4M8 13h8M9.5 16.5h5"></path><path d="M3.5 11.5H5M19 11.5h1.5"></path></svg></span><span class="recipeBookTabLabel">My Resources</span></button>
+      <button id="recipeBookCraftablesTab" type="button" role="tab" aria-selected="false" aria-controls="recipeBookCraftablesPanel" data-recipe-book-section="craftables"><span class="recipeBookTabIcon craftables" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m14.5 4 5.5 5.5-2.7 2.7-2.1-2.1-8.6 8.6-3.3-3.3 8.6-8.6-2.1-2.1L12.5 2l2 2Z"></path><path d="m15.7 15.2.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"></path></svg></span><span class="recipeBookTabLabel">Craftables</span><b id="recipeBookCraftablesBadge">0</b></button>
+    </nav>
+
+    <div id="recipeBookCatalogPanel" class="recipeBookWorkspacePanel" role="tabpanel" aria-labelledby="recipeBookCatalogTab">
+    <section class="recipeBookSearchPanel" aria-label="Recipe search">
+      <form id="recipeBookSearchForm" class="recipeBookSearchForm" role="search">
+        <fieldset id="recipeBookSearchMode" class="recipeBookModeToggle">
+          <legend>Search by</legend>
+          <label><input type="radio" name="recipeBookMode" value="name" checked><span>Recipe name</span></label>
+          <label><input type="radio" name="recipeBookMode" value="ingredient"><span>Ingredient</span></label>
+        </fieldset>
+        <label class="recipeBookSearchField" for="recipeBookSearchInput">
+          <span class="recipeBookSearchGlyph" aria-hidden="true"></span>
+          <input id="recipeBookSearchInput" type="search" autocomplete="off" spellcheck="false" placeholder="Search a recipe name..." aria-label="Search recipes" aria-describedby="recipeBookSearchHint" disabled>
+          <button id="recipeBookClear" class="recipeBookClear" type="button" aria-label="Clear recipe search" title="Clear search" hidden>&times;</button>
+        </label>
+        <button id="recipeBookSearchButton" class="recipeBookSearchButton" type="submit" disabled>Search</button>
+        <label class="recipeBookFilterField">
+          <span>Craft category</span>
+          <select id="recipeBookTypeFilter" aria-label="Filter by craft category" disabled><option value="">All categories</option></select>
+        </label>
+      </form>
+      <div class="recipeBookSearchFoot">
+        <p id="recipeBookSearchHint">Use multiple words to narrow results. Every word must match.</p>
+        <div id="recipeBookDataStatus" class="recipeBookDataStatus" data-state="loading" role="status" aria-live="polite"><i></i><span>Loading offline recipe catalog...</span></div>
+      </div>
+    </section>
+
+    <section class="recipeBookResults" aria-labelledby="recipeBookResultSummary">
+      <div class="recipeBookResultsHead">
+        <div>
+          <span class="recipeBookResultsKicker">CATALOG RESULTS</span>
+          <h2 id="recipeBookResultSummary" role="status" aria-live="polite">Preparing the recipe catalog</h2>
+        </div>
+        <span id="recipeBookPageSummary" class="recipeBookPageSummary"></span>
+      </div>
+      <div id="recipeBookMessage" class="recipeBookMessage" role="alert" hidden>
+        <span></span><button id="recipeBookRetry" type="button">Try again</button>
+      </div>
+      <div id="recipeBookGrid" class="recipeBookGrid" aria-busy="true">
+        <div class="recipeBookLoading"><i></i><strong>Opening the recipe book...</strong><span>Recipes and item icons are stored locally for fast, offline browsing.</span></div>
+      </div>
+      <nav id="recipeBookPagination" class="recipeBookPagination" aria-label="Recipe result pages" hidden>
+        <button id="recipeBookPreviousPage" type="button">Previous</button>
+        <span id="recipeBookPageNumbers"></span>
+        <button id="recipeBookNextPage" type="button">Next</button>
+      </nav>
+    </section>
+    </div>
+
+    <section id="recipeBookResourcesPanel" class="recipeBookWorkspacePanel" role="tabpanel" aria-labelledby="recipeBookResourcesTab" hidden>
+      <div class="recipeBookSectionIntro">
+        <div><span>PERSONAL MATERIALS</span><h2>My Resources</h2><p>Add the exact materials you own. Quantities are saved locally on this PC.</p></div>
+        <strong id="recipeBookResourceSummary">No resources added</strong>
+      </div>
+      <section class="recipeBookResourceComposer" aria-label="Add a resource">
+        <form id="recipeBookResourceForm" autocomplete="off">
+          <div class="recipeBookResourcePicker">
+            <label for="recipeBookResourceSearch">Find an ingredient</label>
+            <div class="recipeBookResourceSearchField">
+              <span class="recipeBookSearchGlyph" aria-hidden="true"></span>
+              <input id="recipeBookResourceSearch" type="search" spellcheck="false" placeholder="Search ingredients, e.g. Wolf's Blood..." role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="recipeBookResourceSuggestions" disabled>
+            </div>
+            <div id="recipeBookResourceSuggestions" class="recipeBookResourceSuggestions" role="listbox" aria-label="Matching ingredients" hidden></div>
+          </div>
+          <label class="recipeBookResourceQuantity"><span>Quantity owned</span><input id="recipeBookResourceQuantity" type="number" min="1" max="999999999999" step="1" inputmode="numeric" value="1" disabled></label>
+          <button id="recipeBookResourceAdd" class="recipeBookPrimaryAction" type="submit" disabled>Add</button>
+        </form>
+        <div id="recipeBookResourceSelection" class="recipeBookResourceSelection" aria-live="polite"><span aria-hidden="true">◇</span><p>Search for an ingredient, then select it from the results.</p></div>
+      </section>
+      <section class="recipeBookInventory" aria-labelledby="recipeBookInventoryTitle">
+        <div class="recipeBookInventoryHead"><div><span>YOUR STORED MATERIALS</span><h3 id="recipeBookInventoryTitle">Resource inventory</h3></div><small>Change a quantity at any time or remove an item.</small></div>
+        <div id="recipeBookResourceList" class="recipeBookResourceList"><div class="recipeBookEmpty"><span aria-hidden="true">◇</span><strong>Your resource list is empty</strong><p>Add materials above to discover what you can craft.</p></div></div>
+      </section>
+    </section>
+
+    <section id="recipeBookCraftablesPanel" class="recipeBookWorkspacePanel" role="tabpanel" aria-labelledby="recipeBookCraftablesTab" hidden>
+      <div class="recipeBookSectionIntro">
+        <div><span>AVAILABLE NOW</span><h2>Craftables</h2><p>Only fully covered direct recipes appear here. Use each card's craft planner to preview material use; plans do not spend or reserve shared materials.</p></div>
+        <strong id="recipeBookCraftableSummary" role="status" aria-live="polite">Add resources to begin</strong>
+      </div>
+      <div class="recipeBookCraftableToolbar">
+        <label class="recipeBookCraftableSearch"><span class="recipeBookSearchGlyph" aria-hidden="true"></span><input id="recipeBookCraftableSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Filter craftable items..." aria-label="Filter craftable recipes" disabled></label>
+        <label class="recipeBookCraftableFilter"><span>Craft category</span><select id="recipeBookCraftableType" aria-label="Filter craftables by craft category" disabled><option value="">All categories</option></select></label>
+      </div>
+      <div id="recipeBookCraftableGrid" class="recipeBookGrid recipeBookCraftableGrid"><div class="recipeBookEmpty"><span aria-hidden="true">✦</span><strong>No craftables yet</strong><p>Add the materials you own under My Resources.</p><button type="button" data-recipe-book-section-link="resources">Open My Resources</button></div></div>
+      <nav id="recipeBookCraftablePagination" class="recipeBookPagination" aria-label="Craftable result pages" hidden>
+        <button id="recipeBookCraftablePrevious" type="button">Previous</button><span id="recipeBookCraftablePages"></span><button id="recipeBookCraftableNext" type="button">Next</button>
+      </nav>
+    </section>
+  </div>
+</section>
+
+<div id="recipeBookItemTooltip" class="recipeBookItemTooltip" role="tooltip" hidden></div>
+
 <section id="dehkiaFuelView" class="appView">
   <div class="dehkiaShell">
     <header class="dehkiaHeader">
@@ -1039,8 +1151,8 @@
   <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.40"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.40"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.41"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.41"></script>
 
 </body>
 </html>
