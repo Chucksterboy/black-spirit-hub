@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.42",
+    "version":  "v0.9.43",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.42/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "121E66AF0531A6361F10E635B93A7FF9DBB7CABCEA39F5C2368AD33FBEAD5E8B",
-    "notes":  "Adds all six Inner Edania Part II grind zones with official requirements, party sizes, resistance guidance, trash values, complete reward tables, and offline-cached reward icons."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.43/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "87089A71600ED564EE078288A32D0CBEA2E94FC01018D9296670BD273726B43C",
+    "notes":  "Improves Events during official maintenance, fixes timeline dates and open-ended event presentation, adds smooth drag scrolling with full titles, and introduces the bottom application health monitor."
 }

@@ -44,6 +44,8 @@ $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
+$eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
+$healthMonitorJsTestPath = Join-Path $repoRoot "scripts\test-health-monitor.mjs"
 $bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
 $dehkiaFuelJsTestPath = Join-Path $repoRoot "scripts\test-dehkia-fuel-frontend.mjs"
 $startupSplashJsTestPath = Join-Path $repoRoot "scripts\test-startup-splash.mjs"
@@ -1391,6 +1393,12 @@ if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $playerGuildJsTestPath -PathType Leaf)) {
 	throw "The executable Player & Guild JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $eventsTimelineJsTestPath -PathType Leaf)) {
+	throw "The executable Events timeline JavaScript regression test is missing."
+}
+if (!(Test-Path -LiteralPath $healthMonitorJsTestPath -PathType Leaf)) {
+	throw "The executable bottom health monitor regression test is missing."
+}
 if (!(Test-Path -LiteralPath $bracketsJsTestPath -PathType Leaf)) {
 	throw "The executable AP & DP Brackets JavaScript regression test is missing."
 }
@@ -1429,6 +1437,14 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $playerGuildJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "Player & Guild JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $eventsTimelineJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Events timeline JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $healthMonitorJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Bottom health monitor regression tests failed."
 	}
 	& $nodeCommand.Source $bracketsJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {

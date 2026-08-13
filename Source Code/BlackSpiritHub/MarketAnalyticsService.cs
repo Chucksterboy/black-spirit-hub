@@ -32,6 +32,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 	private readonly CancellationTokenSource shutdown = new CancellationTokenSource();
 
 	private readonly object reportCacheSync = new();
+	private readonly object healthSync = new();
 
 	private readonly Dictionary<string, (OutfitReport Report, DateTimeOffset CachedUtc)> reportCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -46,6 +47,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 	private int disposeRequested;
 
 	private int resourcesDisposed;
+	private MarketRefreshHealth refreshHealth = new("never", null, null);
 
 	public MarketSettings Settings => settings;
 
@@ -54,6 +56,22 @@ internal sealed class MarketAnalyticsService : IDisposable
 	public event EventHandler? DataChanged;
 
 	public event EventHandler<string>? StatusChanged;
+
+	internal MarketRefreshHealth GetRefreshHealth()
+	{
+		lock (healthSync)
+		{
+			return refreshHealth;
+		}
+	}
+
+	private void SetRefreshHealth(string status, DateTimeOffset? at, string? error)
+	{
+		lock (healthSync)
+		{
+			refreshHealth = new MarketRefreshHealth(status, at, error);
+		}
+	}
 
 	public MarketAnalyticsService(MarketDatabase database, IMarketDataProvider provider, AppLogger logger)
 		: this(database, provider, logger, useProcessUpdateLock: true)
@@ -212,6 +230,7 @@ internal sealed class MarketAnalyticsService : IDisposable
 				this.StatusChanged?.Invoke(this, "A background market update is already running.");
 				return;
 			}
+			SetRefreshHealth("running", DateTimeOffset.UtcNow, null);
 			MarketStorageMaintenanceResult maintenance = await database.MaintainStorageAsync(
 				MarketSampleRetention,
 				cancellationToken);
@@ -261,6 +280,19 @@ internal sealed class MarketAnalyticsService : IDisposable
 				this.StatusChanged?.Invoke(this, "EU market samples are already up to date.");
 			}
 			this.DataChanged?.Invoke(this, EventArgs.Empty);
+			SetRefreshHealth("success", DateTimeOffset.UtcNow, null);
+		}
+		catch (OperationCanceledException)
+		{
+			throw;
+		}
+		catch
+		{
+			SetRefreshHealth(
+				"failed",
+				DateTimeOffset.UtcNow,
+				"The latest market refresh did not finish. The app will retry automatically.");
+			throw;
 		}
 		finally
 		{

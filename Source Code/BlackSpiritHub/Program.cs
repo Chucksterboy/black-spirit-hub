@@ -840,6 +840,47 @@ internal static class Program
 			MarketDatabase database = new(testDatabasePath);
 			await database.InitializeAsync(CancellationToken.None);
 			await database.SaveSettingsAsync(MarketSettings.Default, CancellationToken.None);
+			AppHealthService appHealth = new(database, AppContext.BaseDirectory, logger);
+			BlackSpiritHubHealth healthyState = await appHealth.CheckAsync(
+				new MarketRefreshHealth("never", null, null),
+				CancellationToken.None);
+			if (!healthyState.Ok
+				|| !healthyState.DatabaseReadable
+				|| !healthyState.ContentIndexReadable
+				|| healthyState.ContentCount < 1
+				|| healthyState.HostVersion != AppVersion.Current)
+			{
+				return 241;
+			}
+
+			using (JsonDocument emptyHealthPayload = JsonDocument.Parse("{}"))
+			{
+				CalculatorForm.ValidateHealthCheckPayload(emptyHealthPayload.RootElement);
+			}
+			bool rejectedHealthArguments = false;
+			try
+			{
+				using JsonDocument unsafeHealthPayload = JsonDocument.Parse("{\"sql\":\"SELECT * FROM tracked_items\",\"path\":\"C:\\\\private\"}");
+				CalculatorForm.ValidateHealthCheckPayload(unsafeHealthPayload.RootElement);
+			}
+			catch (InvalidOperationException)
+			{
+				rejectedHealthArguments = true;
+			}
+			if (!rejectedHealthArguments || CalculatorForm.GetCommandTimeout("healthCheck") != TimeSpan.FromSeconds(6))
+			{
+				return 242;
+			}
+
+			string uninitializedDatabasePath = Path.Combine(testStateRoot, "uninitialized-health.db");
+			AppHealthService unavailableHealth = new(new MarketDatabase(uninitializedDatabasePath), AppContext.BaseDirectory, logger);
+			BlackSpiritHubHealth unavailableState = await unavailableHealth.CheckAsync(
+				new MarketRefreshHealth("never", null, null),
+				CancellationToken.None);
+			if (unavailableState.Ok || unavailableState.DatabaseReadable || !unavailableState.ContentIndexReadable)
+			{
+				return 243;
+			}
 			MarketSettings persistedSettings = await database.GetSettingsAsync(CancellationToken.None);
 			if (MarketSettings.DefaultCheckIntervalMinutes != 60
 				|| persistedSettings.IntervalMinutes != 60
@@ -2137,15 +2178,106 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				return 57;
 			}
 
+			EventService.EventDateRange? inferredYearRange = EventService.FindLikelyEventRange(
+				"[New Class] Agent's Adventures July 30 (Thu) after maintenance - Aug 27, 2026 (Thu) before maintenance");
+			if (inferredYearRange?.StartUtc != new DateTimeOffset(2026, 7, 30, 0, 0, 0, TimeSpan.Zero)
+				|| inferredYearRange.EndUtc != new DateTimeOffset(2026, 8, 27, 23, 59, 0, TimeSpan.Zero))
+			{
+				return 131;
+			}
+
+			const string maintenanceHtml =
+				"<html><title>Under Maintenance</title><script src='/_Incapsula_Resource'></script></html>";
+			if (!EventService.IsMaintenancePage(maintenanceHtml)
+				|| !EventService.IsMaintenancePage("", new Uri("https://www.naeu.playblackdesert.com/en-US/shutdown/closetime?shutDownType=0"))
+				|| !EventService.GetEmptyEventsReason(maintenanceHtml).Contains("maintenance", StringComparison.OrdinalIgnoreCase))
+			{
+				return 132;
+			}
+
+			DateTimeOffset eventTestNow = new(2026, 8, 13, 8, 0, 0, TimeSpan.Zero);
+			EventService.EventEntry cachedEventFixture = new(
+				"fixture",
+				"Fixture event",
+				"Adventure",
+				"https://example.test/event",
+				"",
+				"July 30, 2026 after maintenance - Aug 15, 2026 before maintenance",
+				null,
+				new DateTimeOffset(2026, 7, 30, 0, 0, 0, TimeSpan.Zero),
+				new DateTimeOffset(2026, 8, 15, 23, 59, 0, TimeSpan.Zero),
+				"4 days left",
+				96,
+				"active",
+				0.5,
+				"Jul 30 - Aug 15",
+				"Official BDO");
+			EventService.EventEntry? agedEvent = EventService.PrepareEventForDashboard(
+				cachedEventFixture,
+				"CACHED",
+				eventTestNow);
+			if (agedEvent?.RemainingHours != 64 || agedEvent.TimeLeftText != "3 days left")
+			{
+				return 133;
+			}
+
+			EventService.EventEntry sameDayMaintenanceEvent = cachedEventFixture with
+			{
+				Summary = "July 30, 2026 after maintenance - Aug 13, 2026 before maintenance",
+				EndUtc = new DateTimeOffset(2026, 8, 13, 23, 59, 0, TimeSpan.Zero)
+			};
+			if (EventService.PrepareEventForDashboard(sameDayMaintenanceEvent, "MAINTENANCE", eventTestNow) != null
+				|| EventService.PrepareEventForDashboard(sameDayMaintenanceEvent, "CACHED", eventTestNow) == null
+				|| EventService.PrepareEventForDashboard(
+					cachedEventFixture with { EndUtc = eventTestNow.AddMinutes(-1), Summary = "" },
+					"CACHED",
+					eventTestNow) != null)
+			{
+				return 134;
+			}
+
 			object cachedEvents = new { status = "CACHED", totalCount = 24 };
 			object liveEvents = new { status = "LIVE", totalCount = 24 };
+			object maintenanceEvents = new { status = "MAINTENANCE", totalCount = 19 };
 			object emptyEvents = new { status = "CACHED", totalCount = 0 };
 			if (!CalculatorForm.ShouldUseEventsBrowserFallback(cachedEvents, forceRefresh: true)
 				|| CalculatorForm.ShouldUseEventsBrowserFallback(cachedEvents, forceRefresh: false)
 				|| CalculatorForm.ShouldUseEventsBrowserFallback(liveEvents, forceRefresh: true)
+				|| CalculatorForm.ShouldUseEventsBrowserFallback(maintenanceEvents, forceRefresh: true)
 				|| !CalculatorForm.ShouldUseEventsBrowserFallback(emptyEvents, forceRefresh: false))
 			{
 				return 58;
+			}
+
+			DateTimeOffset cachedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+			EventService.EventEntry maintenanceCacheEntry = cachedEventFixture with
+			{
+				StartUtc = cachedAt.AddDays(-1),
+				EndUtc = cachedAt.AddDays(2),
+				Summary = "",
+				RemainingHours = 48
+			};
+			string maintenanceCacheJson = JsonSerializer.Serialize(
+				new
+				{
+					lastRefreshed = cachedAt,
+					sourceUrl = EventService.OfficialEventsUrl,
+					events = new[] { maintenanceCacheEntry },
+					error = (string?)null
+				},
+				bossScheduleJsonOptions);
+			await AtomicFile.WriteAllTextAsync(statePaths.EventsCachePath, maintenanceCacheJson, CancellationToken.None);
+			using (EventService maintenanceEventService = new(statePaths, logger))
+			{
+				JsonElement maintenanceDashboard = JsonSerializer.SerializeToElement(
+					await maintenanceEventService.RefreshFromRenderedHtmlAsync(maintenanceHtml, CancellationToken.None),
+					bossScheduleJsonOptions);
+				string cacheAfterMaintenance = await File.ReadAllTextAsync(statePaths.EventsCachePath);
+				if (maintenanceDashboard.GetProperty("status").GetString() != "MAINTENANCE"
+					|| cacheAfterMaintenance != maintenanceCacheJson)
+				{
+					return 135;
+				}
 			}
 
 			const string featuredOnlyHtml =

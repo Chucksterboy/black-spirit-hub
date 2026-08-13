@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -71,6 +72,49 @@ internal sealed class MarketDatabase
 		await using SqliteCommand versionCommand = connection.CreateCommand();
 		versionCommand.CommandText = $"PRAGMA user_version={CurrentSchemaVersion};";
 		await versionCommand.ExecuteNonQueryAsync(cancellationToken);
+	}
+
+	public async Task<MarketDatabaseHealthProbe> ProbeHealthAsync(CancellationToken cancellationToken)
+	{
+		await using SqliteConnection connection = await OpenAsync(cancellationToken);
+		await using SqliteCommand command = connection.CreateCommand();
+		command.CommandText = @"
+SELECT
+    (SELECT 1) AS probe,
+    (
+        SELECT COUNT(*)
+        FROM sqlite_schema
+        WHERE type='table'
+          AND name IN ('settings','tracked_items','snapshots','outfit_catalog','outfit_snapshots')
+    ) AS required_tables,
+    (SELECT COUNT(*) FROM tracked_items) + (SELECT COUNT(*) FROM outfit_catalog) AS indexed_items,
+    (
+        SELECT MAX(captured_utc)
+        FROM (
+            SELECT captured_utc FROM snapshots WHERE region='eu' AND source='local-snapshot'
+            UNION ALL
+            SELECT captured_utc FROM outfit_snapshots WHERE region='eu'
+        )
+    ) AS latest_sample;";
+		await using SqliteDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+		if (!await reader.ReadAsync(cancellationToken))
+		{
+			return new MarketDatabaseHealthProbe(false, 0, null);
+		}
+
+		bool readable = reader.GetInt32(0) == 1 && reader.GetInt32(1) == 5;
+		int indexedItems = readable ? reader.GetInt32(2) : 0;
+		DateTimeOffset? latest = null;
+		if (readable && !reader.IsDBNull(3)
+			&& DateTimeOffset.TryParse(
+				reader.GetString(3),
+				CultureInfo.InvariantCulture,
+				DateTimeStyles.RoundtripKind,
+				out DateTimeOffset parsed))
+		{
+			latest = parsed;
+		}
+		return new MarketDatabaseHealthProbe(readable, indexedItems, latest);
 	}
 
 	private static async Task<int> GetSchemaVersionAsync(SqliteConnection connection, CancellationToken cancellationToken)

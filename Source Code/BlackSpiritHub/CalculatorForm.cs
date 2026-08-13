@@ -131,6 +131,8 @@ internal sealed class CalculatorForm : Form
 	private readonly DehkiaFuelService dehkiaFuelService;
 
 	private readonly UpdateCheckerService updateCheckerService;
+	private readonly MarketDatabase marketDatabase;
+	private readonly AppHealthService appHealthService;
 
 	private MarketAnalyticsService? marketService;
 
@@ -190,6 +192,8 @@ internal sealed class CalculatorForm : Form
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
 		dehkiaFuelService = new DehkiaFuelService(paths, logger);
 		updateCheckerService = new UpdateCheckerService(logger);
+		marketDatabase = new MarketDatabase(paths.DatabasePath);
+		appHealthService = new AppHealthService(marketDatabase, AppContext.BaseDirectory, logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
 		Text = "Black Spirit Hub";
 		appIcon = LoadPackagedIcon("app-icon.ico", SystemInformation.IconSize)
@@ -837,10 +841,9 @@ internal sealed class CalculatorForm : Form
 		try
 		{
 			CancellationToken cancellationToken = lifetimeCancellation.Token;
-			MarketDatabase database = new MarketDatabase(paths.DatabasePath);
 			minimizeToTray = (await AppBehaviorSettings.LoadAsync(paths, cancellationToken)).MinimizeToTray;
 			BlackDesertMarketProvider provider = new BlackDesertMarketProvider(logger);
-			marketService = new MarketAnalyticsService(database, provider, logger);
+			marketService = new MarketAnalyticsService(marketDatabase, provider, logger);
 			marketService.DataChanged += delegate
 			{
 				PostEvent("dataChanged", null);
@@ -1406,6 +1409,7 @@ internal sealed class CalculatorForm : Form
 			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
 			"searchBdoPlayersGuilds" or "getBdoGuildProfile" => TimeSpan.FromSeconds(33),
 			"getDehkiaFuelData" => TimeSpan.FromSeconds(90),
+			"healthCheck" => TimeSpan.FromSeconds(6),
 			_ => TimeSpan.FromSeconds(45)
 		};
 	}
@@ -1432,6 +1436,12 @@ internal sealed class CalculatorForm : Form
 			{
 				state = "closing"
 			};
+		case "healthCheck":
+		{
+			ValidateHealthCheckPayload(payload);
+			MarketAnalyticsService service = await GetMarketServiceAsync(cancellationToken);
+			return await appHealthService.CheckAsync(service.GetRefreshHealth(), cancellationToken);
+		}
 		case "getDehkiaFuelData":
 		{
 			bool forceRefresh = payload.ValueKind == JsonValueKind.Object
@@ -1708,6 +1718,14 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
+	internal static void ValidateHealthCheckPayload(JsonElement payload)
+	{
+		if (payload.ValueKind != JsonValueKind.Object || payload.EnumerateObject().Any())
+		{
+			throw new InvalidOperationException("The health check does not accept arguments.");
+		}
+	}
+
 	internal static bool ReadMinimizeToTraySetting(JsonElement payload)
 	{
 		if (!payload.TryGetProperty("minimizeToTray", out JsonElement value)
@@ -1749,7 +1767,8 @@ internal sealed class CalculatorForm : Form
 
 	internal static bool ShouldUseEventsBrowserFallback(object dashboard, bool forceRefresh)
 	{
-		if (EventDashboardIsLive(dashboard))
+		if (EventDashboardHasStatus(dashboard, "LIVE")
+			|| EventDashboardHasStatus(dashboard, "MAINTENANCE"))
 			return false;
 
 		// Initialization should paint a usable cache immediately. A user-requested
@@ -1758,14 +1777,14 @@ internal sealed class CalculatorForm : Form
 		return forceRefresh || !EventDashboardHasEvents(dashboard);
 	}
 
-	private static bool EventDashboardIsLive(object dashboard)
+	private static bool EventDashboardHasStatus(object dashboard, string expectedStatus)
 	{
 		try
 		{
 			JsonElement json = JsonSerializer.SerializeToElement(dashboard, JsonOptions);
 			return json.TryGetProperty("status", out JsonElement status)
 				&& status.ValueKind == JsonValueKind.String
-				&& string.Equals(status.GetString(), "LIVE", StringComparison.OrdinalIgnoreCase);
+				&& string.Equals(status.GetString(), expectedStatus, StringComparison.OrdinalIgnoreCase);
 		}
 		catch
 		{

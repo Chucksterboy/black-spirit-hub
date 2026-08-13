@@ -18,13 +18,13 @@ internal sealed class EventService : IDisposable
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
 	private static readonly Uri SiteRoot = new("https://www.naeu.playblackdesert.com");
 	private const string EventMonthPattern = @"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
-	private const string EventDatePattern = EventMonthPattern + @"\.?\s+\d{1,2},\s+20\d{2}(?:\s+\([^)]+\))?(?:\s+(?:(?:\d{1,2}:\d{2}\s*(?:\(\s*)?UTC(?:\s*\))?)|(?:(?:after|before)\s+maintenance)))?";
+	private const string EventDatePattern = EventMonthPattern + @"\.?\s+\d{1,2}(?:,\s+20\d{2})?(?:\s+\([^)]+\))?(?:\s+(?:(?:\d{1,2}:\d{2}\s*(?:\(\s*)?UTC(?:\s*\))?)|(?:(?:after|before)\s+maintenance)))?";
 	private static readonly Regex EventRangeRegex = new(
 		$@"(?<start>{EventDatePattern})\s*(?:-|\u2013|\u2014)\s*(?<end>{EventDatePattern})",
 		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
 		TimeSpan.FromSeconds(2));
 	private static readonly Regex EventDateRegex = new(
-		$@"^(?<month>{EventMonthPattern})\.?\s+(?<day>\d{{1,2}}),\s+(?<year>20\d{{2}})(?:\s+\([^)]+\))?(?:\s+(?:(?<hour>\d{{1,2}}):(?<minute>\d{{2}})\s*(?:\(\s*)?UTC(?:\s*\))?|(?<maintenance>after|before)\s+maintenance))?$",
+		$@"^(?<month>{EventMonthPattern})\.?\s+(?<day>\d{{1,2}})(?:,\s+(?<year>20\d{{2}}))?(?:\s+\([^)]+\))?(?:\s+(?:(?<hour>\d{{1,2}}):(?<minute>\d{{2}})\s*(?:\(\s*)?UTC(?:\s*\))?|(?<maintenance>after|before)\s+maintenance))?$",
 		RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
 		TimeSpan.FromSeconds(2));
 	private readonly AppPaths paths;
@@ -78,17 +78,20 @@ internal sealed class EventService : IDisposable
 		{
 			throw;
 		}
+		catch (EventsMaintenanceException)
+		{
+			logger.Info("Events refresh paused because the official site is under maintenance.");
+			EventCache cache = await ReadBestAvailableCacheAsync(attemptTime, cancellationToken);
+			return BuildDashboard(
+				cache,
+				"MAINTENANCE",
+				BuildMaintenanceMessage(cache),
+				attemptTime);
+		}
 		catch (Exception ex)
 		{
 			logger.Warn("Events refresh failed reason: " + ex.Message);
-			EventCache cache = await ReadJsonAsync<EventCache>(paths.EventsCachePath, cancellationToken)
-				?? new EventCache(attemptTime, OfficialEventsUrl, [], "No official events could be loaded yet.");
-			if (!HasEvents(cache))
-			{
-				EventCache? backup = await ReadJsonAsync<EventCache>(paths.EventsBackupCachePath, cancellationToken);
-				if (HasEvents(backup))
-					cache = backup!;
-			}
+			EventCache cache = await ReadBestAvailableCacheAsync(attemptTime, cancellationToken);
 			return BuildDashboard(cache, "CACHED", "Could not refresh official events. Showing cached data. " + ex.Message, attemptTime);
 		}
 	}
@@ -101,6 +104,17 @@ internal sealed class EventService : IDisposable
 			EventCache? backup = await ReadJsonAsync<EventCache>(paths.EventsBackupCachePath, cancellationToken);
 			if (HasEvents(backup))
 				previousCache = backup;
+		}
+
+		if (IsMaintenancePage(html))
+		{
+			EventCache cache = previousCache
+				?? new EventCache(DateTimeOffset.UtcNow, OfficialEventsUrl, [], "No official events could be loaded yet.");
+			return BuildDashboard(
+				cache,
+				"MAINTENANCE",
+				BuildMaintenanceMessage(cache),
+				DateTimeOffset.UtcNow);
 		}
 
 		return await BuildAndCacheDashboardAsync(
@@ -118,6 +132,9 @@ internal sealed class EventService : IDisposable
 		CancellationToken cancellationToken,
 		IReadOnlyList<EventEntry>? previousEvents = null)
 	{
+		if (IsMaintenancePage(html))
+			throw new EventsMaintenanceException();
+
 		List<EventEntry> events = ParseList(html);
 		if (events.Count == 0)
 			throw new InvalidDataException(GetEmptyEventsReason(html));
@@ -210,26 +227,53 @@ internal sealed class EventService : IDisposable
 		using HttpRequestMessage request = new(HttpMethod.Get, url);
 		using HttpResponseMessage response = await http.SendAsync(request, cancellationToken);
 		string html = await response.Content.ReadAsStringAsync(cancellationToken);
+		if (IsMaintenancePage(html, response.RequestMessage?.RequestUri))
+			throw new EventsMaintenanceException();
 		if (!response.IsSuccessStatusCode)
 			throw new InvalidDataException($"Official events source returned HTTP {(int)response.StatusCode}.");
 		return html;
 	}
 
-	private static string GetEmptyEventsReason(string html)
+	internal static bool IsMaintenancePage(string html, Uri? finalUri = null)
 	{
+		if (finalUri?.AbsolutePath.Contains("/shutdown/", StringComparison.OrdinalIgnoreCase) == true)
+			return true;
+
+		return html.Contains("Under Maintenance", StringComparison.OrdinalIgnoreCase)
+			|| html.Contains("Website Maintenance", StringComparison.OrdinalIgnoreCase)
+			|| html.Contains("shutdown/closetime", StringComparison.OrdinalIgnoreCase);
+	}
+
+	internal static string GetEmptyEventsReason(string html)
+	{
+		if (IsMaintenancePage(html))
+			return "The official BDO events page is currently under maintenance.";
+
 		if (html.Contains("_Incapsula_Resource", StringComparison.OrdinalIgnoreCase)
 			|| html.Contains("Incapsula incident", StringComparison.OrdinalIgnoreCase)
 			|| html.Contains("Request unsuccessful", StringComparison.OrdinalIgnoreCase))
 			return "The official BDO events page blocked the app's background request.";
 
-		if (html.Contains("Under Maintenance", StringComparison.OrdinalIgnoreCase)
-			|| html.Contains("Website Maintenance", StringComparison.OrdinalIgnoreCase))
-			return "The official BDO events page is currently under maintenance.";
-
 		return "The official BDO events page loaded, but no event cards could be parsed.";
 	}
 
 	private static bool HasEvents(EventCache? cache) => cache?.Events is { Count: > 0 };
+
+	private static string BuildMaintenanceMessage(EventCache cache) => HasEvents(cache)
+		? $"Official site under maintenance — showing saved Events data from {cache.LastRefreshed.ToLocalTime():HH:mm}."
+		: "Official site under maintenance. No saved Events data is available yet.";
+
+	private async Task<EventCache> ReadBestAvailableCacheAsync(DateTimeOffset fallbackTime, CancellationToken cancellationToken)
+	{
+		EventCache? cache = await ReadJsonAsync<EventCache>(paths.EventsCachePath, cancellationToken);
+		if (HasEvents(cache))
+			return cache!;
+
+		EventCache? backup = await ReadJsonAsync<EventCache>(paths.EventsBackupCachePath, cancellationToken);
+		return HasEvents(backup)
+			? backup!
+			: cache ?? new EventCache(fallbackTime, OfficialEventsUrl, [], "No official events could be loaded yet.");
+	}
 
 	private async Task<EventEntry> EnrichAsync(EventEntry entry, CancellationToken cancellationToken)
 	{
@@ -421,9 +465,27 @@ internal sealed class EventService : IDisposable
 		List<EventDateRange> ranges = [];
 		foreach (Match match in EventRangeRegex.Matches(text))
 		{
-			if (!TryParseEventDate(match.Groups["start"].Value, isEnd: false, out DateTimeOffset start)
-				|| !TryParseEventDate(match.Groups["end"].Value, isEnd: true, out DateTimeOffset end)
-				|| end < start)
+			string startValue = match.Groups["start"].Value;
+			string endValue = match.Groups["end"].Value;
+			DateTimeOffset start = default;
+			DateTimeOffset end = default;
+			bool endParsed = TryParseEventDate(endValue, isEnd: true, inferredYear: null, out end);
+			bool startParsed = endParsed
+				&& TryParseEventDate(startValue, isEnd: false, inferredYear: end.Year, out start);
+
+			if (!endParsed)
+			{
+				startParsed = TryParseEventDate(startValue, isEnd: false, inferredYear: null, out start);
+				endParsed = startParsed
+					&& TryParseEventDate(endValue, isEnd: true, inferredYear: start.Year, out end);
+			}
+
+			// A first boundary without a year normally inherits the explicit year from
+			// the end boundary. Account for the uncommon Dec-to-Jan range as well.
+			if (startParsed && endParsed && end < start && !EventDateHasYear(startValue))
+				startParsed = TryParseEventDate(startValue, isEnd: false, inferredYear: end.Year - 1, out start);
+
+			if (!startParsed || !endParsed || end < start)
 			{
 				continue;
 			}
@@ -441,13 +503,33 @@ internal sealed class EventService : IDisposable
 			.First();
 	}
 
-	private static bool TryParseEventDate(string value, bool isEnd, out DateTimeOffset parsed)
+	private static bool EventDateHasYear(string value) => Regex.IsMatch(
+		value,
+		@",\s+20\d{2}\b",
+		RegexOptions.CultureInvariant,
+		TimeSpan.FromSeconds(1));
+
+	private static bool TryParseEventDate(string value, bool isEnd, int? inferredYear, out DateTimeOffset parsed)
 	{
 		parsed = default;
 		Match match = EventDateRegex.Match(Clean(value));
 		if (!match.Success
-			|| !int.TryParse(match.Groups["day"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int day)
-			|| !int.TryParse(match.Groups["year"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int year))
+			|| !int.TryParse(match.Groups["day"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int day))
+		{
+			return false;
+		}
+
+		int year;
+		if (match.Groups["year"].Success)
+		{
+			if (!int.TryParse(match.Groups["year"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out year))
+				return false;
+		}
+		else if (inferredYear.HasValue)
+		{
+			year = inferredYear.Value;
+		}
+		else
 		{
 			return false;
 		}
@@ -505,9 +587,14 @@ internal sealed class EventService : IDisposable
 
 	private static object BuildDashboard(EventCache cache, string status, string? message, DateTimeOffset? lastAttempt = null)
 	{
-		bool isStale = DateTimeOffset.UtcNow - cache.LastRefreshed > TimeSpan.FromHours(3);
-		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((DateTimeOffset.UtcNow - cache.LastRefreshed).TotalMinutes));
-		var events = cache.Events.Select(ApplyExactEventRange).Select(x => new
+		DateTimeOffset now = DateTimeOffset.UtcNow;
+		bool maintenance = string.Equals(status, "MAINTENANCE", StringComparison.OrdinalIgnoreCase);
+		bool isStale = now - cache.LastRefreshed > TimeSpan.FromHours(3);
+		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((now - cache.LastRefreshed).TotalMinutes));
+		var events = cache.Events
+			.Select(entry => PrepareEventForDashboard(entry, maintenance ? "MAINTENANCE" : status, now))
+			.OfType<EventEntry>()
+			.Select(x => new
 		{
 			x.Id,
 			x.Title,
@@ -541,6 +628,49 @@ internal sealed class EventService : IDisposable
 			totalCount = events.Length
 		};
 	}
+
+	internal static EventEntry? PrepareEventForDashboard(EventEntry entry, string status, DateTimeOffset now)
+	{
+		EventEntry current = ApplyCurrentTiming(ApplyExactEventRange(entry), now);
+		if (EventHasEnded(current, now))
+			return null;
+		if (string.Equals(status, "MAINTENANCE", StringComparison.OrdinalIgnoreCase)
+			&& EndsBeforeMaintenanceToday(current, now))
+		{
+			return null;
+		}
+		return current;
+	}
+
+	private static EventEntry ApplyCurrentTiming(EventEntry entry, DateTimeOffset now)
+	{
+		if (!entry.EndUtc.HasValue)
+			return entry;
+
+		double remainingTotalHours = (entry.EndUtc.Value - now).TotalHours;
+		int remainingHours = Math.Max(0, (int)Math.Ceiling(remainingTotalHours));
+		string timeLeft = remainingHours >= 24
+			? $"{Math.Max(1, (int)Math.Ceiling(remainingTotalHours / 24d))} days left"
+			: $"{remainingHours} hours left";
+
+		return entry with
+		{
+			TimeLeftText = timeLeft,
+			RemainingHours = remainingHours,
+			Status = remainingHours <= 72 ? "endingSoon" : "active",
+			Progress = EstimateProgress(entry.StartUtc, entry.EndUtc, remainingHours),
+			DateRangeText = FormatDateRange(entry.StartUtc, entry.EndUtc, timeLeft)
+		};
+	}
+
+	private static bool EventHasEnded(EventEntry entry, DateTimeOffset now) =>
+		entry.EndUtc.HasValue
+		&& entry.EndUtc.Value <= now;
+
+	private static bool EndsBeforeMaintenanceToday(EventEntry entry, DateTimeOffset now) =>
+		entry.EndUtc.HasValue
+		&& entry.EndUtc.Value.UtcDateTime.Date == now.UtcDateTime.Date
+		&& entry.Summary.Contains("before maintenance", StringComparison.OrdinalIgnoreCase);
 
 	private static EventEntry ApplyExactEventRange(EventEntry entry)
 	{
@@ -671,6 +801,14 @@ internal sealed class EventService : IDisposable
 	}
 
 	public void Dispose() => http.Dispose();
+
+	private sealed class EventsMaintenanceException : Exception
+	{
+		public EventsMaintenanceException()
+			: base("The official BDO events page is currently under maintenance.")
+		{
+		}
+	}
 
 	private sealed record EventCache(DateTimeOffset LastRefreshed, string SourceUrl, IReadOnlyList<EventEntry> Events, string? Error);
 

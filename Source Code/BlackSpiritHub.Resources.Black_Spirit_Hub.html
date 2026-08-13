@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.42">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.43">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -561,10 +561,17 @@
       <div class="eventsStatus"><i></i><span id="eventsStatusText">Official events loading...</span><button id="eventsRefresh" class="eventsRefresh" type="button">Refresh Events</button></div>
     </header>
     <section class="eventsLayout">
-      <section class="eventsTimeline" aria-label="Official event timeline">
+      <section id="eventsTimelineScroller" class="eventsTimeline" aria-label="Official event timeline. Drag horizontally to browse dates." tabindex="0">
         <div class="eventsTimelineTop"><strong id="eventsTimelineTitle">Official BDO Events</strong><span id="eventsTimelineCount">0 active</span></div>
         <div id="eventsTimelineDays" class="eventsTimelineDays"></div>
         <div id="eventsTimelineBars" class="eventsTimelineBars"></div>
+      </section>
+      <section id="eventsOngoing" class="eventsOngoing" aria-labelledby="eventsOngoingTitle" hidden>
+        <header class="eventsOngoingHead">
+          <div><span>Official events</span><h2 id="eventsOngoingTitle">Ongoing — no fixed end date</h2></div>
+          <strong id="eventsOngoingCount">0</strong>
+        </header>
+        <div id="eventsOngoingList" class="eventsOngoingList"></div>
       </section>
       <aside id="eventsDetail" class="eventsDetail">
         <div class="eventsEmpty">Select an event to see its details.</div>
@@ -1146,14 +1153,14 @@
   </div>
 </section>
 
-<footer class="appStatusBar">
-  <span class="statusLeft"><span class="statusReady">Ready</span><button class="supportHeart" type="button" data-open-url="https://ko-fi.com/chucksterboy" aria-label="Support Me" title="Support Me" data-tooltip="Support Me"><svg class="supportHeartGlyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg><span class="supportHeartLabel">Support Me</span></button></span>
-  <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
+<footer class="appStatusBar" aria-label="Black Spirit Hub status">
+  <span class="statusLeft"><button class="supportHeart" type="button" data-open-url="https://ko-fi.com/chucksterboy" aria-label="Support Me" title="Support Me" data-tooltip="Support Me"><svg class="supportHeartGlyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg><span class="supportHeartLabel">Support Me</span></button></span>
+  <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><button id="appHealthMonitor" class="bsh-status-health bsh-status-health--checking" type="button" title="Testing local saves and Black Spirit Hub services." aria-busy="true"><span class="bsh-status-ecg" aria-hidden="true"><svg viewBox="0 0 46 28" role="presentation"><path class="bsh-status-ecg-baseline" d="M1 14H45" /><path class="bsh-status-ecg-trace" d="M1 14H10L13 11L16 22L21 4L25 18L29 12L33 14H45" /></svg></span><span class="bsh-status-health-copy" role="status" aria-live="polite"><small>Health</small><strong>Checking core systems...</strong></span></button><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.42"></script>
-<script src="Assets/GrindTracker/grind-spots-inner-edania.js?v=v0.9.42"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.42"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.43"></script>
+<script src="Assets/GrindTracker/grind-spots-inner-edania.js?v=v0.9.43"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.43"></script>
 
 </body>
 </html>
