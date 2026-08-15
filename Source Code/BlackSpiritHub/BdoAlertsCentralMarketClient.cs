@@ -208,12 +208,11 @@ internal sealed class BdoAlertsCentralMarketClient : IDisposable
 				null,
 				"bdoalerts-price-history",
 				captured);
-			if (prices.TryGetValue(itemId, out GrindMarketPrice? existing)
-				&& existing != mapped)
+			if (!prices.TryGetValue(itemId, out GrindMarketPrice? existing)
+				|| PreferPriceHistoryRow(mapped, existing))
 			{
-				throw new InvalidDataException("BDO Alerts price history returned conflicting duplicate items.");
+				prices[itemId] = mapped;
 			}
-			prices[itemId] = mapped;
 		}
 
 		DateTimeOffset snapshotTime = prices.Count == 0
@@ -223,6 +222,25 @@ internal sealed class BdoAlertsCentralMarketClient : IDisposable
 			snapshotTime,
 			prices.Values.OrderBy(price => price.ItemId).ToArray(),
 			"BDO Alerts Central Market");
+	}
+
+	private static bool PreferPriceHistoryRow(
+		GrindMarketPrice candidate,
+		GrindMarketPrice existing)
+	{
+		if (candidate.Enhancement == 0 && existing.Enhancement != 0)
+		{
+			return true;
+		}
+		if (candidate.Enhancement != 0 && existing.Enhancement == 0)
+		{
+			return false;
+		}
+		if (candidate.Enhancement != existing.Enhancement)
+		{
+			return candidate.Enhancement < existing.Enhancement;
+		}
+		return candidate.CapturedUtc > existing.CapturedUtc;
 	}
 
 	internal static BdoAlertsMarketSnapshot ParsePearlShop(

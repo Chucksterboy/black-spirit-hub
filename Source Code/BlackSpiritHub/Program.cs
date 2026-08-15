@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
@@ -2710,6 +2711,66 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 				}
 			}
 
+			using (EdaniaMarketFallbackStubHandler liveEdaniaFallback = new(11898, 5_150_000_000))
+			using (BdoAlertsMarketStubHandler unavailableBdo = new(
+				BdoAlertsMarketStubMode.Forbidden,
+				fakeApiKey))
+			using (GrindMarketPriceProvider provider = new(
+				marketLogger,
+				liveEdaniaFallback,
+				unavailableBdo,
+				fakeApiKey))
+			{
+				GrindMarketPriceResponse response = await provider.GetPricesAsync(
+					[11898],
+					"eu",
+					CancellationToken.None);
+				GrindMarketPrice? price = response.Prices.SingleOrDefault();
+				if (price is null
+					|| price.ItemId != 11898
+					|| price.Enhancement != 0
+					|| price.Price != 5_150_000_000
+					|| price.Source != "pearl-abyss-sublist-live"
+					|| response.Missing.Count != 0
+					|| !response.Provider.Contains("Pearl Abyss live fallback", StringComparison.Ordinal)
+					|| liveEdaniaFallback.ArshaRequestCount != 2
+					|| liveEdaniaFallback.PearlAbyssRequestCount != 1
+					|| !liveEdaniaFallback.ExactPearlAbyssRequestObserved)
+				{
+					return 241;
+				}
+			}
+
+			using (JsonDocument duplicateHistory = JsonDocument.Parse(
+				"""
+				{
+				  "success": true,
+				  "region": "eu",
+				  "total_items": 3,
+				  "items": [
+				    {"item_id": 11898, "sub_key": 1, "item_name": "Apeiron Earring", "current_price": 35000000000, "current_stock": 0, "last_updated": "2026-08-15T11:00:00Z"},
+				    {"item_id": 11898, "sub_key": 0, "item_name": "Apeiron Earring", "current_price": 5150000000, "current_stock": 0, "last_updated": "2026-08-15T10:00:00Z"},
+				    {"item_id": 11898, "sub_key": 0, "item_name": "Apeiron Earring", "current_price": 5200000000, "current_stock": 0, "last_updated": "2026-08-15T12:00:00Z"}
+				  ]
+				}
+				"""))
+			{
+				BdoAlertsMarketSnapshot parsedHistory = BdoAlertsCentralMarketClient.ParsePriceHistory(
+					duplicateHistory.RootElement,
+					[11898],
+					"eu",
+					DateTimeOffset.UnixEpoch);
+				GrindMarketPrice selected = parsedHistory.Prices.Single();
+				if (selected.Enhancement != 0
+					|| selected.Price != 5_200_000_000
+					|| selected.CapturedUtc != DateTimeOffset.Parse(
+						"2026-08-15T12:00:00Z",
+						CultureInfo.InvariantCulture))
+				{
+					return 242;
+				}
+			}
+
 			Uri trustedPriceHistory = new(
 				"https://api.bdoalerts.net/api/market/price-history?item_ids=101,102&region=eu&days=1");
 			using (HttpRequestMessage trustedRequest = new(HttpMethod.Get, trustedPriceHistory))
@@ -3078,6 +3139,81 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 				.Select(value => long.TryParse(value, out long id) ? id : 0)
 				.Where(id => id > 0)
 				.ToArray();
+		}
+	}
+
+	private sealed class EdaniaMarketFallbackStubHandler : HttpMessageHandler
+	{
+		private readonly long itemId;
+		private readonly long basePrice;
+		private int arshaRequestCount;
+		private int pearlAbyssRequestCount;
+
+		public EdaniaMarketFallbackStubHandler(long itemId, long basePrice)
+		{
+			this.itemId = itemId;
+			this.basePrice = basePrice;
+		}
+
+		public int ArshaRequestCount => Volatile.Read(ref arshaRequestCount);
+
+		public int PearlAbyssRequestCount => Volatile.Read(ref pearlAbyssRequestCount);
+
+		public bool ExactPearlAbyssRequestObserved { get; private set; }
+
+		protected override async Task<HttpResponseMessage> SendAsync(
+			HttpRequestMessage request,
+			CancellationToken cancellationToken)
+		{
+			string host = request.RequestUri?.Host ?? string.Empty;
+			if (host.Equals("api.arsha.io", StringComparison.OrdinalIgnoreCase))
+			{
+				Interlocked.Increment(ref arshaRequestCount);
+				return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+				{
+					ReasonPhrase = "Internal Server Error",
+					Content = new StringContent(
+						"""{"status":500,"message":"One or more requests returned invalid data.","code":103}""",
+						Encoding.UTF8,
+						"application/json")
+				};
+			}
+
+			if (host.Equals("eu-trade.naeu.playblackdesert.com", StringComparison.OrdinalIgnoreCase))
+			{
+				Interlocked.Increment(ref pearlAbyssRequestCount);
+				string body = request.Content is null
+					? string.Empty
+					: await request.Content.ReadAsStringAsync(cancellationToken);
+				ExactPearlAbyssRequestObserved = request.Method == HttpMethod.Post
+					&& request.RequestUri?.Scheme == Uri.UriSchemeHttps
+					&& request.RequestUri.AbsolutePath.Equals(
+						"/Trademarket/GetWorldMarketSubList",
+						StringComparison.Ordinal)
+					&& body == $"keyType=0&mainKey={itemId.ToString(CultureInfo.InvariantCulture)}"
+					&& request.Content?.Headers.ContentType?.MediaType == "application/x-www-form-urlencoded";
+				string row = string.Join(
+					'-',
+					itemId.ToString(CultureInfo.InvariantCulture),
+					"0",
+					"0",
+					basePrice.ToString(CultureInfo.InvariantCulture),
+					"0",
+					"77",
+					"0",
+					"0",
+					basePrice.ToString(CultureInfo.InvariantCulture),
+					"1786781353|");
+				return new HttpResponseMessage(HttpStatusCode.OK)
+				{
+					Content = new StringContent(
+						JsonSerializer.Serialize(new { resultCode = 0, resultMsg = row }),
+						Encoding.UTF8,
+						"application/json")
+				};
+			}
+
+			return new HttpResponseMessage(HttpStatusCode.NotFound);
 		}
 	}
 

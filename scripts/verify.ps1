@@ -20,6 +20,9 @@ $cssPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.css"
 $scriptPath = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.js"
 $grindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots.js"
 $innerEdaniaGrindDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots-inner-edania.js"
+$grindCorrectionsDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-spots-corrections.js"
+$grindGuidesDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-guides.js"
+$grindGuidesCurrentDataPath = Join-Path $sourceRoot "Assets\GrindTracker\grind-guides-current.js"
 $recipeBookRoot = Join-Path $sourceRoot "Assets\RecipeBook"
 $recipeBookDataPath = Join-Path $recipeBookRoot "recipes.json"
 $recipeBookManifestPath = Join-Path $recipeBookRoot "manifest.json"
@@ -42,6 +45,7 @@ $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
+$grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
@@ -65,6 +69,9 @@ foreach ($path in @(
 	$scriptPath,
 	$grindDataPath,
 	$innerEdaniaGrindDataPath,
+	$grindCorrectionsDataPath,
+	$grindGuidesDataPath,
+	$grindGuidesCurrentDataPath,
 	$alarmPath,
 	$recipeBookDataPath,
 	$recipeBookManifestPath,
@@ -616,7 +623,7 @@ if ($script -notmatch '(?s)function initializeGrindTracker\(\).*?grindRender\(\)
 	$script -notmatch '\(spot\.drops\|\|\[\]\)\.map\(drop=>.*?grindDropPriceLine\(drop\)') {
 	throw "The Grind Zones picker-to-preview flow or preserved market-price pipeline is incomplete."
 }
-if ($script -notmatch 'const GRIND_PRICE_CACHE_VERSION=15;' -or
+if ($script -notmatch 'const GRIND_PRICE_CACHE_VERSION=16;' -or
 	$script -notmatch 'cache\[normalized\]\.updatedAt="";cache\[normalized\]\.attemptedAt="";' -or
 	$script -notmatch 'const refreshedIds=new Set\(\);' -or
 	$script -notmatch 'isCompleteCatalogRefresh&&ids\.every\(id=>refreshedIds\.has\(id\)\|\|Object\.prototype\.hasOwnProperty\.call\(GRIND_REFERENCE_FALLBACK_ITEM_PRICES,String\(id\)\)\)\)target\.updatedAt=' -or
@@ -935,12 +942,12 @@ if ($gavinya.drops[0].isTrash -ne $true -or
 }
 
 $expectedInnerEdaniaSpots = @(
-	@("Aphrodon Temple", 917, 400, 470, "1", "inner-edania-abundance-imbued-branch", "Abundance-imbued Branch", 155127, 14),
-	@("Emesia Fortress", 918, 405, 485, "1", "inner-edania-black-crystal-fragment", "Black Crystal Fragment", 160539, 16),
-	@("Magaia Temple", 919, 410, 490, "1", "inner-edania-elion-follower-helmet", "Elion Follower's Helmet", 181042, 17),
-	@("Aresion Temple", 920, 415, 495, "1", "inner-edania-scorched-belt-ornament", "Scorched Belt Ornament", 182049, 24),
-	@("Scales of Judgment", 921, 415, 500, "3", "inner-edania-elion-follower-mark", "Elion Follower's Mark", 186458, 24),
-	@("Event Horizon", 922, 420, 505, "1", "inner-edania-broken-void-glove", "Broken Void Glove", 196501, 27)
+	@("Aphrodon Temple", 917, 400, 470, "1", "980127", "Branch of Abundance", 155127, 14, "Assets/GrindTracker/icons-clean/item-980127.png"),
+	@("Hermesia Inner Castle", 918, 405, 485, "1", "980128", "Black Crystal Fragment", 160539, 16, "Assets/GrindTracker/icons-clean/item-980128.png"),
+	@("Magaia Temple", 919, 410, 490, "1", "980129", "Elion Follower's Helmet", 181042, 17, "Assets/GrindTracker/icons-clean/item-980129.png"),
+	@("Aresion Temple", 920, 415, 495, "1", "980131", "Scorched Belt Ornament", 182049, 24, "Assets/GrindTracker/icons-clean/item-980131.png"),
+	@("Scales of Judgment", 921, 415, 500, "3", "980130", "Elion Follower's Mark", 186458, 24, "Assets/GrindTracker/icons-clean/item-980130.png"),
+	@("Event Horizon", 922, 420, 505, "1", "980132", "Broken Gloves of the Void", 196501, 27, "Assets/GrindTracker/icons-clean/item-980132.png")
 )
 foreach ($expectedSpot in $expectedInnerEdaniaSpots) {
 	$zoneName = [string]$expectedSpot[0]
@@ -957,11 +964,14 @@ foreach ($expectedSpot in $expectedInnerEdaniaSpots) {
 		[string]$zone.type -ne "edania" -or
 		[int]$zone.spotType -ne 111 -or
 		[string]$zone.trashId -ne [string]$expectedSpot[5] -or
-		[string]$zone.primaryTrash -ne [string]$expectedSpot[6]) {
+		[string]$zone.primaryTrash -ne [string]$expectedSpot[6] -or
+		[string]$zone.icon -ne [string]$expectedSpot[9]) {
 		throw "$zoneName metadata is missing or incorrect."
 	}
 	$primaryDrop = @($zone.drops | Where-Object { [string]$_.id -eq [string]$expectedSpot[5] })
-	if ($primaryDrop.Count -ne 1 -or $primaryDrop[0].isTrash -ne $true) {
+	if ($primaryDrop.Count -ne 1 -or
+		$primaryDrop[0].isTrash -ne $true -or
+		[string]$primaryDrop[0].icon -ne [string]$expectedSpot[9]) {
 		throw "$zoneName must contain exactly one correctly flagged primary trash drop."
 	}
 	if ($zone.drops.Count -ne [int]$expectedSpot[8]) {
@@ -971,6 +981,70 @@ foreach ($expectedSpot in $expectedInnerEdaniaSpots) {
 	if ($script.IndexOf($priceToken, [StringComparison]::Ordinal) -lt 0) {
 		throw "$zoneName is missing its official trash-loot vendor price."
 	}
+}
+$innerEdaniaDrops = @($innerEdaniaSpots | ForEach-Object { @($_.drops) })
+$nonNumericInnerEdaniaDropIds = @($innerEdaniaDrops | Where-Object { [string]$_.id -notmatch '^\d+$' })
+if ($nonNumericInnerEdaniaDropIds.Count -ne 0) {
+	throw "Inner Edania Part II still contains provisional nonnumeric item IDs: $($nonNumericInnerEdaniaDropIds.id -join ', ')"
+}
+$expectedInnerEdaniaLocalizedNames = @{
+	"821430" = "WON Origin Shard"
+	"821431" = "BON Origin Shard"
+	"821432" = "JIN Origin Shard"
+	"821433" = "HAN Origin Shard"
+	"821461" = "Embers of Ynix - Helmet"
+	"821462" = "Embers of Ynix - Armor"
+	"821463" = "Embers of Ynix - Gloves"
+	"821464" = "Embers of Ynix - Shoes"
+	"821421" = "Twilight of the End - Necklace"
+	"821422" = "Twilight of the End - Earring"
+	"821423" = "Twilight of the End - Ring"
+	"821424" = "Twilight of the End - Belt"
+	"980139" = "Broken Vestige of Goldroot"
+	"980140" = "Broken Vestige of Ebonmere"
+	"980141" = "Broken Vestige of Everlight"
+	"980142" = "Broken Vestige of Crimsonflare"
+	"980143" = "Broken Vestige of Voidreach"
+	"821471" = "Fusion Shard"
+}
+foreach ($entry in $expectedInnerEdaniaLocalizedNames.GetEnumerator()) {
+	$drops = @($innerEdaniaDrops | Where-Object { [string]$_.id -eq [string]$entry.Key })
+	if ($drops.Count -eq 0 -or @($drops | Where-Object { [string]$_.name -ne [string]$entry.Value }).Count -ne 0) {
+		throw "Inner Edania item $($entry.Key) is missing or does not use current NA/EU name '$($entry.Value)'."
+	}
+}
+$expectedInnerEdaniaVendorPrices = @{
+	"15294" = 1200000000L; "15295" = 1500000000L; "15296" = 1700000000L; "15297" = 2000000000L
+	"821430" = 12000000L; "821431" = 15000000L; "821432" = 17000000L; "821433" = 20000000L
+	"980127" = 155127L; "980128" = 160539L; "980129" = 181042L; "980130" = 186458L
+	"980131" = 182049L; "980132" = 196501L
+	"980139" = 3000000000L; "980140" = 3100000000L; "980141" = 3200000000L
+	"980142" = 3300000000L; "980143" = 4000000000L
+}
+foreach ($entry in $expectedInnerEdaniaVendorPrices.GetEnumerator()) {
+	$priceToken = '"' + [string]$entry.Key + '":' + [string]$entry.Value
+	if ($script.IndexOf($priceToken, [StringComparison]::Ordinal) -lt 0) {
+		throw "Inner Edania item $($entry.Key) is missing its current-client vendor value."
+	}
+}
+$expectedInnerEdaniaMarketIds = @("1178", "11733", "11898", "12144", "12298", "761803", "767343", "767344", "767353", "821318", "821419", "821420", "821421", "821422", "821423", "821424", "821459", "821460", "821471")
+$expectedInnerEdaniaUnmarketableIds = @("821461", "821462", "821463", "821464")
+$classifiedInnerEdaniaIds = @(
+	@($expectedInnerEdaniaVendorPrices.Keys) +
+	$expectedInnerEdaniaMarketIds +
+	$expectedInnerEdaniaUnmarketableIds
+) | Sort-Object -Unique
+$actualInnerEdaniaIds = @($innerEdaniaDrops | ForEach-Object { [string]$_.id } | Sort-Object -Unique)
+if ($classifiedInnerEdaniaIds.Count -ne 42 -or
+	$actualInnerEdaniaIds.Count -ne 42 -or
+	(Compare-Object $classifiedInnerEdaniaIds $actualInnerEdaniaIds)) {
+	throw "Every Inner Edania Part II reward must be explicitly classified as market, vendor-value, or unmarketable."
+}
+if ($script -notmatch 'const GRIND_PRICE_CACHE_VERSION=16;' -or
+	$script -notmatch 'GRIND_UNMARKETABLE_ITEM_IDS=new Set\(\["821461","821462","821463","821464"\]\)' -or
+	$script -notmatch 'Not listed on Central Market' -or
+	$script -match 'Abundance-imbued Branch|Emesia Fortress|Twilight of the Apocalypse|Inix''s Spark|Broken (Golden|Ink|White Night|Crimson|Void) Trace|Broken Void Glove|Fusion Crystal') {
+	throw "Inner Edania cache refresh, non-market labeling, or current localization is incomplete."
 }
 if ($html -notmatch 'Assets/GrindTracker/grind-spots-inner-edania\.js\?v=[^"]+') {
 	throw "The Inner Edania catalog cache key is missing."
@@ -988,6 +1062,33 @@ foreach ($iconFile in $officialInnerEdaniaIcons) {
 	}
 	finally {
 		$bitmap.Dispose()
+	}
+}
+
+$expectedInnerEdaniaTrashIcons = @(
+	@("item-980127.png", 44, 44, "FF001CB17F8BC76EA5487EBD14471D126E7B5A487FB66747625883E3B3254221"),
+	@("item-980128.png", 44, 44, "F630BCC38FB915B5F0FAE4FCD731ADE628BE4E32EC4F86C5CCB1B59E71D07B16"),
+	@("item-980129.png", 44, 44, "2B3950C0914C3DB59E610173CF33E5F0A4267970AF2C0A6097BBBCE565603E02"),
+	@("item-980130.png", 44, 44, "EBA84C7A337F1E32B6D476C3DD21A342EFAB9B1151F5E88B872047CEE7ADCE17"),
+	@("item-980131.png", 44, 44, "09720CA08F2F2D58364CB40EEC956E85B4ED5551CF17EBD0AE5348D7B5CC5328"),
+	@("item-980132.png", 48, 44, "9F26FCAA0A88C14D5AE5EA31D928343660EFE2184F145FCBF82F944C15B4630B")
+)
+foreach ($expectedIcon in $expectedInnerEdaniaTrashIcons) {
+	$iconPath = Join-Path $sourceRoot ("Assets\GrindTracker\icons-clean\" + [string]$expectedIcon[0])
+	if (!(Test-Path -LiteralPath $iconPath -PathType Leaf)) {
+		throw "Current-client Inner Edania trash icon '$($expectedIcon[0])' is missing."
+	}
+	$bitmap = [System.Drawing.Bitmap]::new($iconPath)
+	try {
+		if ($bitmap.Width -ne [int]$expectedIcon[1] -or $bitmap.Height -ne [int]$expectedIcon[2]) {
+			throw "Current-client Inner Edania trash icon '$($expectedIcon[0])' has the wrong native dimensions."
+		}
+	}
+	finally {
+		$bitmap.Dispose()
+	}
+	if ((Get-FileHash -LiteralPath $iconPath -Algorithm SHA256).Hash -ne [string]$expectedIcon[3]) {
+		throw "Current-client Inner Edania trash icon '$($expectedIcon[0])' no longer matches the verified client asset."
 	}
 }
 
@@ -1329,6 +1430,27 @@ if ($bdoAlertsMarketSource -notmatch 'AllowAutoRedirect\s*=\s*false' -or
 	$grindMarketProviderSource -match 'GetPearlShopSnapshotAsync') {
 	throw "The Grind Zone BDO Alerts price integration lost its bounded request, authentication, or Arsha fallback safeguards."
 }
+$pearlAbyssFallbackAssignment = [regex]::Match(
+	$grindMarketProviderSource,
+	'(?s)PearlAbyssLiveFallbackItemIds\s*=\s*\[(.*?)\];'
+)
+$expectedPearlAbyssFallbackIds = @(11733L, 11898L, 12144L, 12298L, 767343L, 767344L, 767353L, 821419L, 821420L, 821421L, 821422L, 821423L, 821424L, 821459L, 821460L, 821471L)
+$actualPearlAbyssFallbackIds = if ($pearlAbyssFallbackAssignment.Success) {
+	@([regex]::Matches($pearlAbyssFallbackAssignment.Groups[1].Value, '\d+') | ForEach-Object { [long]$_.Value } | Sort-Object -Unique)
+}
+else {
+	@()
+}
+if ($actualPearlAbyssFallbackIds.Count -ne $expectedPearlAbyssFallbackIds.Count -or
+	(Compare-Object ($expectedPearlAbyssFallbackIds | Sort-Object) $actualPearlAbyssFallbackIds) -or
+	$grindMarketProviderSource -notmatch 'https://eu-trade\.naeu\.playblackdesert\.com/Trademarket/GetWorldMarketSubList' -or
+	$grindMarketProviderSource -notmatch 'FormUrlEncodedContent' -or
+	$grindMarketProviderSource -notmatch 'pearl-abyss-sublist-live' -or
+	$grindMarketProviderSource -notmatch '!pricesById\.ContainsKey\(id\) && PearlAbyssLiveFallbackItemIds\.Contains\(id\)' -or
+	$bdoAlertsMarketSource -notmatch 'PreferPriceHistoryRow' -or
+	$bdoAlertsMarketSource -match 'price history returned conflicting duplicate items') {
+	throw "Inner Edania live-market fallback or duplicate price-row handling is incomplete."
+}
 if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'AllowAutoRedirect = false' -or
 	$couponSource -notmatch 'bdoAlertsHttp\.SendAsync' -or
@@ -1387,6 +1509,9 @@ if (!(Test-Path -LiteralPath $couponJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
 	throw "The executable Grind Zones resistance recommendation regression test is missing."
 }
+if (!(Test-Path -LiteralPath $grindGuidesJsTestPath -PathType Leaf)) {
+	throw "The executable Grind Zones mechanics and rotations regression test is missing."
+}
 if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 	throw "The executable app-behavior JavaScript regression test is missing."
 }
@@ -1429,6 +1554,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $grindResistanceJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
 		throw "Grind Zones resistance recommendation JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $grindGuidesJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Grind Zones mechanics and rotations JavaScript regression tests failed."
 	}
 	& $nodeCommand.Source $appBehaviorJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {

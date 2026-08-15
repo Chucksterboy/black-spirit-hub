@@ -23,6 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
+	private const string UiRevision = "grind-picker-layout-20260815";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -909,7 +910,7 @@ internal sealed class CalculatorForm : Form
 		core.NavigationCompleted += NavigationCompleted;
 		try
 		{
-			string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current)}";
+			string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current + "-" + UiRevision)}";
 			logger.Info($"WebView generation {generation}: navigating local interface.");
 			core.Navigate(url);
 			await navigationReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);

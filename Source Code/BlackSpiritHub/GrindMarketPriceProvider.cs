@@ -48,6 +48,28 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 	private const int AnalyticsRecoveryRequestBudget = 128;
 	private const long AnalyticsHealthProbeItemId = 16001;
 	private const int MaximumConsecutiveEmptyAnalyticsBatches = 2;
+	private const int PearlAbyssLiveBatchItemCount = 4;
+	private static readonly Uri PearlAbyssEuSubListEndpoint = new(
+		"https://eu-trade.naeu.playblackdesert.com/Trademarket/GetWorldMarketSubList");
+	private static readonly HashSet<long> PearlAbyssLiveFallbackItemIds =
+	[
+		11733,
+		11898,
+		12144,
+		12298,
+		767343,
+		767344,
+		767353,
+		821419,
+		821420,
+		821421,
+		821422,
+		821423,
+		821424,
+		821459,
+		821460,
+		821471
+	];
 
 	private readonly HttpClient client;
 	private readonly BdoAlertsCentralMarketClient? bdoAlertsClient;
@@ -152,6 +174,38 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 			catch (Exception ex) when (IsProviderFailure(ex))
 			{
 				logger.Warn($"Arsha GetWorldMarketSubList {normalizedRegion.ToUpperInvariant()} fallback batch failed: {ex.Message}");
+			}
+		}
+
+		long[] missingFromCaches = ids
+			.Where(id => !pricesById.ContainsKey(id) && PearlAbyssLiveFallbackItemIds.Contains(id))
+			.ToArray();
+		if (missingFromCaches.Length > 0)
+		{
+			try
+			{
+				IReadOnlyList<GrindMarketPrice> livePrices = await FetchPearlAbyssLivePricesAsync(
+					missingFromCaches,
+					DateTimeOffset.UtcNow,
+					cancellationToken);
+				foreach (GrindMarketPrice price in livePrices)
+				{
+					pricesById[price.ItemId] = price;
+				}
+				if (livePrices.Count > 0)
+				{
+					provider = provider.Contains("Pearl Abyss", StringComparison.Ordinal)
+						? provider
+						: provider + " + Pearl Abyss live fallback";
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex) when (IsProviderFailure(ex))
+			{
+				logger.Warn($"Pearl Abyss EU live grind-price fallback failed: {ex.Message}");
 			}
 		}
 
@@ -358,6 +412,62 @@ internal sealed class GrindMarketPriceProvider : IDisposable
 		}
 
 		throw new InvalidDataException("Arsha GetWorldMarketSubList did not return a usable response.");
+	}
+
+	private async Task<IReadOnlyList<GrindMarketPrice>> FetchPearlAbyssLivePricesAsync(
+		long[] itemIds,
+		DateTimeOffset captured,
+		CancellationToken cancellationToken)
+	{
+		List<GrindMarketPrice> prices = new();
+		foreach (long[] batch in itemIds.Chunk(PearlAbyssLiveBatchItemCount))
+		{
+			MarketSubListEntry?[] entries = await Task.WhenAll(
+				batch.Select(itemId => TryFetchPearlAbyssLivePriceAsync(itemId, cancellationToken)));
+			foreach (MarketSubListEntry? entry in entries)
+			{
+				if (entry.HasValue)
+				{
+					prices.Add(ToPrice(entry.Value, null, "pearl-abyss-sublist-live", captured));
+				}
+			}
+		}
+		return prices;
+	}
+
+	private async Task<MarketSubListEntry?> TryFetchPearlAbyssLivePriceAsync(
+		long itemId,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			return await FetchPearlAbyssLivePriceAsync(itemId, cancellationToken);
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch (Exception ex) when (IsProviderFailure(ex))
+		{
+			logger.Warn($"Pearl Abyss EU live grind-price fallback skipped item {itemId.ToString(CultureInfo.InvariantCulture)}: {ex.Message}");
+			return null;
+		}
+	}
+
+	private async Task<MarketSubListEntry?> FetchPearlAbyssLivePriceAsync(
+		long itemId,
+		CancellationToken cancellationToken)
+	{
+		using HttpRequestMessage request = new(HttpMethod.Post, PearlAbyssEuSubListEndpoint);
+		request.Content = new FormUrlEncodedContent(
+		[
+			new KeyValuePair<string, string>("keyType", "0"),
+			new KeyValuePair<string, string>("mainKey", itemId.ToString(CultureInfo.InvariantCulture))
+		]);
+		using JsonDocument document = await SendJsonAsync(request, cancellationToken);
+		MarketSubListEntry entry = ParseSubList(document.RootElement, itemId)
+			.FirstOrDefault(candidate => candidate.Enhancement == 0);
+		return entry.ItemId > 0 ? entry : null;
 	}
 
 	private async Task<IReadOnlyList<GrindMarketPrice>> FetchArshaCategoryListAsync(

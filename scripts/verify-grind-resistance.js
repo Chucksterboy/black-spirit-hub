@@ -16,6 +16,10 @@ const innerEdaniaCatalogSource = fs.readFileSync(
   path.join(sourceRoot, "Assets", "GrindTracker", "grind-spots-inner-edania.js"),
   "utf8"
 );
+const catalogCorrectionsSource = fs.readFileSync(
+  path.join(sourceRoot, "Assets", "GrindTracker", "grind-spots-corrections.js"),
+  "utf8"
+);
 
 function extractExpression(pattern, label) {
   const match = appSource.match(pattern);
@@ -50,11 +54,21 @@ assert(
   "The current Dehkia Thornwood Knockback/Floating correction is missing."
 );
 ccOverrides["dehkia thornwood forest"] = ["knockback", "float"];
+for (const [name, ccs, caps] of [
+  ["sycraia ruins lower zone", ["knockback", "float"], [1935, 800]],
+  ["orzekea", ["knockback", "float"], [1595, 700]]
+]) {
+  assert(appSource.includes(`grindSpotCcOverrides["${name}"]=`), `Missing current-name CC override for ${name}.`);
+  assert(appSource.includes(`grindMaxCapOverrides["${name}"]=`), `Missing current-name stat cap for ${name}.`);
+  ccOverrides[name] = ccs;
+  maxCapOverrides[name] = caps;
+}
 
 const catalogContext = { window: {} };
 vm.createContext(catalogContext);
 vm.runInContext(catalogSource, catalogContext);
 vm.runInContext(innerEdaniaCatalogSource, catalogContext);
+vm.runInContext(catalogCorrectionsSource, catalogContext);
 const spots = catalogContext.window.BDO_GRIND_SPOTS;
 assert(Array.isArray(spots) && spots.length >= 90, "The grind-zone catalog did not load.");
 
@@ -128,14 +142,16 @@ function spot(name) {
 }
 
 assert.deepStrictEqual(Array.from(recommendations(spot("Orbita Castle")), group => group.primary.name), ["Sycraia Crystal - Adamantine"]);
-for (const name of ["Sycraia Abyssal Ruins (Lower)", "Sycraia Abyssal Ruins (Upper)"]) {
+for (const name of ["Sycraia Ruins (Lower Zone)", "Sycraia Abyssal Ruins (Upper)"]) {
   assert.deepStrictEqual(Array.from(recommendations(spot(name)), group => group.primary.name), ["Sycraia Crystal - Fighting Spirit"]);
 }
+assert(!spots.some(item => item.id === 112 || item.id === 914), "Obsolete duplicate profiles must not reach resistance verification.");
+assert.deepStrictEqual(Array.from(maxCapOverrides[normalizeName("Orzekea")]), [1595, 700]);
 assert.deepStrictEqual(Array.from(recommendations(spot("Star's End")), group => group.primary.name), ["Sycraia Crystal - Giant"]);
 assert.deepStrictEqual(Array.from(recommendations(spot("[Dehkia] Thornwood Forest")), group => group.primary.name), ["Sycraia Crystal - Fighting Spirit"]);
 const innerEdaniaFixtures = [
   ["Aphrodon Temple", 917, 400, 470, "1", 14, [2090, 810], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
-  ["Emesia Fortress", 918, 405, 485, "1", 16, [2220, 830], ["knockback", "float"], "Sycraia Crystal - Fighting Spirit"],
+  ["Hermesia Inner Castle", 918, 405, 485, "1", 16, [2220, 830], ["knockback", "float"], "Sycraia Crystal - Fighting Spirit"],
   ["Magaia Temple", 919, 410, 490, "1", 17, [2340, 840], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
   ["Aresion Temple", 920, 415, 495, "1", 24, [2455, 850], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
   ["Scales of Judgment", 921, 415, 500, "3", 24, [2455, 860], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],

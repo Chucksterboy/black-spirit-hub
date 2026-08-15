@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.43",
+    "version":  "v0.9.44",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.43/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "87089A71600ED564EE078288A32D0CBEA2E94FC01018D9296670BD273726B43C",
-    "notes":  "Improves Events during official maintenance, fixes timeline dates and open-ended event presentation, adds smooth drag scrolling with full titles, and introduces the bottom application health monitor."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.44/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "FA728CD4C3E1899C803E7926A2044F7BD2D8CE1DC66F4172D7DCF539395C8C75",
+    "notes":  "Adds verified mechanics and route guidance for every live 250 AP+ grind zone, corrects current zone data and Edania II pricing and icons, and fixes the Grind Zone picker in small windows."
 }
