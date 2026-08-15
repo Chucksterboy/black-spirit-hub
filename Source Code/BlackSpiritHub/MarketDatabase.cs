@@ -1076,6 +1076,17 @@ WHERE row_number=1;";
 					item2.Detail.HasValue
 					&& item2.Detail.Value <= reportNow.Add(OutfitClockSkewTolerance)
 					&& reportNow - item2.Detail.Value <= OutfitRecommendationMaximumDetailAge;
+				bool hasValidListing = item2.Id > 0
+					&& !string.IsNullOrWhiteSpace(item2.Name)
+					&& item2.Price > 0;
+				bool salesSignalEligible =
+					!salesDataStale
+					&& hasValidListing
+					&& evidenceSamples.Count >= OutfitRecommendationMinimumSamples
+					&& confidence >= OutfitRecommendationMinimumConfidence
+					&& num4.HasValue
+					&& num4.Value > 0.0
+					&& activeSalesWindows >= OutfitRecommendationMinimumActiveWindows;
 				bool flag3 =
 					!salesDataStale
 					&& hasCurrentPreorderDetail
@@ -1089,7 +1100,13 @@ WHERE row_number=1;";
 				double score = flag3 && estimatedQueueDays.HasValue && estimatedQueueDays.Value > 0.0
 					? confidence * volumeReliability / estimatedQueueDays.Value
 					: 0.0;
-				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, evidenceSamples.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
+				double salesSignalScore = !salesDataStale
+					&& hasValidListing
+					&& num4.HasValue
+					&& num4.Value > 0.0
+					? confidence * volumeReliability * num4.Value
+					: 0.0;
+				list2.Add(new OutfitOpportunity(item2.Id, item2.Name, item2.Price, item2.Stock, preorderCount, lifetimeSales, num, num2, num3, num4, sevenDayChancePercent, estimatedQueueDays, demandMomentumPercent, confidencePercent, score, flag3, hasCurrentPreorderDetail, salesSignalEligible, salesSignalScore, evidenceSamples.Count, lastSalesSampleUtc, salesDataStale, item2.Detail));
 			}
 			int num10 = catalog.Count<(long, string, long, long, DateTimeOffset, DateTimeOffset?)>(delegate((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x)
 			{
@@ -1101,9 +1118,42 @@ WHERE row_number=1;";
 				.Select(opportunity => opportunity.LastSalesSampleUtc)
 				.Max();
 			int staleSalesOutfitCount = list2.Count(opportunity => opportunity.SalesDataStale);
-			result = new OutfitReport(catalog.Count, num10, (catalog.Count == 0) ? 0.0 : ((double)num10 * 100.0 / (double)catalog.Count), (catalog.Count == 0) ? ((DateTimeOffset?)null) : new DateTimeOffset?(catalog.Max<(long, string, long, long, DateTimeOffset, DateTimeOffset?), DateTimeOffset>(((long Id, string Name, long Price, long Stock, DateTimeOffset Sync, DateTimeOffset? Detail) x) => x.Sync)), latestSalesSampleUtc, staleSalesOutfitCount, (from x in list2
-				orderby x.Score descending, x.SalesPerDay ?? (-1.0) descending, x.PreorderCount ?? long.MaxValue, x.Name
-				select x).ToArray());
+			OutfitOpportunity[] orderedOpportunities = list2
+				.OrderByDescending(opportunity => opportunity.Score)
+				.ThenByDescending(opportunity => opportunity.SalesPerDay ?? -1.0)
+				.ThenBy(opportunity => opportunity.PreorderCount ?? long.MaxValue)
+				.ThenBy(opportunity => opportunity.Name, StringComparer.OrdinalIgnoreCase)
+				.ThenBy(opportunity => opportunity.Name, StringComparer.Ordinal)
+				.ThenBy(opportunity => opportunity.ItemId)
+				.ToArray();
+			OutfitOpportunity[] validOpportunities = orderedOpportunities
+				.Where(opportunity => opportunity.ItemId > 0
+					&& !string.IsNullOrWhiteSpace(opportunity.Name)
+					&& opportunity.Price > 0)
+				.ToArray();
+			OutfitOpportunity[] topOpportunities = validOpportunities
+				.Where(opportunity => opportunity.RecommendationEligible)
+				.Concat(validOpportunities
+					.Where(opportunity => !opportunity.RecommendationEligible && opportunity.SalesSignalEligible)
+					.OrderByDescending(opportunity => opportunity.SalesSignalScore)
+					.ThenByDescending(opportunity => opportunity.SalesPerDay ?? -1.0)
+					.ThenByDescending(opportunity => opportunity.Sales24Hours ?? -1L)
+					.ThenBy(opportunity => opportunity.Name, StringComparer.OrdinalIgnoreCase)
+					.ThenBy(opportunity => opportunity.Name, StringComparer.Ordinal)
+					.ThenBy(opportunity => opportunity.ItemId))
+				.Concat(validOpportunities
+					.Where(opportunity => !opportunity.RecommendationEligible && !opportunity.SalesSignalEligible))
+				.Take(3)
+				.ToArray();
+			result = new OutfitReport(
+				catalog.Count,
+				num10,
+				catalog.Count == 0 ? 0.0 : (double)num10 * 100.0 / catalog.Count,
+				catalog.Count == 0 ? null : catalog.Max(item => item.Sync),
+				latestSalesSampleUtc,
+				staleSalesOutfitCount,
+				orderedOpportunities,
+				topOpportunities);
 		}
 		return result;
 	}

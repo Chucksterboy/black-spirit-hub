@@ -46,6 +46,7 @@ $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 $grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
+$marketOutfitJsTestPath = Join-Path $repoRoot "scripts\test-market-outfit-frontend.mjs"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
@@ -769,14 +770,11 @@ if ($css -notmatch '(?s)\.outfitTableWrap\s*\{[^}]*overflow:\s*auto;[^}]*scrollb
 	$css -match '(?s)\.outfitTableWrap\s*\{[^}]*overflow(?:-y)?:\s*hidden') {
 	throw "The outfit table scrollbar must be visually hidden without disabling table scrolling."
 }
-if ($script -notmatch '(?s)const\s+topThree\s*=\s*filtered\s*\.filter\(item\s*=>\s*item\.recommendationEligible\s*===\s*true\)\s*\.slice\(0,\s*3\)' -or
-	$script -match 'const\s+recommendationRank\s*=') {
-	throw "Top outfit cards must use only authoritative eligible backend recommendations without client-side fallback ranking."
-}
-if ($script -notmatch 'sampleReadyCount\s*=\s*filtered\.filter\(item\s*=>\s*item\.sampleCount\s*>=\s*12\)' -or
-	$script -notmatch 'outfits have 12\+ samples' -or
-	$script -match 'outfits have 5\+ samples') {
-	throw "Top outfit empty-state diagnostics must match the 12-sample recommendation requirement."
+if ($script -notmatch 'const\s+topThree\s*=\s*outfitTopRecommendations\(report,\s*3\)' -or
+	$script -match 'No active outfit recommendations yet' -or
+	$html -notmatch 'id="topOutfitHeading">Top 3 Outfit Opportunities</h2>' -or
+	$html -notmatch 'id="topOutfitCards"[^>]+role="list"[^>]+aria-live="polite"') {
+	throw "Top outfit cards must consume the backend-selected opportunities and remain visibly populated without misleading empty-state copy."
 }
 $marketDatabaseSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketDatabase.cs") -Raw
 if ($marketDatabaseSource -notmatch 'OutfitRecommendationMinimumSamples\s*=\s*12;' -or
@@ -784,7 +782,10 @@ if ($marketDatabaseSource -notmatch 'OutfitRecommendationMinimumSamples\s*=\s*12
 	$marketDatabaseSource -notmatch 'OutfitRecommendationActive3DaySales\s*=\s*20;' -or
 	$marketDatabaseSource -notmatch 'OutfitRecommendationActive7DaySales\s*=\s*40;' -or
 	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumActiveWindows\s*=\s*2;' -or
-	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumConfidence\s*=\s*0\.6;') {
+	$marketDatabaseSource -notmatch 'OutfitRecommendationMinimumConfidence\s*=\s*0\.6;' -or
+	$marketDatabaseSource -notmatch 'salesSignalEligible\s*=' -or
+	$marketDatabaseSource -notmatch 'topOpportunities\s*=' -or
+	$marketDatabaseSource -notmatch '\.Take\(3\)') {
 	throw "Top outfit recommendations must retain the minimum evidence and sales-volume gates."
 }
 if ($marketDatabaseSource -notmatch 'CompactOutfitEvidenceSamples\(value2\)' -or
@@ -1512,6 +1513,9 @@ if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $grindGuidesJsTestPath -PathType Leaf)) {
 	throw "The executable Grind Zones mechanics and rotations regression test is missing."
 }
+if (!(Test-Path -LiteralPath $marketOutfitJsTestPath -PathType Leaf)) {
+	throw "The executable Central Market outfit recommendation regression test is missing."
+}
 if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 	throw "The executable app-behavior JavaScript regression test is missing."
 }
@@ -1558,6 +1562,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $grindGuidesJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
 		throw "Grind Zones mechanics and rotations JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $marketOutfitJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Central Market outfit recommendation JavaScript regression tests failed."
 	}
 	& $nodeCommand.Source $appBehaviorJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {

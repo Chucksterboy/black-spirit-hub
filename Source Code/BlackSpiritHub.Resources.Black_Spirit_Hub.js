@@ -3204,45 +3204,87 @@ function outfitSalesValue(item, value, windowClass) {
   return `<span class="${classes}"${title}>${fmtInt(value)}</span>`;
 }
 
+/* OUTFIT_RECOMMENDATION_CORE_BEGIN */
+function outfitTopRecommendations(report, limit = 3) {
+  const requested = Math.max(0, Math.floor(Number(limit) || 0));
+  if(!requested) return [];
+  const authoritative = Array.isArray(report?.topOpportunities) ? report.topOpportunities : [];
+  const available = Array.isArray(report?.opportunities) ? report.opportunities : [];
+  const seen = new Set();
+  return authoritative.concat(available).filter(item => {
+    const itemId = Number(item?.itemId);
+    if(!item || itemId <= 0 || Number(item.price) <= 0 || !String(item.name || "").trim() || seen.has(itemId)) return false;
+    seen.add(itemId);
+    return true;
+  }).slice(0, requested);
+}
+
+function outfitRecommendationTier(item) {
+  if(item?.recommendationEligible === true) return "verified";
+  if(item?.salesSignalEligible === true) return "sales-watch";
+  return "early-watch";
+}
+/* OUTFIT_RECOMMENDATION_CORE_END */
+
 function renderOutfitReport() {
   const report = marketState.outfits;
   if(!report) return;
   const selectedRegionLabel = getMarketRegion().toUpperCase();
   marketEl.outfitCoverage.textContent =
-    `${fmtInt(report.catalogCount)} outfits discovered | ${fmtInt(report.detailedCount)} with detailed local samples | ${report.coveragePercent.toFixed(1)}% coverage`;
+    `${fmtInt(report.catalogCount)} outfits discovered | ${fmtInt(report.detailedCount)} checked at least once | ${report.coveragePercent.toFixed(1)}% catalog coverage`;
   const filter = norm(marketEl.outfitFilter.value)
     .replace(/\bberzerker\b/g, "berserker")
     .replace(/\bzerker\b/g, "berserker");
   const filtered = report.opportunities.filter(item => !filter || norm(item.name).includes(filter));
-  const topThree = filtered
-    .filter(item => item.recommendationEligible === true)
-    .slice(0, 3);
-  const sampleReadyCount = filtered.filter(item => item.sampleCount >= 12).length;
-  const windowReadyCount = filtered.filter(item =>
-    item.sales24Hours != null &&
-    item.sales3Days != null &&
-    item.sales7Days != null
-  ).length;
+  const topThree = outfitTopRecommendations(report, 3);
   marketEl.topOutfitCards.innerHTML = topThree.map((item,index) => {
+    const tier = outfitRecommendationTier(item);
     const cached = outfitSalesCacheMeta(item);
-    const signal = cached
-      ? `Cached ${selectedRegionLabel} market signal`
-      : item.recommendationEligible ? "Strong preorder signal" : `Best available ${selectedRegionLabel} market signal`;
-    const rankLabel = cached ? `Cached candidate #${index + 1}` : `Must order #${index + 1}`;
-    return `<article class="mustOrderCard">
+    const detailChecked = item.lastDetailedUtc
+      ? formatMarketSampleTime(item.lastDetailedUtc)
+      : null;
+    const rankLabel = tier === "verified"
+      ? `Verified recommendation #${index + 1}`
+      : tier === "sales-watch"
+        ? `Sales watch #${index + 1}`
+        : `Early market watch #${index + 1}`;
+    const signal = tier === "verified"
+      ? "Strong current preorder signal"
+      : tier === "sales-watch"
+        ? item.preorderDataFresh === true
+          ? "Strong recent sales — no active preorder queue"
+          : "Strong recent sales — preorder queue not recently verified"
+        : cached
+          ? `Best available ${selectedRegionLabel} signal — cached sales refresh pending`
+          : `Best available ${selectedRegionLabel} signal — building more evidence`;
+    const preorderLabel = item.preorderDataFresh === true
+      ? "Preorders"
+      : detailChecked ? "Older preorder snapshot" : "Preorder scan";
+    const preorderValue = item.preorderDataFresh === true
+      ? (item.preorderCount == null ? "Scanning" : fmtInt(item.preorderCount))
+      : detailChecked
+        ? `${item.preorderCount == null ? "Unavailable" : `${fmtInt(item.preorderCount)} recorded`} · checked ${detailChecked}`
+        : "Not scanned yet";
+    const queueLabel = tier === "verified" ? "Queue estimate" : "Queue status";
+    const queueValue = tier === "verified"
+      ? (item.estimatedQueueDays == null ? "-" : item.estimatedQueueDays < 1 ? "< 1 day" : `${item.estimatedQueueDays.toFixed(1)} days`)
+      : tier === "sales-watch"
+        ? item.preorderDataFresh === true ? "No active queue" : "Refresh needed"
+        : cached ? "Sales refresh pending" : "More history needed";
+    return `<article class="mustOrderCard" role="listitem" data-opportunity-tier="${tier}">
       <div class="mustOrderRank">${rankLabel}</div>
       <h3>${escapeHtml(item.name)}</h3>
       <div class="mustOrderStats">
         <span>Recommendation<strong>${signal}</strong></span>
         <span>Price<strong>${fmtSilver(item.price)}</strong></span>
         <span>24h / 3d / 7d<strong>${outfitSalesValue(item,item.sales24Hours,"salesWindow24h")} / ${outfitSalesValue(item,item.sales3Days,"salesWindow3d")} / ${outfitSalesValue(item,item.sales7Days,"salesWindow7d")}</strong></span>
-        <span>Preorders<strong>${item.preorderCount == null ? "Scanning" : fmtInt(item.preorderCount)}</strong></span>
-        <span>${cached ? "Cached queue estimate" : "Queue estimate"}<strong>${item.estimatedQueueDays == null ? "-" : item.estimatedQueueDays < 1 ? "< 1 day" : `${item.estimatedQueueDays.toFixed(1)} days`}</strong></span>
+        <span>${preorderLabel}<strong>${preorderValue}</strong></span>
+        <span>${queueLabel}<strong>${queueValue}</strong></span>
       </div>
     </article>`;
-  }).join("") || `<div class="mustOrderCard">
-    <strong>No active outfit recommendations yet</strong>
-    <span class="confidence">${fmtInt(sampleReadyCount)} outfits have 12+ samples | ${fmtInt(windowReadyCount)} have complete windows. Waiting for active preorders with enough recent ${selectedRegionLabel} sales evidence.</span>
+  }).join("") || `<div class="mustOrderCard" role="listitem">
+    <strong>Building the first three outfit opportunities</strong>
+    <span class="confidence">Central Market history is still being collected. The strongest three available signals will appear automatically.</span>
   </div>`;
   const rows = filtered.slice(0, 500);
   marketEl.outfitRows.innerHTML = rows.map((item,index) => {

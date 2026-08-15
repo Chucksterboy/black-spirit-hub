@@ -829,6 +829,7 @@ internal static class Program
 	private static async Task<int> RunOfflineSmokeTestAsync(AppLogger logger)
 	{
 		string testDatabasePath = Path.Combine(Path.GetTempPath(), $"bdo-market-offline-smoke-{Guid.NewGuid():N}.db");
+		string topOpportunitiesDatabasePath = Path.Combine(Path.GetTempPath(), $"bdo-market-top-opportunities-smoke-{Guid.NewGuid():N}.db");
 		string testStateRoot = Path.Combine(Path.GetTempPath(), $"bdo-state-offline-smoke-{Guid.NewGuid():N}");
 		try
 		{
@@ -1240,6 +1241,121 @@ internal static class Program
 			if (staleDetailSignalResult.RecommendationEligible) return 218;
 			if (staleDetailSignalResult.Sales24Hours != 200
 				|| staleDetailSignalResult.Sales3Days != 420) return 219;
+
+			MarketDatabase topOpportunitiesDatabase = new(topOpportunitiesDatabasePath);
+			await topOpportunitiesDatabase.InitializeAsync(CancellationToken.None);
+			MarketItem verifiedTopOutfit = new(720_001, 0, "Verified Top Opportunity", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem salesWatchA = new(720_002, 0, "Sales Watch A", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem salesWatchB = new(720_003, 0, "Sales Watch B", 4, 2_020_000_000, 0, 0, 55, 1);
+			MarketItem salesWatchC = new(720_004, 0, "Sales Watch C", 4, 2_020_000_000, 0, 0, 55, 1);
+			await topOpportunitiesDatabase.SyncOutfitCatalogAsync(
+				[verifiedTopOutfit, salesWatchA, salesWatchB, salesWatchC],
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			DateTimeOffset topOpportunityLatestUtc = DateTimeOffset.UtcNow.AddMinutes(-2);
+			async Task SeedTopOpportunityAsync(MarketItem item, long salesStep, long preorders)
+			{
+				long latestTrades = 10_000;
+				for (int index = 0; index < 15; index++)
+				{
+					latestTrades = 10_000 + index * salesStep;
+					await topOpportunitiesDatabase.SaveOutfitBulkSamplesAsync(
+						[olderOutfitSample with
+						{
+							ItemId = item.ItemId,
+							Name = item.Name,
+							Price = item.CurrentPrice,
+							BasePrice = item.CurrentPrice,
+							TradeCount = latestTrades,
+							CapturedUtc = topOpportunityLatestUtc.Subtract(TimeSpan.FromHours((14 - index) * 12.0))
+						}],
+						"eu",
+						CancellationToken.None);
+				}
+				await topOpportunitiesDatabase.SaveOutfitDetailAsync(
+					item,
+					item with { TradeCount = latestTrades },
+					new MarketSnapshot(
+						item.CurrentPrice,
+						0,
+						latestTrades,
+						preorders,
+						item.CurrentPrice,
+						item.CurrentPrice,
+						item.CurrentPrice,
+						Array.Empty<ProviderHistoryPoint>()),
+					"eu",
+					CancellationToken.None);
+			}
+			await SeedTopOpportunityAsync(verifiedTopOutfit, 10, 100);
+			await SeedTopOpportunityAsync(salesWatchA, 40, 80);
+			await SeedTopOpportunityAsync(salesWatchB, 30, 60);
+			await SeedTopOpportunityAsync(salesWatchC, 20, 40);
+			await using (SqliteConnection staleSalesWatchConnection = new($"Data Source={topOpportunitiesDatabasePath}"))
+			{
+				await staleSalesWatchConnection.OpenAsync();
+				await using SqliteCommand ageSalesWatches = staleSalesWatchConnection.CreateCommand();
+				ageSalesWatches.CommandText = @"
+UPDATE outfit_catalog
+SET last_detailed_utc=$stale
+WHERE region='eu' AND item_id IN ($watchA,$watchB,$watchC);";
+				ageSalesWatches.Parameters.AddWithValue("$stale", DateTimeOffset.UtcNow.AddDays(-8).ToString("O"));
+				ageSalesWatches.Parameters.AddWithValue("$watchA", salesWatchA.ItemId);
+				ageSalesWatches.Parameters.AddWithValue("$watchB", salesWatchB.ItemId);
+				ageSalesWatches.Parameters.AddWithValue("$watchC", salesWatchC.ItemId);
+				if (await ageSalesWatches.ExecuteNonQueryAsync() != 3) return 244;
+			}
+
+			OutfitReport mixedTopReport = await topOpportunitiesDatabase.GetOutfitReportAsync("eu", CancellationToken.None);
+			OutfitOpportunity verifiedTopResult = mixedTopReport.Opportunities.Single(item => item.ItemId == verifiedTopOutfit.ItemId);
+			OutfitOpportunity[] salesWatchResults = new[] { salesWatchA, salesWatchB, salesWatchC }
+				.Select(watch => mixedTopReport.Opportunities.Single(item => item.ItemId == watch.ItemId))
+				.ToArray();
+			if (!verifiedTopResult.RecommendationEligible
+				|| !verifiedTopResult.PreorderDataFresh
+				|| !verifiedTopResult.SalesSignalEligible
+				|| verifiedTopResult.SalesSignalScore <= 0.0) return 245;
+			if (salesWatchResults.Any(item => item.RecommendationEligible
+				|| item.PreorderDataFresh
+				|| !item.SalesSignalEligible
+				|| item.SalesSignalScore <= 0.0)) return 246;
+			if (!mixedTopReport.TopOpportunities.Select(item => item.ItemId).SequenceEqual(
+				[verifiedTopOutfit.ItemId, salesWatchA.ItemId, salesWatchB.ItemId])) return 247;
+
+			await topOpportunitiesDatabase.SyncOutfitCatalogAsync(
+				[salesWatchA, salesWatchB, salesWatchC],
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			OutfitReport salesWatchOnlyReport = await topOpportunitiesDatabase.GetOutfitReportAsync("eu", CancellationToken.None);
+			if (!salesWatchOnlyReport.TopOpportunities.Select(item => item.ItemId).SequenceEqual(
+				[salesWatchA.ItemId, salesWatchB.ItemId, salesWatchC.ItemId])) return 248;
+
+			MarketItem weakZulu = new(720_101, 0, "Zulu Early Market Watch", 4, 1_000_000_000, 0, 0, 55, 1);
+			MarketItem weakAlpha = new(720_102, 0, "Alpha Early Market Watch", 4, 1_000_000_000, 0, 0, 55, 1);
+			MarketItem weakMike = new(720_103, 0, "Mike Early Market Watch", 4, 1_000_000_000, 0, 0, 55, 1);
+			MarketItem invalidBlankName = new(720_104, 0, string.Empty, 4, 1_000_000_000, 0, 0, 55, 1);
+			MarketItem invalidZeroPrice = new(720_105, 0, "Invalid Zero Price", 4, 0, 0, 0, 55, 1);
+			await topOpportunitiesDatabase.SyncOutfitCatalogAsync(
+				[weakZulu, weakAlpha, weakMike, invalidBlankName, invalidZeroPrice],
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			OutfitReport weakTopReport = await topOpportunitiesDatabase.GetOutfitReportAsync("eu", CancellationToken.None);
+			if (!weakTopReport.TopOpportunities.Select(item => item.ItemId).SequenceEqual(
+				[weakAlpha.ItemId, weakMike.ItemId, weakZulu.ItemId])
+				|| weakTopReport.TopOpportunities.Any(item => item.RecommendationEligible || item.SalesSignalEligible)) return 249;
+
+			await topOpportunitiesDatabase.SyncOutfitCatalogAsync(
+				[weakZulu, weakAlpha],
+				"eu",
+				CancellationToken.None,
+				removeMissing: true);
+			OutfitReport limitedTopReport = await topOpportunitiesDatabase.GetOutfitReportAsync("eu", CancellationToken.None);
+			if (limitedTopReport.TopOpportunities.Count != 2
+				|| !limitedTopReport.TopOpportunities.Select(item => item.ItemId).SequenceEqual(
+					[weakAlpha.ItemId, weakZulu.ItemId])) return 250;
 
 			MarketItem sparseEvidenceOutfit = new(700_008, 0, "Sparse Evidence Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
 			MarketItem denseEvidenceOutfit = new(700_009, 0, "Dense Evidence Test Outfit", 4, 2_020_000_000, 0, 0, 55, 1);
@@ -2357,6 +2473,7 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 		finally
 		{
 			SqliteCleanup(testDatabasePath);
+			SqliteCleanup(topOpportunitiesDatabasePath);
 			try
 			{
 				if (Directory.Exists(testStateRoot))
