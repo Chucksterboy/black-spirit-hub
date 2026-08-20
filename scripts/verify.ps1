@@ -29,6 +29,13 @@ $recipeBookManifestPath = Join-Path $recipeBookRoot "manifest.json"
 $recipeBookBundleIdPath = Join-Path $recipeBookRoot "bundle-id.txt"
 $recipeBookFilterReportPath = Join-Path $recipeBookRoot "filter-report.json"
 $recipeBookNoticePath = Join-Path $recipeBookRoot "NOTICE.txt"
+$recipeBookOcrAtlasPath = Join-Path $recipeBookRoot "ocr\icon-atlas.png"
+$recipeBookOcrIndexPath = Join-Path $recipeBookRoot "ocr\icon-index.json"
+$recipeBookPpOcrModelPath = Join-Path $recipeBookRoot "ocr\ppocrv5\en_PP-OCRv5_mobile_rec.onnx"
+$recipeBookPaddleOcrLicensePath = Join-Path $recipeBookRoot "ocr\LICENSE-PADDLEOCR.txt"
+$recipeBookPpOcrNoticePath = Join-Path $recipeBookRoot "ocr\MODEL-NOTICE-PPOCRV5.txt"
+$recipeBookOnnxRuntimeLicensePath = Join-Path $recipeBookRoot "ocr\LICENSE-ONNXRUNTIME.txt"
+$recipeBookOnnxRuntimeNoticesPath = Join-Path $recipeBookRoot "ocr\THIRD-PARTY-NOTICES-ONNXRUNTIME.txt"
 $alarmPath = Join-Path $sourceRoot "Assets\Alarm.mp3"
 $appIconPath = Join-Path $sourceRoot "app.ico"
 $runtimeIconPath = Join-Path $sourceRoot "Assets\AppIcon\app-icon.ico"
@@ -55,6 +62,8 @@ $bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
 $dehkiaFuelJsTestPath = Join-Path $repoRoot "scripts\test-dehkia-fuel-frontend.mjs"
 $startupSplashJsTestPath = Join-Path $repoRoot "scripts\test-startup-splash.mjs"
 $recipeBookJsTestPath = Join-Path $repoRoot "scripts\test-recipe-book.mjs"
+$recipeBookOcrJsTestPath = Join-Path $repoRoot "scripts\test-recipe-book-ocr.mjs"
+$recipeBookOcrFixtureManifestPath = Join-Path $repoRoot "tests\fixtures\recipe-book-ocr\manifest.json"
 $recipeBookBuildScriptPath = Join-Path $repoRoot "scripts\build-recipe-book-data.mjs"
 $dehkiaFuelIconVerifyScriptPath = Join-Path $repoRoot "scripts\verify-dehkia-fuel-icons.ps1"
 $classIconRefreshScriptPath = Join-Path $repoRoot "scripts\update-class-icons.ps1"
@@ -78,7 +87,14 @@ foreach ($path in @(
 	$recipeBookManifestPath,
 	$recipeBookBundleIdPath,
 	$recipeBookFilterReportPath,
-	$recipeBookNoticePath
+	$recipeBookNoticePath,
+	$recipeBookOcrAtlasPath,
+	$recipeBookOcrIndexPath,
+	$recipeBookPpOcrModelPath,
+	$recipeBookPaddleOcrLicensePath,
+	$recipeBookPpOcrNoticePath,
+	$recipeBookOnnxRuntimeLicensePath,
+	$recipeBookOnnxRuntimeNoticesPath
 )) {
 	if (!(Test-Path -LiteralPath $path)) { throw "Required UI asset is missing: $path" }
 }
@@ -1263,7 +1279,9 @@ if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 6 -or $script -match 
 	throw "Dashboard timer badges are missing, malformed, or using placeholder glyphs."
 }
 if ($html.Length -gt 100000) { throw "The HTML shell exceeded the 100 KB performance budget." }
-if ($script.Length -gt 500000) { throw "The main UI script exceeded the 500 KB performance budget." }
+# The local OCR review flow and reviewed BDO substitution metadata intentionally share
+# this dependency-free script; retain a narrow measured ceiling with modest headroom.
+if ($script.Length -gt 565000) { throw "The main UI script exceeded the OCR/group-aware 565 KB performance budget." }
 if ($css -notmatch 'body\[data-motion="reduced"\]' -or $script -notmatch 'visibilitychange') {
 	throw "Reduced-motion or visibility lifecycle handling is missing."
 }
@@ -1538,8 +1556,9 @@ if (!(Test-Path -LiteralPath $startupSplashJsTestPath -PathType Leaf)) {
 	throw "The executable native startup splash regression test is missing."
 }
 if (!(Test-Path -LiteralPath $recipeBookJsTestPath -PathType Leaf) -or
+	!(Test-Path -LiteralPath $recipeBookOcrJsTestPath -PathType Leaf) -or
 	!(Test-Path -LiteralPath $recipeBookBuildScriptPath -PathType Leaf)) {
-	throw "The Recipe Book data builder or executable frontend regression test is missing."
+	throw "The Recipe Book data builder, frontend regression test, or screenshot OCR regression test is missing."
 }
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($nodeCommand) {
@@ -1603,6 +1622,10 @@ if ($nodeCommand) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "Recipe Book frontend and bundle integrity tests failed."
 	}
+	& $nodeCommand.Source $recipeBookOcrJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Recipe Book Screenshot Mats OCR regression tests failed."
+	}
 }
 else {
 	Write-Host "Node.js was not found; executable UI JavaScript regression checks were skipped."
@@ -1638,6 +1661,93 @@ if ($releaseScript -notmatch 'Assets\\RecipeBook\\recipes\.json' -or
 	$legacyInstallerProgram -notmatch 'Assets/RecipeBook/manifest\.json' -or
 	$legacyInstallerProgram -notmatch 'Assets/RecipeBook/bundle-id\.txt') {
 	throw "Application publish and installer validation must require the offline Recipe Book bundle."
+}
+$ocrPackagingContracts = @(
+	@{
+		Name = "release publish"
+		Source = $releaseScript
+		Patterns = @(
+			'onnxruntime\.dll',
+			'onnxruntime_providers_shared\.dll',
+			'Assets\\RecipeBook\\ocr\\icon-atlas\.png',
+			'Assets\\RecipeBook\\ocr\\icon-index\.json',
+			'Assets\\RecipeBook\\ocr\\ppocrv5\\en_PP-OCRv5_mobile_rec\.onnx',
+			'Assets\\RecipeBook\\ocr\\LICENSE-PADDLEOCR\.txt',
+			'Assets\\RecipeBook\\ocr\\MODEL-NOTICE-PPOCRV5\.txt',
+			'Assets\\RecipeBook\\ocr\\LICENSE-ONNXRUNTIME\.txt',
+			'Assets\\RecipeBook\\ocr\\THIRD-PARTY-NOTICES-ONNXRUNTIME\.txt'
+		)
+	},
+	@{
+		Name = "native installer"
+		Source = $nativeInstallerBuildScript
+		Patterns = @(
+			'onnxruntime\.dll',
+			'onnxruntime_providers_shared\.dll',
+			'Assets\\RecipeBook\\ocr\\icon-atlas\.png',
+			'Assets\\RecipeBook\\ocr\\icon-index\.json',
+			'Assets\\RecipeBook\\ocr\\ppocrv5\\en_PP-OCRv5_mobile_rec\.onnx',
+			'Assets\\RecipeBook\\ocr\\LICENSE-PADDLEOCR\.txt',
+			'Assets\\RecipeBook\\ocr\\MODEL-NOTICE-PPOCRV5\.txt',
+			'Assets\\RecipeBook\\ocr\\LICENSE-ONNXRUNTIME\.txt',
+			'Assets\\RecipeBook\\ocr\\THIRD-PARTY-NOTICES-ONNXRUNTIME\.txt'
+		)
+	},
+	@{
+		Name = "legacy installer"
+		Source = $legacyInstallerProgram
+		Patterns = @(
+			'onnxruntime\.dll',
+			'onnxruntime_providers_shared\.dll',
+			'Assets/RecipeBook/ocr/icon-atlas\.png',
+			'Assets/RecipeBook/ocr/icon-index\.json',
+			'Assets/RecipeBook/ocr/ppocrv5/en_PP-OCRv5_mobile_rec\.onnx',
+			'Assets/RecipeBook/ocr/LICENSE-PADDLEOCR\.txt',
+			'Assets/RecipeBook/ocr/MODEL-NOTICE-PPOCRV5\.txt',
+			'Assets/RecipeBook/ocr/LICENSE-ONNXRUNTIME\.txt',
+			'Assets/RecipeBook/ocr/THIRD-PARTY-NOTICES-ONNXRUNTIME\.txt'
+		)
+	},
+	@{
+		Name = "offline smoke"
+		Source = $programSource
+		Patterns = @(
+			'"onnxruntime\.dll"',
+			'"onnxruntime_providers_shared\.dll"',
+			'"ocr", "icon-atlas\.png"',
+			'"ocr", "icon-index\.json"',
+			'"ocr", "ppocrv5", "en_PP-OCRv5_mobile_rec\.onnx"',
+			'"ocr", "LICENSE-PADDLEOCR\.txt"',
+			'"ocr", "MODEL-NOTICE-PPOCRV5\.txt"',
+			'"ocr", "LICENSE-ONNXRUNTIME\.txt"',
+			'"ocr", "THIRD-PARTY-NOTICES-ONNXRUNTIME\.txt"'
+		)
+	}
+)
+foreach ($contract in $ocrPackagingContracts) {
+	foreach ($pattern in $contract.Patterns) {
+		if ($contract.Source -notmatch $pattern) {
+			throw "The $($contract.Name) contract does not explicitly require OCR payload component: $pattern"
+		}
+	}
+}
+$paddleOcrLicense = Get-Content -LiteralPath $recipeBookPaddleOcrLicensePath -Raw
+$ppOcrNotice = Get-Content -LiteralPath $recipeBookPpOcrNoticePath -Raw
+$onnxRuntimeLicense = Get-Content -LiteralPath $recipeBookOnnxRuntimeLicensePath -Raw
+$onnxRuntimeNotices = Get-Content -LiteralPath $recipeBookOnnxRuntimeNoticesPath -Raw
+$recipeBookNotice = Get-Content -LiteralPath $recipeBookNoticePath -Raw
+$ppOcrModelHash = (Get-FileHash -LiteralPath $recipeBookPpOcrModelPath -Algorithm SHA256).Hash
+if ((Get-Item -LiteralPath $recipeBookPpOcrModelPath).Length -ne 7872351 -or
+	$ppOcrModelHash -ne 'C3461ADD59BB4323ECBA96A492AB75E06DDA42467C9E3D0C18DB5D1D21924BE8' -or
+	$paddleOcrLicense -notmatch 'Apache License\s+Version 2\.0, January 2004' -or
+	$ppOcrNotice -notmatch 'RapidOCR 3\.9\.2' -or
+	$ppOcrNotice -notmatch 'C3461ADD59BB4323ECBA96A492AB75E06DDA42467C9E3D0C18DB5D1D21924BE8' -or
+	$onnxRuntimeLicense -notmatch 'Copyright \(c\) Microsoft Corporation' -or
+	$onnxRuntimeLicense -notmatch 'Permission is hereby granted, free of charge' -or
+	$onnxRuntimeNotices -notmatch 'THIRD PARTY SOFTWARE NOTICES AND INFORMATION' -or
+	$recipeBookNotice -notmatch 'RapidOCR 3\.9\.2 English PP-OCRv5 mobile ONNX model entirely locally and offline' -or
+	$recipeBookNotice -match 'Tesseract|Leptonica|eng\.traineddata') {
+	throw "The redistributed OCR license payload is missing or incomplete."
 }
 if ($releaseScript -match '--self-contained\s+false' -or
 	([regex]::Matches($releaseScript, '--self-contained\s+true')).Count -ne 1 -or
@@ -1789,6 +1899,30 @@ if ($node) {
 }
 
 $appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows\Black Spirit Hub.dll"
+$appBuildRoot = Split-Path -Parent $appDll
+foreach ($relativePath in @(
+	"onnxruntime.dll",
+	"onnxruntime_providers_shared.dll",
+	"Assets\RecipeBook\ocr\icon-atlas.png",
+	"Assets\RecipeBook\ocr\icon-index.json",
+	"Assets\RecipeBook\ocr\ppocrv5\en_PP-OCRv5_mobile_rec.onnx",
+	"Assets\RecipeBook\ocr\LICENSE-PADDLEOCR.txt",
+	"Assets\RecipeBook\ocr\MODEL-NOTICE-PPOCRV5.txt",
+	"Assets\RecipeBook\ocr\LICENSE-ONNXRUNTIME.txt",
+	"Assets\RecipeBook\ocr\THIRD-PARTY-NOTICES-ONNXRUNTIME.txt"
+)) {
+	$builtPath = Join-Path $appBuildRoot $relativePath
+	if (!(Test-Path -LiteralPath $builtPath -PathType Leaf) -or (Get-Item -LiteralPath $builtPath).Length -le 0) {
+		throw "The built application is missing required OCR payload component: $relativePath"
+	}
+}
+if (!(Test-Path -LiteralPath $recipeBookOcrFixtureManifestPath -PathType Leaf)) {
+	throw "The real-image Recipe Book OCR fixture manifest is missing."
+}
+& $dotnet $appDll --recipe-book-ocr-fixture-test $recipeBookOcrFixtureManifestPath
+if ($LASTEXITCODE -ne 0) {
+	throw "Real-image Recipe Book OCR fixture regressions failed with exit code $LASTEXITCODE."
+}
 & $dotnet $appDll --offline-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "Offline application smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --product-migration-smoke-test

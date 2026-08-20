@@ -1,0 +1,10 @@
+Recipe Book screenshot OCR regression fixtures
+
+These losslessly curated crops were supplied by a project contributor for local,
+offline regression testing. PNG ancillary metadata and unrelated screen content
+were removed before the fixtures were added. The fixtures are not copied into the
+Black Spirit Hub application, installer, or release package.
+
+Black Desert and its interface, item artwork, names, and related marks are the
+property of Pearl Abyss or their respective owners. Their appearance in this
+test-only fixture set does not imply affiliation or endorsement.

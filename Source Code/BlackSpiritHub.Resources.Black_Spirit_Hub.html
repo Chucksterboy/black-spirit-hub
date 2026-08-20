@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.45">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.46">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -881,8 +881,11 @@
 
     <section id="recipeBookResourcesPanel" class="recipeBookWorkspacePanel" role="tabpanel" aria-labelledby="recipeBookResourcesTab" hidden>
       <div class="recipeBookSectionIntro">
-        <div><span>PERSONAL MATERIALS</span><h2>My Resources</h2><p>Add the exact materials you own. Quantities are saved locally on this PC.</p></div>
-        <strong id="recipeBookResourceSummary">No resources added</strong>
+        <div><span>PERSONAL MATERIALS</span><h2>My Resources</h2><p>Add the exact materials you own.</p></div>
+        <div class="recipeBookResourceIntroActions">
+          <button id="recipeBookScreenshotUndo" class="recipeBookScreenshotUndo" type="button" hidden>Undo screenshot import</button>
+          <button id="recipeBookScreenshotOpen" class="recipeBookScreenshotOpen" type="button" disabled><span aria-hidden="true">▣</span> Screenshot Mats</button>
+        </div>
       </div>
       <section class="recipeBookResourceComposer" aria-label="Add a resource">
         <form id="recipeBookResourceForm" autocomplete="off">
@@ -923,6 +926,52 @@
 </section>
 
 <div id="recipeBookItemTooltip" class="recipeBookItemTooltip" role="tooltip" hidden></div>
+
+<div id="recipeBookScreenshotDialog" class="recipeBookScreenshotDialog" hidden>
+  <div class="recipeBookScreenshotBackdrop" data-recipe-book-ocr-close aria-hidden="true"></div>
+  <section class="recipeBookScreenshotSurface" role="dialog" aria-modal="true" aria-labelledby="recipeBookScreenshotTitle" aria-describedby="recipeBookScreenshotDescription" tabindex="-1">
+    <header class="recipeBookScreenshotHeader">
+      <div>
+        <span>LOCAL SCREENSHOT SCANNER</span>
+        <h2 id="recipeBookScreenshotTitle">Screenshot Mats</h2>
+        <p id="recipeBookScreenshotDescription">Import material counts from BDO storage screenshots. Apply becomes available when every detected row has a material and quantity.</p>
+      </div>
+      <button id="recipeBookScreenshotClose" class="recipeBookScreenshotClose" type="button" aria-label="Close Screenshot Mats">&times;</button>
+    </header>
+    <div class="recipeBookScreenshotPrivacy"><span aria-hidden="true">◆</span><p><strong>Private and offline.</strong> Images are analyzed on this PC and are discarded when this window closes.</p></div>
+    <section id="recipeBookScreenshotDropZone" class="recipeBookScreenshotDropZone" aria-labelledby="recipeBookScreenshotDropTitle">
+      <input id="recipeBookScreenshotFiles" type="file" accept="image/png,image/jpeg,image/bmp,.png,.jpg,.jpeg,.bmp" multiple hidden>
+      <span class="recipeBookScreenshotDropIcon" aria-hidden="true">▧</span>
+      <div><strong id="recipeBookScreenshotDropTitle">Drop storage screenshots here</strong><p>PNG, JPG, or BMP · up to 8 images · paste with Ctrl+V also works</p></div>
+      <div class="recipeBookScreenshotIntakeActions">
+        <button id="recipeBookScreenshotBrowse" type="button">Browse images</button>
+        <button id="recipeBookScreenshotPaste" type="button">Paste screenshot</button>
+      </div>
+    </section>
+    <div class="recipeBookScreenshotSessionBar">
+      <div id="recipeBookScreenshotStatus" role="status" aria-live="polite"><i></i><span>Add one or more screenshots to begin.</span></div>
+      <button id="recipeBookScreenshotClear" type="button" hidden>Clear session</button>
+    </div>
+    <section id="recipeBookScreenshotReview" class="recipeBookScreenshotReview" aria-labelledby="recipeBookScreenshotReviewTitle" hidden>
+      <div class="recipeBookScreenshotReviewHead">
+        <div><span>CONFIRM BEFORE IMPORTING</span><h3 id="recipeBookScreenshotReviewTitle">Review detected materials</h3></div>
+        <p><b class="is-ready">Green</b> rows are exact. <b class="needs-review">Amber</b> rows contain readings worth checking before you apply them.</p>
+      </div>
+      <div id="recipeBookScreenshotWarnings" class="recipeBookScreenshotWarnings" role="note" hidden></div>
+      <div id="recipeBookScreenshotRows" class="recipeBookScreenshotRows"></div>
+      <fieldset class="recipeBookScreenshotMergeMode">
+        <legend>How should detected materials change My Resources?</legend>
+        <label><input type="radio" name="recipeBookScreenshotMerge" value="update" checked><span><strong>Update detected materials</strong><small>Replace detected quantities. Materials not shown stay unchanged.</small></span></label>
+        <label><input type="radio" name="recipeBookScreenshotMerge" value="add"><span><strong>Add to current totals</strong><small>Add every detected quantity to what is already saved.</small></span></label>
+        <label id="recipeBookScreenshotAddConfirmWrap" class="recipeBookScreenshotAddConfirm" hidden><input id="recipeBookScreenshotAddConfirm" type="checkbox"><span>I understand this can double-count materials from a screenshot imported before.</span></label>
+      </fieldset>
+    </section>
+    <footer class="recipeBookScreenshotFooter">
+      <p id="recipeBookScreenshotSelectionSummary">Complete every detected row to import.</p>
+      <div><button id="recipeBookScreenshotCancel" type="button">Cancel</button><button id="recipeBookScreenshotApply" type="button" disabled>Apply materials</button></div>
+    </footer>
+  </section>
+</div>
 
 <section id="dehkiaFuelView" class="appView">
   <div class="dehkiaShell">
@@ -1165,12 +1214,12 @@
   <span class="statusRight"><span id="couponStatusAlert" class="couponStatusAlert"></span><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><button id="appHealthMonitor" class="bsh-status-health bsh-status-health--checking" type="button" title="Testing local saves and Black Spirit Hub services." aria-busy="true"><span class="bsh-status-ecg" aria-hidden="true"><svg viewBox="0 0 46 28" role="presentation"><path class="bsh-status-ecg-baseline" d="M1 14H45" /><path class="bsh-status-ecg-trace" d="M1 14H10L13 11L16 22L21 4L25 18L29 12L33 14H45" /></svg></span><span class="bsh-status-health-copy" role="status" aria-live="polite"><small>Health</small><strong>Checking core systems...</strong></span></button><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
-<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.45"></script>
-<script src="Assets/GrindTracker/grind-spots-inner-edania.js?v=v0.9.45"></script>
-<script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.45"></script>
-<script src="Assets/GrindTracker/grind-guides.js?v=v0.9.45"></script>
-<script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.45"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.45"></script>
+<script src="Assets/GrindTracker/grind-spots.js?v=v0.9.46"></script>
+<script src="Assets/GrindTracker/grind-spots-inner-edania.js?v=v0.9.46"></script>
+<script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.46"></script>
+<script src="Assets/GrindTracker/grind-guides.js?v=v0.9.46"></script>
+<script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.46"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.46"></script>
 
 </body>
 </html>

@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 3,
+  "truthSets": {
+    "storage-88": {
+      "visibleLabelCount": 88,
+      "rows": [
+        [
+          { "display": "1060", "value": 1060 },
+          { "display": "2000", "value": 2000 },
+          { "display": "139.9K", "value": 139900 },
+          { "display": "174.5K", "value": 174500 },
+          { "display": "1978", "value": 1978 },
+          { "display": "1326", "value": 1326 },
+          { "display": "498.8K", "value": 498800 },
+          { "display": "12718", "value": 12718 },
+          { "display": "565.1K", "value": 565100 }
+        ],
+        [
+          { "display": "461.6K", "value": 461600 },
+          { "display": "64424", "value": 64424 },
+          { "display": "11041", "value": 11041 },
+          { "display": "652.1K", "value": 652100 },
+          { "display": "172.9K", "value": 172900 },
+          { "display": "87713", "value": 87713 },
+          { "display": "175.4K", "value": 175400 },
+          { "display": "25060", "value": 25060 },
+          { "display": "355.0K", "value": 355000 }
+        ],
+        [
+          { "display": "23358", "value": 23358 },
+          { "display": "42085", "value": 42085 },
+          { "display": "130.1K", "value": 130100 },
+          { "display": "108.2K", "value": 108200 },
+          { "display": "7326", "value": 7326 },
+          { "display": "2134", "value": 2134 },
+          { "display": null, "value": 1, "assumedOne": true },
+          { "display": null, "value": 1, "assumedOne": true },
+          { "display": "184.9K", "value": 184900 }
+        ],
+        [
+          { "display": "596", "value": 596 },
+          { "display": "4571", "value": 4571 },
+          { "display": "418", "value": 418 },
+          { "display": "77", "value": 77 },
+          { "display": "860", "value": 860 },
+          { "display": "211.4K", "value": 211400 },
+          { "display": "10800", "value": 10800 },
+          { "display": "367", "value": 367 },
+          { "display": "3021", "value": 3021 }
+        ],
+        [
+          { "display": "20636", "value": 20636 },
+          { "display": "12103", "value": 12103 },
+          { "display": "136", "value": 136 },
+          { "display": "5665", "value": 5665 },
+          { "display": "278.8K", "value": 278800 },
+          { "display": "455.1K", "value": 455100 },
+          { "display": "127.3K", "value": 127300 },
+          { "display": "11276", "value": 11276 },
+          { "display": "77463", "value": 77463 }
+        ],
+        [
+          { "display": "645.0K", "value": 645000 },
+          { "display": "53380", "value": 53380 },
+          { "display": "290.0K", "value": 290000 },
+          { "display": "294.6K", "value": 294600 },
+          { "display": "45065", "value": 45065 },
+          { "display": "19089", "value": 19089 },
+          { "display": "14602", "value": 14602 },
+          { "display": "8104", "value": 8104 },
+          { "display": "107.0K", "value": 107000 }
+        ],
+        [
+          { "display": "24268", "value": 24268 },
+          { "display": "6753", "value": 6753 },
+          { "display": "1220", "value": 1220 },
+          { "display": "2507", "value": 2507 },
+          { "display": "104.8K", "value": 104800 },
+          { "display": "43092", "value": 43092 },
+          { "display": "50919", "value": 50919 },
+          { "display": "15202", "value": 15202 },
+          { "display": "350", "value": 350 }
+        ],
+        [
+          { "display": "38549", "value": 38549 },
+          { "display": "36171", "value": 36171 },
+          { "display": "23119", "value": 23119 },
+          { "display": "129", "value": 129 },
+          { "display": "5894", "value": 5894 },
+          { "display": "5072", "value": 5072 },
+          { "display": "8694", "value": 8694 },
+          { "display": "2575", "value": 2575 },
+          { "display": "2784", "value": 2784 }
+        ],
+        [
+          { "display": "10844", "value": 10844 },
+          { "display": "212", "value": 212 },
+          { "display": "7178", "value": 7178 },
+          { "display": "1.3M", "value": 1300000 },
+          { "display": "2207", "value": 2207 },
+          { "display": "9589", "value": 9589 },
+          { "display": "9", "value": 9 },
+          { "display": "23132", "value": 23132 },
+          { "display": "59662", "value": 59662 }
+        ],
+        [
+          { "display": "13371", "value": 13371 },
+          { "display": "122", "value": 122 },
+          { "display": "40", "value": 40 },
+          { "display": "1525", "value": 1525 },
+          { "display": "789.5K", "value": 789500 },
+          { "display": "15544", "value": 15544 },
+          { "display": "69224", "value": 69224 },
+          { "display": "143.0K", "value": 143000 },
+          { "display": "76551", "value": 76551 }
+        ]
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "full-45",
+      "file": "full-45.png",
+      "sha256": "cbc17736aeca2d8895cb9c083954bfca87f3ac4b54db632449bf470b1b640cca",
+      "bytes": 237624,
+      "width": 469,
+      "height": 520,
+      "grid": {
+        "columns": 9,
+        "rows": 10,
+        "left": 8,
+        "pitch": 51,
+        "cellWidth": 45,
+        "cellHeight": 45,
+        "rowTops": [8, 59, 110, 161, 212, 263, 314, 365, 416, 467],
+        "boxTolerance": 2
+      },
+      "minimumResolved": 84,
+      "requiredResolved": [
+        { "row": 5, "column": 2 },
+        { "row": 5, "column": 4 },
+        { "row": 5, "column": 6 },
+        { "row": 6, "column": 1 },
+        { "row": 6, "column": 3 }
+      ],
+      "requiredBorderGrades": [
+        { "row": 1, "column": 1, "grade": 2 },
+        { "row": 1, "column": 2, "grade": 2 },
+        { "row": 1, "column": 3, "grade": 2 },
+        { "row": 1, "column": 4, "grade": 2 },
+        { "row": 1, "column": 5, "grade": 2 },
+        { "row": 1, "column": 6, "grade": 2 },
+        { "row": 1, "column": 8, "grade": 0 },
+        { "row": 1, "column": 9, "grade": 0 },
+        { "row": 2, "column": 9, "grade": 0 },
+        { "row": 3, "column": 2, "grade": 0 },
+        { "row": 4, "column": 5, "grade": 1 }
+      ],
+      "truth": { "set": "storage-88", "rowOffset": 0, "columnOffset": 0 }
+    },
+    {
+      "id": "full-58",
+      "file": "full-58.png",
+      "sha256": "0617e73472ca844c2379970391eeb0ddebad98e37f9363dffd540250370eeb88",
+      "bytes": 544506,
+      "width": 625,
+      "height": 746,
+      "grid": {
+        "columns": 9,
+        "rows": 10,
+        "left": 25,
+        "pitch": 65,
+        "cellWidth": 58,
+        "cellHeight": 58,
+        "rowTops": [73, 138, 202, 267, 332, 397, 461, 526, 591, 656],
+        "boxTolerance": 2
+      },
+      "minimumResolved": 79,
+      "requiredResolved": [
+        { "row": 5, "column": 2 },
+        { "row": 5, "column": 4 },
+        { "row": 5, "column": 6 },
+        { "row": 6, "column": 1 }
+      ],
+      "requiredBorderGrades": [
+        { "row": 1, "column": 1, "grade": 2 },
+        { "row": 1, "column": 2, "grade": 2 },
+        { "row": 1, "column": 3, "grade": 2 },
+        { "row": 1, "column": 4, "grade": 2 },
+        { "row": 1, "column": 5, "grade": 2 },
+        { "row": 1, "column": 6, "grade": 2 },
+        { "row": 1, "column": 8, "grade": 0 },
+        { "row": 1, "column": 9, "grade": 0 },
+        { "row": 2, "column": 9, "grade": 0 },
+        { "row": 3, "column": 2, "grade": 0 },
+        { "row": 4, "column": 5, "grade": 1 }
+      ],
+      "truth": { "set": "storage-88", "rowOffset": 0, "columnOffset": 0 }
+    },
+    {
+      "id": "full-68",
+      "file": "full-68.png",
+      "sha256": "4ddd75dab6f153ebc670f29b0fc62fc83abb4c492c5e13b9efa6f9f0f8e079be",
+      "bytes": 580496,
+      "width": 700,
+      "height": 781,
+      "grid": {
+        "columns": 9,
+        "rows": 10,
+        "left": 12,
+        "pitch": 76,
+        "cellWidth": 68,
+        "cellHeight": 68,
+        "rowTops": [12, 89, 165, 242, 318, 395, 471, 548, 624, 701],
+        "boxTolerance": 2
+      },
+      "minimumResolved": 85,
+      "requiredResolved": [
+        { "row": 5, "column": 2 },
+        { "row": 5, "column": 4 },
+        { "row": 5, "column": 6 },
+        { "row": 6, "column": 1 },
+        { "row": 6, "column": 3 }
+      ],
+      "requiredBorderGrades": [
+        { "row": 1, "column": 1, "grade": 2 },
+        { "row": 1, "column": 2, "grade": 2 },
+        { "row": 1, "column": 3, "grade": 2 },
+        { "row": 1, "column": 4, "grade": 2 },
+        { "row": 1, "column": 5, "grade": 2 },
+        { "row": 1, "column": 6, "grade": 2 },
+        { "row": 1, "column": 8, "grade": 0 },
+        { "row": 1, "column": 9, "grade": 0 },
+        { "row": 2, "column": 9, "grade": 0 },
+        { "row": 3, "column": 2, "grade": 0 },
+        { "row": 4, "column": 5, "grade": 1 }
+      ],
+      "truth": { "set": "storage-88", "rowOffset": 0, "columnOffset": 0 }
+    },
+    {
+      "id": "partial-58-4x3",
+      "file": "partial-58-4x3.png",
+      "sha256": "8cdd80e566a5b3d00bce555212ca609f3d88707cc1e5e3e68992d1b0d5c94546",
+      "bytes": 76350,
+      "width": 267,
+      "height": 198,
+      "grid": {
+        "columns": 4,
+        "rows": 3,
+        "left": 10,
+        "pitch": 64,
+        "cellWidth": 58,
+        "cellHeight": 58,
+        "rowTops": [3, 68, 132],
+        "boxTolerance": 2
+      },
+      "minimumResolved": 11,
+      "requiredResolved": [],
+      "requiredBorderGrades": [
+        { "row": 1, "column": 1, "grade": 2 },
+        { "row": 1, "column": 2, "grade": 2 },
+        { "row": 1, "column": 3, "grade": 2 },
+        { "row": 1, "column": 4, "grade": 2 },
+        { "row": 3, "column": 2, "grade": 0 }
+      ],
+      "truth": { "set": "storage-88", "rowOffset": 0, "columnOffset": 0 }
+    },
+    {
+      "id": "tight-58-2x1",
+      "file": "tight-58-2x1.png",
+      "sha256": "7ad1f2e3c22574d61c926bd7ff1a556722ff40e2e1c5353d9f9060e3c2e6800b",
+      "bytes": 11997,
+      "width": 132,
+      "height": 80,
+      "grid": {
+        "columns": 2,
+        "rows": 1,
+        "left": 5,
+        "pitch": 65,
+        "cellWidth": 58,
+        "cellHeight": 58,
+        "rowTops": [11],
+        "boxTolerance": 2
+      },
+      "minimumResolved": 1,
+      "requiredResolved": [],
+      "requiredBorderGrades": [
+        { "row": 1, "column": 1, "grade": 0 },
+        { "row": 1, "column": 2, "grade": 0 }
+      ],
+      "truth": { "set": "storage-88", "rowOffset": 0, "columnOffset": 7 }
+    }
+  ]
+}

@@ -32,6 +32,18 @@ internal static class Program
 	{
 		ApplicationConfiguration.Initialize();
 		Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+		if (args.Length > 0
+			&& string.Equals(args[0], "--recipe-book-ocr-fixture-test", StringComparison.OrdinalIgnoreCase))
+		{
+			if (args.Length != 2)
+			{
+				Console.Error.WriteLine("Usage: --recipe-book-ocr-fixture-test <manifest.json>");
+				Environment.Exit(269);
+				return;
+			}
+			Environment.Exit(RecipeBookOcrFixtureRunner.Run(AppContext.BaseDirectory, args[1]));
+			return;
+		}
 		if (args.Any(a => string.Equals(a, "--coupon-smoke-test", StringComparison.OrdinalIgnoreCase)))
 		{
 			string root = Path.Combine(Path.GetTempPath(), $"bdo-coupon-smoke-{Guid.NewGuid():N}");
@@ -299,9 +311,27 @@ internal static class Program
 				return 119;
 			}
 			string recipeBookRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
-			string[] requiredRecipeBookFiles = ["recipes.json", "manifest.json", "bundle-id.txt", "NOTICE.txt"];
-			if (requiredRecipeBookFiles.Any(fileName =>
-				!File.Exists(Path.Combine(recipeBookRoot, fileName)))
+			string[] requiredRecipeBookFiles =
+			[
+				Path.Combine(recipeBookRoot, "recipes.json"),
+				Path.Combine(recipeBookRoot, "manifest.json"),
+				Path.Combine(recipeBookRoot, "bundle-id.txt"),
+				Path.Combine(recipeBookRoot, "NOTICE.txt"),
+				Path.Combine(recipeBookRoot, "ocr", "icon-atlas.png"),
+				Path.Combine(recipeBookRoot, "ocr", "icon-index.json"),
+				Path.Combine(recipeBookRoot, "ocr", "ppocrv5", "en_PP-OCRv5_mobile_rec.onnx"),
+				Path.Combine(recipeBookRoot, "ocr", "LICENSE-ONNXRUNTIME.txt"),
+				Path.Combine(recipeBookRoot, "ocr", "LICENSE-PADDLEOCR.txt"),
+				Path.Combine(recipeBookRoot, "ocr", "MODEL-NOTICE-PPOCRV5.txt"),
+				Path.Combine(recipeBookRoot, "ocr", "THIRD-PARTY-NOTICES-ONNXRUNTIME.txt")
+			];
+			string[] requiredOcrRuntimeFiles =
+			[
+				Path.Combine(AppContext.BaseDirectory, "onnxruntime.dll"),
+				Path.Combine(AppContext.BaseDirectory, "onnxruntime_providers_shared.dll")
+			];
+			if (requiredRecipeBookFiles.Any(fileName => !File.Exists(fileName))
+				|| requiredOcrRuntimeFiles.Any(fileName => !File.Exists(fileName))
 				|| !Directory.Exists(Path.Combine(recipeBookRoot, "icons", "items"))
 				|| !Directory.EnumerateFiles(
 					Path.Combine(recipeBookRoot, "icons", "items"),
@@ -872,6 +902,46 @@ internal static class Program
 			if (!rejectedHealthArguments || CalculatorForm.GetCommandTimeout("healthCheck") != TimeSpan.FromSeconds(6))
 			{
 				return 242;
+			}
+
+			using (JsonDocument screenshotPayload = JsonDocument.Parse(
+				"{\"fileName\":\"storage.png\",\"mimeType\":\"image/png\",\"dataBase64\":\"AAAA\"}"))
+			{
+				RecipeBookScreenshotRequest screenshotRequest = RecipeBookScreenshotService.ParsePayload(screenshotPayload.RootElement);
+				if (screenshotRequest.FileName != "storage.png"
+					|| screenshotRequest.MimeType != "image/png"
+					|| screenshotRequest.DataBase64 != "AAAA")
+				{
+					return 251;
+				}
+			}
+			bool rejectedScreenshotArguments = false;
+			try
+			{
+				using JsonDocument unsafeScreenshotPayload = JsonDocument.Parse(
+					"{\"fileName\":\"storage.png\",\"mimeType\":\"image/png\",\"dataBase64\":\"AAAA\",\"path\":\"C:\\\\private.png\"}");
+				_ = RecipeBookScreenshotService.ParsePayload(unsafeScreenshotPayload.RootElement);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedScreenshotArguments = true;
+			}
+			if (!rejectedScreenshotArguments
+				|| CalculatorForm.GetCommandTimeout("analyzeRecipeBookScreenshot") != TimeSpan.FromSeconds(90)
+				|| !RecipeBookScreenshotService.TryParseQuantity("139.9K", out long roundedQuantity, out bool roundedApproximate)
+				|| roundedQuantity != 139_900
+				|| !roundedApproximate
+				|| !RecipeBookScreenshotService.TryParseQuantity("12,103", out long groupedQuantity, out bool groupedApproximate)
+				|| groupedQuantity != 12_103
+				|| groupedApproximate
+				|| RecipeBookScreenshotService.TryParseQuantity("12.5", out _, out _))
+			{
+				return 252;
+			}
+			int screenshotSmokeResult = RunRecipeBookScreenshotSmokeTest();
+			if (screenshotSmokeResult != 0)
+			{
+				return screenshotSmokeResult;
 			}
 
 			string uninitializedDatabasePath = Path.Combine(testStateRoot, "uninitialized-health.db");
@@ -3456,6 +3526,535 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 		catch (UnauthorizedAccessException)
 		{
 		}
+	}
+
+	private static int RunRecipeBookScreenshotSmokeTest()
+	{
+		if (!RecipeBookScreenshotService.TryParseQuantity("174.5K", out long firstRounded, out bool firstApproximate)
+			|| firstRounded != 174_500
+			|| !firstApproximate
+			|| !RecipeBookScreenshotService.TryParseQuantity("498.8K", out long secondRounded, out bool secondApproximate)
+			|| secondRounded != 498_800
+			|| !secondApproximate
+			|| !RecipeBookScreenshotService.TryParseQuantity("1.3M", out long millionRounded, out bool millionApproximate)
+			|| millionRounded != 1_300_000
+			|| !millionApproximate
+			|| !RecipeBookScreenshotService.TryParseQuantity("12,103", out long groupedExact, out bool groupedApproximate)
+			|| groupedExact != 12_103
+			|| groupedApproximate)
+		{
+			return 264;
+		}
+		foreach (string malformed in new[] { "7455K", "440K", "174 5K", "174.55K", "3G717" })
+		{
+			if (RecipeBookScreenshotService.TryParseQuantity(malformed, out _, out _))
+			{
+				return 265;
+			}
+		}
+
+		if (PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("455:1K") != "455.1K"
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("645,0K") != "645.0K"
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("12103") != "12103"
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("250603") is not null
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("290.0K2") is not null)
+		{
+			return 260;
+		}
+
+		static PpOcrv5QuantityCandidate QuantityCandidate(string id, string text, double confidence) =>
+			new(id, text, confidence, confidence, PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken(text));
+		PpOcrv5QuantityCandidate[] consensusCandidates =
+		[
+			QuantityCandidate("primary", "12103", 0.91),
+			QuantityCandidate("raw106", "12103", 0.88),
+			QuantityCandidate("raw100", "12103", 0.86),
+			QuantityCandidate("right-color", string.Empty, 0),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		PpOcrv5QuantityDecision consensus = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			consensusCandidates);
+		PpOcrv5QuantityCandidate[] disputedCandidates =
+		[
+			QuantityCandidate("primary", "12703", 0.99),
+			QuantityCandidate("raw106", "12103", 0.88),
+			QuantityCandidate("raw100", "12103", 0.86),
+			QuantityCandidate("right-color", string.Empty, 0),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		PpOcrv5QuantityCandidate[] singleGlyphCandidates =
+		[
+			QuantityCandidate("primary", string.Empty, 0),
+			QuantityCandidate("raw106", string.Empty, 0),
+			QuantityCandidate("raw100", string.Empty, 0),
+			QuantityCandidate("right-color", "9", 0.95),
+			QuantityCandidate("right-gray", "9", 0.94),
+			QuantityCandidate("right-otsu", "9", 0.93)
+		];
+		PpOcrv5QuantityCandidate[] unsafeTruncatedRescueCandidates =
+		[
+			QuantityCandidate("primary", string.Empty, 0),
+			QuantityCandidate("raw106", string.Empty, 0),
+			QuantityCandidate("raw100", string.Empty, 0),
+			QuantityCandidate("right-color", "665", 0.95),
+			QuantityCandidate("right-gray", "665", 0.94),
+			QuantityCandidate("right-otsu", "665", 0.93)
+		];
+		if (consensus.Status != PpOcrv5QuantityReadStatus.Confirmed
+			|| consensus.ExactQuantity != 12_103
+			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+				new Rectangle(25, 73, 58, 58),
+				disputedCandidates).Status == PpOcrv5QuantityReadStatus.Confirmed
+			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+				new Rectangle(25, 73, 58, 58),
+				singleGlyphCandidates).ExactQuantity != 9
+			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+				new Rectangle(25, 73, 58, 58),
+				unsafeTruncatedRescueCandidates).Status == PpOcrv5QuantityReadStatus.Confirmed
+			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+				new Rectangle(5, 11, 58, 58),
+				consensusCandidates).Status != PpOcrv5QuantityReadStatus.ReviewClippedLeft)
+		{
+			return 268;
+		}
+
+		PpOcrv5QuantityCandidate[] blankQuantityCandidates =
+		[
+			QuantityCandidate("primary", string.Empty, 0),
+			QuantityCandidate("raw106", string.Empty, 0),
+			QuantityCandidate("raw100", string.Empty, 0),
+			QuantityCandidate("right-color", string.Empty, 0),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		Rectangle quantitySmokeSlot = new(11, 11, 58, 58);
+		PpOcrv5QuantityRecognition blankQuantityRecognition = new(
+			quantitySmokeSlot,
+			new PpOcrv5QuantityDecision(
+				string.Empty,
+				null,
+				null,
+				false,
+				0,
+				PpOcrv5QuantityReadStatus.Invalid,
+				"No complete quantity token was read, so this quantity must be reviewed.",
+				null),
+			blankQuantityCandidates);
+		using Bitmap unlabeledQuantitySlot = new(80, 80, PixelFormat.Format32bppArgb);
+		using Bitmap unreadableVisibleQuantitySlot = new(80, 80, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(unlabeledQuantitySlot))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(38, 40, 45)))
+		using (SolidBrush iconEdge = new(Color.FromArgb(224, 224, 224)))
+		{
+			graphics.FillRectangle(background, 0, 0, unlabeledQuantitySlot.Width, unlabeledQuantitySlot.Height);
+			graphics.FillRectangle(slot, quantitySmokeSlot);
+			// A narrow bright icon edge has enough pixels to defeat a density-only test,
+			// but it must not be mistaken for a hidden quantity label.
+			graphics.FillRectangle(iconEdge, 50, 48, 1, 20);
+		}
+		using (Graphics graphics = Graphics.FromImage(unreadableVisibleQuantitySlot))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(38, 40, 45)))
+		using (SolidBrush label = new(Color.FromArgb(224, 224, 224)))
+		{
+			graphics.FillRectangle(background, 0, 0, unreadableVisibleQuantitySlot.Width, unreadableVisibleQuantitySlot.Height);
+			graphics.FillRectangle(slot, quantitySmokeSlot);
+			// Deterministic, high-luminance digit-like strokes inside the quantity band.
+			graphics.FillRectangle(label, 27, 52, 4, 13);
+			graphics.FillRectangle(label, 35, 52, 10, 3);
+			graphics.FillRectangle(label, 42, 52, 3, 13);
+			graphics.FillRectangle(label, 35, 62, 10, 3);
+		}
+		RecipeBookScreenshotService.QuantityRecognition unlabeledQuantity =
+			RecipeBookScreenshotService.MapQuantityRecognition(
+				unlabeledQuantitySlot,
+				quantitySmokeSlot,
+				blankQuantityRecognition);
+		RecipeBookScreenshotService.QuantityRecognition unreadableVisibleQuantity =
+			RecipeBookScreenshotService.MapQuantityRecognition(
+				unreadableVisibleQuantitySlot,
+				quantitySmokeSlot,
+				blankQuantityRecognition);
+		if (!unlabeledQuantity.AssumedOne
+			|| unlabeledQuantity.Value != 1
+			|| !string.IsNullOrEmpty(unlabeledQuantity.Text)
+			|| unreadableVisibleQuantity.AssumedOne
+			|| unreadableVisibleQuantity.Value is not null
+			|| unreadableVisibleQuantity.Text != "Unreadable")
+		{
+			return 267;
+		}
+
+		Color neutralBorder = Color.FromArgb(108, 108, 111);
+		Color highQualityBorder = Color.FromArgb(131, 165, 69);
+		Color specialBorder = Color.FromArgb(69, 141, 203);
+		foreach (int slotExtent in new[] { 45, 58, 68 })
+		{
+			if (!HasExpectedBorderGrade(slotExtent, neutralBorder, neutralBorder, neutralBorder, 0)
+				|| !HasExpectedBorderGrade(slotExtent, highQualityBorder, highQualityBorder, highQualityBorder, 1)
+				|| !HasExpectedBorderGrade(slotExtent, specialBorder, specialBorder, specialBorder, 2))
+			{
+				return 269;
+			}
+		}
+
+		if (!HasExpectedBorderGrade(
+				58,
+				neutralBorder,
+				neutralBorder,
+				neutralBorder,
+				0,
+				centerColor: specialBorder)
+			|| !HasExpectedBorderGrade(
+				58,
+				neutralBorder,
+				neutralBorder,
+				neutralBorder,
+				0,
+				centerColor: highQualityBorder)
+			|| !HasExpectedBorderGrade(
+				58,
+				specialBorder,
+				specialBorder,
+				specialBorder,
+				2,
+				driftX: 2,
+				driftY: 2)
+			|| !HasExpectedBorderGrade(
+				58,
+				highQualityBorder,
+				highQualityBorder,
+				highQualityBorder,
+				1,
+				driftX: -2,
+				driftY: -2)
+			|| !HasExpectedBorderGrade(
+				58,
+				specialBorder,
+				highQualityBorder,
+				neutralBorder,
+				null)
+			|| !HasExpectedBorderGrade(
+				58,
+				Color.FromArgb(243, 185, 60),
+				Color.FromArgb(243, 185, 60),
+				Color.FromArgb(243, 185, 60),
+				null)
+			|| !HasExpectedBorderGrade(
+				58,
+				Color.FromArgb(155, 82, 196),
+				Color.FromArgb(155, 82, 196),
+				Color.FromArgb(155, 82, 196),
+				null)
+			|| !HasExpectedBorderGrade(
+				58,
+				neutralBorder,
+				neutralBorder,
+				neutralBorder,
+				null,
+				clipped: true)
+			|| !HasExpectedBorderGrade(
+				23,
+				specialBorder,
+				specialBorder,
+				specialBorder,
+				null)
+			|| !HasExpectedBorderGrade(
+				58,
+				neutralBorder,
+				neutralBorder,
+				neutralBorder,
+				null,
+				centerColor: specialBorder,
+				drawBorder: false)
+			|| !HasExpectedBorderGrade(
+				58,
+				highQualityBorder,
+				highQualityBorder,
+				highQualityBorder,
+				null,
+				drawSideBorders: false)
+			|| !HasExpectedBorderGrade(
+				58,
+				specialBorder,
+				specialBorder,
+				specialBorder,
+				null,
+				drawSideBorders: false)
+			|| !HasExpectedBorderGrade(
+				58,
+				specialBorder,
+				specialBorder,
+				specialBorder,
+				null,
+				assumedTightCrop: true))
+		{
+			return 269;
+		}
+
+		int cropWidth = 625;
+		int cropHeight = 746;
+
+		using Bitmap screenshot = new(cropWidth, cropHeight, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(screenshot))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(background, 0, 0, cropWidth, cropHeight);
+			for (int row = 0; row < 10; row++)
+			{
+				for (int column = 0; column < RecipeBookScreenshotService.ExpectedColumns; column++)
+				{
+					graphics.FillRectangle(slot, 25 + column * 65, 73 + row * 65, 58, 58);
+				}
+			}
+		}
+
+		RecipeBookScreenshotService.DetectedGrid? grid =
+			RecipeBookScreenshotService.DetectGrid(screenshot, CancellationToken.None);
+		if (grid is null
+			|| grid.Columns != RecipeBookScreenshotService.ExpectedColumns
+			|| grid.Left != 25
+			|| grid.Pitch != 65
+			|| grid.RowTops.Count != 10
+			|| grid.CellWidth is < 57 or > 59)
+		{
+			return 254;
+		}
+
+		using Bitmap partial = new(267, 198, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(partial))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(background, 0, 0, partial.Width, partial.Height);
+			for (int row = 0; row < 3; row++)
+			{
+				for (int column = 0; column < 4; column++)
+				{
+					graphics.FillRectangle(slot, 10 + column * 65, 3 + row * 65, 58, 58);
+				}
+			}
+		}
+		RecipeBookScreenshotService.DetectedGrid? partialGrid =
+			RecipeBookScreenshotService.DetectGrid(partial, CancellationToken.None);
+		if (partialGrid is null
+			|| partialGrid.Columns != 4
+			|| partialGrid.Left is < 9 or > 11
+			|| partialGrid.Pitch is < 64 or > 66
+			|| partialGrid.RowTops.Count != 3)
+		{
+			return 255;
+		}
+
+		using Bitmap single = new(80, 80, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(single))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(background, 0, 0, single.Width, single.Height);
+			graphics.FillRectangle(slot, 11, 11, 58, 58);
+		}
+		RecipeBookScreenshotService.DetectedGrid? singleGrid =
+			RecipeBookScreenshotService.DetectGrid(single, CancellationToken.None);
+		if (singleGrid is null
+			|| singleGrid.Columns != 1
+			|| singleGrid.Left is < 10 or > 12
+			|| singleGrid.RowTops.Count != 1)
+		{
+			return 256;
+		}
+
+		Rectangle tomatoQuantityCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(523, 707, 58, 58),
+			new Size(673, 783),
+			65,
+			58,
+			20);
+		if (tomatoQuantityCrop != new Rectangle(516, 744, 65, 20))
+		{
+			return 257;
+		}
+
+		Rectangle tinyCanonicalCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(0, 0, 12, 12),
+			new Size(12, 12),
+			14,
+			12,
+			10);
+		Rectangle tinyExpandedCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(0, 0, 12, 12),
+			new Size(12, 12),
+			14,
+			12,
+			12);
+		if (tinyCanonicalCrop != new Rectangle(0, 1, 12, 10)
+			|| tinyExpandedCrop != new Rectangle(0, 0, 12, 12))
+		{
+			return 258;
+		}
+
+		Rectangle rightEdgeCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(615, 0, 58, 58),
+			new Size(673, 783),
+			65,
+			58,
+			22);
+		Rectangle clippedNominalCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(0, 0, 56, 58),
+			new Size(673, 783),
+			65,
+			58,
+			20);
+		Rectangle tightFirstSlotCrop = RecipeBookScreenshotService.GetQuantityCropBounds(
+			new Rectangle(4, 4, 58, 58),
+			new Size(132, 80),
+			65,
+			58,
+			20);
+		if (rightEdgeCrop != new Rectangle(608, 35, 65, 22)
+			|| clippedNominalCrop != new Rectangle(0, 37, 56, 20)
+			|| tightFirstSlotCrop != new Rectangle(0, 41, 62, 20))
+		{
+			return 259;
+		}
+
+		using Bitmap tinyScaledGrid = new(45, 25, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(tinyScaledGrid))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(background, 0, 0, tinyScaledGrid.Width, tinyScaledGrid.Height);
+			for (int row = 0; row < 2; row++)
+			{
+				for (int column = 0; column < 4; column++)
+				{
+					graphics.FillRectangle(slot, 2 + column * 10, 2 + row * 10, 8, 8);
+				}
+			}
+		}
+		RecipeBookScreenshotService.DetectedGrid? tinyGrid =
+			RecipeBookScreenshotService.DetectGrid(tinyScaledGrid, CancellationToken.None);
+		if (tinyGrid is null
+			|| tinyGrid.AssumedTightCrop
+			|| tinyGrid.Columns != 4
+			|| tinyGrid.Left is < 1 or > 3
+			|| tinyGrid.Pitch is < 9 or > 11
+			|| tinyGrid.CellWidth is < 7 or > 10
+			|| tinyGrid.RowTops.Count != 2
+			|| tinyGrid.RowTops[0] is < 1 or > 3
+			|| tinyGrid.RowTops[1] is < 11 or > 13)
+		{
+			return 261;
+		}
+
+		using Bitmap oversizedSingle = new(900, 900, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(oversizedSingle))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(background, 0, 0, oversizedSingle.Width, oversizedSingle.Height);
+			graphics.FillRectangle(slot, 100, 100, 700, 700);
+		}
+		RecipeBookScreenshotService.DetectedGrid? oversizedGrid =
+			RecipeBookScreenshotService.DetectGrid(oversizedSingle, CancellationToken.None);
+		if (oversizedGrid is null
+			|| oversizedGrid.AssumedTightCrop
+			|| oversizedGrid.Columns != 1
+			|| oversizedGrid.Left is < 95 or > 105
+			|| oversizedGrid.CellWidth is < 690 or > 710
+			|| oversizedGrid.RowTops.Count != 1
+			|| oversizedGrid.RowTops[0] is < 95 or > 105)
+		{
+			return 262;
+		}
+
+		using Bitmap wideSingle = new(200, 80, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(wideSingle))
+		using (SolidBrush slot = new(Color.FromArgb(78, 80, 85)))
+		{
+			graphics.FillRectangle(slot, 0, 0, wideSingle.Width, wideSingle.Height);
+		}
+		RecipeBookScreenshotService.DetectedGrid? wideGrid =
+			RecipeBookScreenshotService.DetectGrid(wideSingle, CancellationToken.None);
+		if (wideGrid is null
+			|| !wideGrid.AssumedTightCrop
+			|| wideGrid.Columns != 1
+			|| wideGrid.Left != 60
+			|| wideGrid.CellWidth != 80
+			|| wideGrid.RowTops.Count != 1
+			|| wideGrid.RowTops[0] != 0)
+		{
+			return 263;
+		}
+
+		// Loading the session validates the bundled model, embedded dictionary, and
+		// ONNX Runtime native loader without analyzing or retaining user data.
+		using PpOcrv5QuantityRecognizer recognizer = new(AppContext.BaseDirectory);
+		return 0;
+	}
+
+	private static bool HasExpectedBorderGrade(
+		int slotExtent,
+		Color topBorder,
+		Color leftBorder,
+		Color rightBorder,
+		int? expectedGrade,
+		Color? centerColor = null,
+		int driftX = 0,
+		int driftY = 0,
+		bool drawBorder = true,
+		bool drawSideBorders = true,
+		bool clipped = false,
+		bool assumedTightCrop = false)
+	{
+		int margin = clipped ? 0 : 8;
+		int canvasWidth = slotExtent + margin * 2 + Math.Abs(driftX);
+		int canvasHeight = slotExtent + margin * 2 + Math.Abs(driftY);
+		using Bitmap bitmap = new(canvasWidth, canvasHeight, PixelFormat.Format32bppArgb);
+		using (Graphics graphics = Graphics.FromImage(bitmap))
+		using (SolidBrush background = new(Color.FromArgb(18, 19, 23)))
+		using (SolidBrush slot = new(Color.FromArgb(29, 29, 32)))
+		{
+			graphics.FillRectangle(background, 0, 0, bitmap.Width, bitmap.Height);
+			Rectangle actualBox = new(margin, margin, slotExtent, slotExtent);
+			graphics.FillRectangle(slot, actualBox);
+			if (centerColor is Color center)
+			{
+				int centerInset = Math.Max(5, slotExtent / 6);
+				using SolidBrush centerBrush = new(center);
+				graphics.FillRectangle(
+					centerBrush,
+					Rectangle.Inflate(actualBox, -centerInset, -centerInset));
+			}
+			if (drawBorder)
+			{
+				using Pen topPen = new(topBorder, 2);
+				graphics.DrawLine(topPen, actualBox.Left, actualBox.Top, actualBox.Right - 1, actualBox.Top);
+				if (drawSideBorders)
+				{
+					using Pen leftPen = new(leftBorder, 2);
+					using Pen rightPen = new(rightBorder, 2);
+					graphics.DrawLine(leftPen, actualBox.Left, actualBox.Top, actualBox.Left, actualBox.Bottom - 1);
+					graphics.DrawLine(rightPen, actualBox.Right - 1, actualBox.Top, actualBox.Right - 1, actualBox.Bottom - 1);
+				}
+			}
+		}
+
+		Rectangle detectedBox = new(
+			clipped ? -1 : margin + driftX,
+			clipped ? -1 : margin + driftY,
+			slotExtent,
+			slotExtent);
+		RecipeBookScreenshotService.BorderGradeRecognition result =
+			RecipeBookScreenshotService.DetectBorderGrade(bitmap, detectedBox, assumedTightCrop);
+		return expectedGrade is int grade
+			? result.Grade == grade && result.Confidence is >= 0.58 and <= 1
+			: result.Grade is null && result.Confidence == 0;
 	}
 
 	private static void CopyDirectoryIfPresent(

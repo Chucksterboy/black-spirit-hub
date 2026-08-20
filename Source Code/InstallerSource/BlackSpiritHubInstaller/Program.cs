@@ -585,6 +585,8 @@ internal sealed class InstallerForm : Form
 	private static readonly string[] RequiredPayloadFiles =
 	{
 		InstallerConfig.ExeName,
+		"onnxruntime.dll",
+		"onnxruntime_providers_shared.dll",
 		"WebView2Loader.dll",
 		"e_sqlite3.dll",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.html",
@@ -602,7 +604,14 @@ internal sealed class InstallerForm : Form
 		"Assets/RecipeBook/manifest.json",
 		"Assets/RecipeBook/bundle-id.txt",
 		"Assets/RecipeBook/NOTICE.txt",
-		"Assets/RecipeBook/icons/item-fallback.svg"
+		"Assets/RecipeBook/icons/item-fallback.svg",
+		"Assets/RecipeBook/ocr/icon-atlas.png",
+		"Assets/RecipeBook/ocr/icon-index.json",
+		"Assets/RecipeBook/ocr/ppocrv5/en_PP-OCRv5_mobile_rec.onnx",
+		"Assets/RecipeBook/ocr/LICENSE-PADDLEOCR.txt",
+		"Assets/RecipeBook/ocr/MODEL-NOTICE-PPOCRV5.txt",
+		"Assets/RecipeBook/ocr/LICENSE-ONNXRUNTIME.txt",
+		"Assets/RecipeBook/ocr/THIRD-PARTY-NOTICES-ONNXRUNTIME.txt"
 	};
 
 	internal static void ValidatePayloadArchive(ZipArchive archive)

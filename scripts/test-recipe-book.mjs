@@ -22,7 +22,7 @@ const end=js.indexOf(endMarker);
 assert.ok(start>=0&&end>start,"Recipe Book testable core markers must exist");
 const coreSource=js.slice(start+startMarker.length,end);
 const context=vm.createContext({console});
-vm.runInContext(`${coreSource}\nglobalThis.recipeBookCore={RECIPE_BOOK_PAGE_SIZE,RECIPE_BOOK_ASSET_ROOT,recipeBookSearchNorm,recipeBookSearchTokens,recipeBookTypeLabel,recipeBookSafeIconPath,recipeBookPrepareData,recipeBookFilterRecipes,recipeBookIconDisplaySize,recipeBookIngredientKey,recipeBookResourceAmount,recipeBookSanitizeResources,recipeBookResourceCandidates,recipeBookRecipeRequirements,recipeBookRecipeCraftCount,recipeBookClampCraftAmount,recipeBookSanitizeCraftPlans,recipeBookCraftMaterialUsage,recipeBookItemUsage,recipeBookCraftableRecipes};`,context,{filename:"recipe-book-core.js"});
+vm.runInContext(`${coreSource}\nglobalThis.recipeBookCore={RECIPE_BOOK_PAGE_SIZE,RECIPE_BOOK_ASSET_ROOT,RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS,recipeBookSearchNorm,recipeBookSearchTokens,recipeBookTypeLabel,recipeBookSafeIconPath,recipeBookPrepareData,recipeBookFilterRecipes,recipeBookIconDisplaySize,recipeBookIngredientKey,recipeBookResourceAmount,recipeBookSanitizeResources,recipeBookResourceCandidates,recipeBookResourceInventoryRows,recipeBookRecipeRequirements,recipeBookRecipeCraftCount,recipeBookClampCraftAmount,recipeBookSanitizeCraftPlans,recipeBookCraftMaterialUsage,recipeBookItemUsage,recipeBookCraftableRecipes};`,context,{filename:"recipe-book-core.js"});
 const core=context.recipeBookCore;
 
 assert.equal(core.RECIPE_BOOK_PAGE_SIZE,24,"Recipe pages must contain 24 cards");
@@ -95,6 +95,161 @@ assert.equal(core.recipeBookRecipeCraftCount({inputs:[{key:"2:0",count:2},{key:"
 assert.equal(core.recipeBookRecipeCraftCount({inputs:[{key:"2:2",count:1}]},{"2:1":99}),0,"one enhancement level must never satisfy another");
 assert.deepEqual(Array.from(core.recipeBookCraftableRecipes(prepared,{"2:0":14,"3:0":4}),entry=>[entry.recipe.id,entry.maxCrafts]),[["alchemy-sinners",7],["alchemy-draught",2]],"Craftables must retain recipe variants and calculate each independently");
 
+assert.ok(Array.isArray(core.RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS),"BDO substitution groups must be declared as reviewed core data");
+assert.ok(Object.isFrozen(core.RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS),"Substitution definitions must be immutable at runtime");
+for(const groupId of ["meat-1","meat-reptile","meat-bird","blood-1","blood-2","blood-3","blood-4","blood-5","grain","flour","dough","fruit","vegetable","flower","herb-juice"]){
+  assert.ok(core.RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS.some(group=>group.id===groupId),`Missing reviewed BDO substitution group ${groupId}`);
+}
+
+const substitutionFixture={
+  schemaVersion:1,
+  source:{kind:"substitution fixture"},
+  counts:{recipes:5,items:9},
+  items:{
+    "6204":{name:"Rhino Blood",grade:0,icon:"icons/6204.webp"},
+    "6214":{name:"Wolf Blood",grade:0,icon:"icons/6214.webp"},
+    "7201":{name:"Wheat Dough",grade:0,icon:"icons/7201.webp"},
+    "7202":{name:"Barley Dough",grade:0,icon:"icons/7202.webp"},
+    "7901":{name:"Deer Meat",grade:0,icon:"icons/7901.webp"},
+    "7908":{name:"Lizard Meat",grade:0,icon:"icons/7908.webp"},
+    "7913":{name:"Wolf Meat",grade:0,icon:"icons/7913.webp"},
+    "7915":{name:"Cheetah Dragon Meat",grade:0,icon:"icons/7915.webp"},
+    "999999":{name:"Test Meal",grade:0,icon:"icons/999999.webp"}
+  },
+  recipes:[
+    {id:"cook-red-meat",outputId:"999999",type:"COOK",inputs:[{itemId:"7905",count:5}]},
+    {id:"alchemy-blood",outputId:"999999",type:"ALCHEMY",inputs:[{itemId:"6214",count:2}]},
+    {id:"cook-dough",outputId:"999999",type:"COOK",inputs:[{itemId:"7201",count:2}]},
+    {id:"cook-reptile",outputId:"999999",type:"COOK",inputs:[{itemId:"7908",count:2}]},
+    {id:"cook-fruit",outputId:"999999",type:"COOK",inputs:[{itemId:"7313",count:2}]},
+    {id:"house-exact",outputId:"999999",type:"HOUSE",inputs:[{itemId:"7901",count:5}]},
+    {id:"herbal-juice",outputId:"999999",type:"SIMPLE_ALCHEMY",inputs:[{itemId:"5401",count:3}]},
+    {id:"herbal-juice-azalea",outputId:"999999",type:"SIMPLE_ALCHEMY",inputs:[{itemId:"5402",count:3}]},
+    {id:"herbal-juice-weeds",outputId:"999999",type:"SIMPLE_ALCHEMY",inputs:[{itemId:"5600",count:10}]}
+  ]
+};
+const substitutionData=core.recipeBookPrepareData(substitutionFixture);
+assert.ok(Array.isArray(substitutionData.substitutionGroups)&&substitutionData.substitutionGroups.length>=14,"Prepared data must expose the reviewed substitution groups");
+assert.ok(substitutionData.substitutionGroupLookup["meat-1"],"Prepared data must index substitution groups by stable ID");
+assert.equal(substitutionData.substitutionGroupLookup["meat-1"].sharedIcon,true,"Meat Group metadata must preserve its shared-icon ambiguity flag for OCR");
+assert.equal(substitutionData.substitutionGroupLookup["blood-1"].sharedIcon,true,"Blood Group metadata must preserve its shared-icon ambiguity flag for OCR");
+assert.equal(substitutionData.substitutionGroupLookup.grain.sharedIcon,false,"Non-identical quality-tier groups must not be mislabeled as shared meat/blood icons");
+assert.equal(substitutionData.substitutionMemberByKey["7901:0"]?.groupId,"meat-1","Prepared data must index exact member identities without replacing their keys");
+assert.ok(substitutionData.resourceLookup["7913:0"],"A curated substitute absent from recipe inputs must be synthesized as a selectable resource identity");
+assert.equal(core.recipeBookResourceCandidates(substitutionData,"Wolf Meat",10)[0]?.key,"7913:0","Synthesized substitution members must be searchable by their real material name");
+assert.deepEqual(core.recipeBookFilterRecipes(substitutionData,{query:"Goat Meat",mode:"ingredient"}).map(recipe=>recipe.id),["cook-red-meat"],"Ingredient search must expose every valid member of a generic substitution-group recipe");
+assert.equal(core.recipeBookFilterRecipes(substitutionData,{query:"Wolf Meat",mode:"ingredient"}).some(recipe=>recipe.id==="house-exact"),false,"Ingredient search must not expand an exact non-group recipe to sibling materials");
+assert.equal(substitutionData.substitutionMemberByKey["820108:0"]?.groupId,"fruit","Wild Berry must be an exact member of the explicitly requested Fruit Group");
+assert.equal(substitutionData.substitutionMemberByKey["820113:0"]?.groupId,"fruit","Persimmon must be an exact member of the explicitly requested Fruit Group");
+assert.deepEqual(core.recipeBookFilterRecipes(substitutionData,{query:"Wild Berry",mode:"ingredient"}).map(recipe=>recipe.id),["cook-fruit"],"Ingredient search must expose Wild Berry through a generic Fruit Group recipe");
+assert.deepEqual(core.recipeBookFilterRecipes(substitutionData,{query:"Persimmon",mode:"ingredient"}).map(recipe=>recipe.id),["cook-fruit"],"Ingredient search must expose Persimmon through a generic Fruit Group recipe");
+const goatUsage=core.recipeBookItemUsage(substitutionData,"7957",0,4);
+assert.equal(goatUsage.recipeCount,1,"A substitute tooltip must report the generic recipe that accepts it");
+assert.equal(goatUsage.outputs[0]?.outputId,"999999","Substitute usage must resolve to the same crafted output as the canonical group ingredient");
+assert.equal(substitutionData.resourceLookup["7957:0"].uses,goatUsage.recipeCount,"Search ranking and tooltip usage must share the same group-applicability rules");
+
+const exactMeatResources=core.recipeBookSanitizeResources({"7901:0":10000,"7913:0":10000},substitutionData);
+assert.deepEqual({...exactMeatResources},{"7901:0":10000,"7913:0":10000},"Grouped presentation must preserve each exact material key and quantity in storage");
+const meatRows=Array.from(core.recipeBookResourceInventoryRows(substitutionData,exactMeatResources));
+assert.equal(meatRows.length,1,"Two tracked red meats must project as one inventory card");
+const meatRow=meatRows[0];
+assert.equal(meatRow.kind,"group");
+assert.equal(meatRow.id,"group:meat-1");
+assert.equal(meatRow.groupId,"meat-1");
+assert.equal(meatRow.name,"Meat Group 1");
+assert.equal(meatRow.rawTotal,20000,"Five different 10K red meats would likewise sum to one 50K raw group total");
+assert.equal(meatRow.equivalentTotal,20000,"One-to-one meat substitutes must retain the same recipe-unit total");
+assert.equal(meatRow.weighted,false);
+assert.deepEqual(Array.from(meatRow.members,member=>[member.key,member.amount]).sort(),[["7901:0",10000],["7913:0",10000]],"The grouped card must retain every tracked member for its icon and editable detail row");
+
+const redMeatRecipe=substitutionData.recipes.find(recipe=>recipe.id==="cook-red-meat");
+const redMeatRequirement=core.recipeBookRecipeRequirements(redMeatRecipe,exactMeatResources,substitutionData)[0];
+assert.equal(redMeatRequirement.key,"group:meat-1");
+assert.equal(redMeatRequirement.groupId,"meat-1");
+assert.equal(redMeatRequirement.candidateKey,substitutionData.substitutionGroupLookup["meat-1"].representativeKey,"Grouped requirements must use the reviewed representative icon identity");
+assert.equal(redMeatRequirement.name,"Meat Group 1");
+assert.equal(redMeatRequirement.count,5);
+assert.equal(redMeatRequirement.owned,20000,"A cooking recipe must pool all same-group meat stock");
+assert.equal(redMeatRequirement.rawOwned,20000);
+assert.equal(redMeatRequirement.weighted,false);
+assert.equal(core.recipeBookRecipeCraftCount(redMeatRecipe,exactMeatResources,substitutionData),4000,"Group-pooled stock must determine the craftable batch count");
+const repeatedMeatRecipe={type:"COOK",inputs:[{key:"7905:0",count:2},{key:"7905:0",count:3}]},repeatedMeatRequirements=core.recipeBookRecipeRequirements(repeatedMeatRecipe,{"7901:0":10},substitutionData);
+assert.equal(repeatedMeatRequirements.length,1,"Repeated inputs from one substitution group must share one pooled requirement");
+assert.equal(repeatedMeatRequirements[0].count,5,"Same-group recipe inputs must aggregate before craft division");
+assert.equal(core.recipeBookRecipeCraftCount(repeatedMeatRecipe,{"7901:0":10},substitutionData),2);
+const exactPotatoRecipe={type:"COOK",inputs:[{key:"7003:0",count:5}]};
+assert.equal(core.recipeBookRecipeRequirements(exactPotatoRecipe,{"7001:0":5},substitutionData)[0].key,"7003:0","A same-type recipe that literally requires a non-representative member must remain exact");
+assert.equal(core.recipeBookRecipeCraftCount(exactPotatoRecipe,{"7001:0":5},substitutionData),0,"Wheat must never satisfy an exact Potato recipe merely because both are grains");
+const genericGrainRecipe={type:"COOK",inputs:[{key:"7001:0",count:5}]},qualityGrainRequirement=core.recipeBookRecipeRequirements(genericGrainRecipe,{"7006:0":3},substitutionData)[0];
+assert.equal(qualityGrainRequirement.key,"group:grain","The representative Wheat requirement must identify a generic Grain Group recipe");
+assert.equal(qualityGrainRequirement.owned,6,"High-quality Wheat must contribute the conservative two recipe units per physical item");
+assert.equal(core.recipeBookRecipeCraftCount(genericGrainRecipe,{"7006:0":3},substitutionData),1,"Quality grain must safely satisfy a generic grain recipe at its conservative tier value");
+const fruitResources=core.recipeBookSanitizeResources({"820108:0":7,"820113:0":5},substitutionData),fruitRow=Array.from(core.recipeBookResourceInventoryRows(substitutionData,fruitResources)).find(row=>row.groupId==="fruit"),fruitRecipe=substitutionData.recipes.find(recipe=>recipe.id==="cook-fruit"),fruitRequirement=core.recipeBookRecipeRequirements(fruitRecipe,fruitResources,substitutionData)[0];
+assert.ok(fruitRow,"Wild Berry and Persimmon stock must project into one Fruit Group inventory card");
+assert.equal(fruitRow.rawTotal,12,"Fruit Group inventory must add the literal Wild Berry and Persimmon quantities");
+assert.equal(fruitRow.equivalentTotal,12,"Wild Berry and Persimmon must contribute one recipe unit per item");
+assert.deepEqual(Array.from(fruitRow.members,member=>member.key).sort(),["820108:0","820113:0"],"The grouped Fruit card must retain both exact member identities");
+assert.equal(fruitRequirement.key,"group:fruit","An Apple representative input must resolve as the generic Fruit Group requirement");
+assert.equal(fruitRequirement.owned,12,"Generic fruit requirements must pool Wild Berry and Persimmon stock");
+assert.equal(core.recipeBookRecipeCraftCount(fruitRecipe,fruitResources,substitutionData),6,"Fruit Group stock must drive generic recipe craftability");
+const herbResources={"5402:0":3,"5600:0":10},herbRow=Array.from(core.recipeBookResourceInventoryRows(substitutionData,herbResources)).find(row=>row.groupId==="herb-juice"),herbRecipe=substitutionData.recipes.find(recipe=>recipe.id==="herbal-juice"),herbRequirement=core.recipeBookRecipeRequirements(herbRecipe,herbResources,substitutionData)[0];
+assert.equal(herbRow.name,"Herb Group 1","The user-reviewed wild-herb pool must have a single grouped inventory card");
+assert.equal(herbRow.rawTotal,13,"The herb group must preserve the literal item count");
+assert.equal(herbRow.equivalentTotal,60,"Three wild herbs and ten Weeds must each contribute one 30-unit Herbal Juice batch");
+assert.equal(herbRequirement.count,30);
+assert.equal(herbRequirement.owned,60);
+assert.equal(core.recipeBookRecipeCraftCount(herbRecipe,herbResources,substitutionData),2,"Herb Group 1 must honor both the 3-herb and 10-Weeds Herbal Juice ratios");
+assert.equal(substitutionData.substitutionCanonicalRecipeById["herbal-juice-azalea"],"herbal-juice","Equivalent herb recipe variants must alias the pooled canonical recipe");
+assert.equal(substitutionData.substitutionCanonicalRecipeById["herbal-juice-weeds"],"herbal-juice","The 10-Weeds variant must alias the 3-herb pooled recipe through exact integer units");
+assert.equal(core.recipeBookCraftableRecipes(substitutionData,herbResources).filter(entry=>entry.recipe.id.startsWith("herbal-juice")).map(entry=>entry.recipe.id).join("|"),"herbal-juice","Craftables must show one pooled group card instead of duplicate material variants");
+assert.equal(core.recipeBookFilterRecipes(substitutionData,{query:"Silver Azalea",mode:"ingredient"}).map(recipe=>recipe.id).join("|"),"herbal-juice","Ingredient search must return the pooled canonical recipe once instead of its duplicate exact alias");
+assert.equal(core.recipeBookItemUsage(substitutionData,"5402",0,4).recipeCount,1,"A grouped member tooltip must count the pooled Herbal Juice recipe once");
+const groupedCraftable=Array.from(core.recipeBookCraftableRecipes(substitutionData,exactMeatResources),entry=>[entry.recipe.id,entry.maxCrafts]);
+assert.ok(groupedCraftable.some(([id,maxCrafts])=>id==="cook-red-meat"&&maxCrafts===4000),"Craftables must use substitution-aware recipe counts, not only direct exact stock");
+
+const bloodResources=core.recipeBookSanitizeResources({"6204:0":10,"6214:0":10},substitutionData);
+const bloodRow=Array.from(core.recipeBookResourceInventoryRows(substitutionData,bloodResources)).find(row=>row.groupId==="blood-1");
+assert.ok(bloodRow,"Same-group bloods must project into one Blood Group 1 inventory card");
+assert.equal(bloodRow.rawTotal,20);
+assert.equal(bloodRow.equivalentTotal,20,"Blood Group 1 members in this reviewed one-to-one model must pool at the same amount");
+assert.equal(bloodRow.weighted,false);
+const bloodRecipe=substitutionData.recipes.find(recipe=>recipe.id==="alchemy-blood");
+assert.equal(core.recipeBookRecipeCraftCount(bloodRecipe,bloodResources,substitutionData),10,"Alchemy recipes must consume pooled same-group blood stock");
+
+for(const [groupId,resources,recipeId] of [
+  ["dough",{"7201:0":10,"7202:0":10},"cook-dough"],
+  ["meat-reptile",{"7908:0":10,"7915:0":10},"cook-reptile"]
+]){
+  const inventoryRow=Array.from(core.recipeBookResourceInventoryRows(substitutionData,resources)).find(row=>row.groupId===groupId);
+  assert.ok(inventoryRow,`${groupId} substitutes must project into one inventory card`);
+  assert.equal(inventoryRow.rawTotal,20,`${groupId} must show the literal sum of stored items`);
+  assert.equal(inventoryRow.weighted,true,`${groupId} must disclose that its recipe units use member factors`);
+  assert.notEqual(inventoryRow.equivalentTotal,inventoryRow.rawTotal,`${groupId} must distinguish raw item total from weighted recipe units`);
+  const expectedEquivalent=Array.from(inventoryRow.members,member=>member.amount*member.factor).reduce((sum,value)=>sum+value,0);
+  assert.equal(inventoryRow.equivalentTotal,expectedEquivalent,`${groupId} recipe units must be the exact weighted member sum`);
+  const recipe=substitutionData.recipes.find(entry=>entry.id===recipeId),requirement=core.recipeBookRecipeRequirements(recipe,resources,substitutionData)[0],recipeMember=inventoryRow.members.find(member=>member.key===recipe.inputs[0].key);
+  assert.equal(requirement.key,`group:${groupId}`);
+  assert.equal(requirement.owned,expectedEquivalent);
+  assert.equal(requirement.count,recipe.inputs[0].count*recipeMember.factor,"Recipe cost must be normalized to the same units as weighted stock");
+  assert.equal(core.recipeBookRecipeCraftCount(recipe,resources,substitutionData),Math.floor(expectedEquivalent/requirement.count));
+}
+
+const houseRecipe=substitutionData.recipes.find(recipe=>recipe.id==="house-exact"),wolfOnly={"7913:0":10000},mixedMeat={"7901:0":10000,"7913:0":10000};
+const houseRequirement=core.recipeBookRecipeRequirements(houseRecipe,mixedMeat,substitutionData)[0];
+assert.equal(houseRequirement.key,"7901:0","Non-cooking/non-alchemy recipes must retain the exact ingredient key");
+assert.equal(houseRequirement.groupId,"");
+assert.equal(houseRequirement.owned,10000,"HOUSE recipes must not count a same-group substitute toward an exact material");
+assert.equal(houseRequirement.rawOwned,10000);
+assert.equal(core.recipeBookRecipeCraftCount(houseRecipe,wolfOnly,substitutionData),0,"A substitute must not satisfy an exact HOUSE recipe outside the reviewed recipe-type scope");
+assert.equal(core.recipeBookRecipeCraftCount(houseRecipe,mixedMeat,substitutionData),2000);
+
+const singleResourceRow=Array.from(core.recipeBookResourceInventoryRows(prepared,{"3:0":2}))[0];
+assert.equal(singleResourceRow.kind,"single","Materials without a reviewed substitution group must retain a normal inventory row");
+assert.equal(singleResourceRow.id,"3:0");
+assert.equal(singleResourceRow.key,"3:0");
+assert.equal(singleResourceRow.candidate.key,"3:0");
+assert.equal(singleResourceRow.amount,2);
+
 const usageFixture={...fixture,counts:{recipes:4,items:6},recipes:[...fixture.recipes,{id:"alchemy-draught-alt",outputId:"4",type:"SIMPLE_ALCHEMY",station:"Processing",inputs:[{itemId:"2",count:3}]}]};
 const usagePrepared=core.recipeBookPrepareData(usageFixture),wolfUsage=core.recipeBookItemUsage(usagePrepared,"2",0,1),draughtUsage=core.recipeBookItemUsage(usagePrepared,"4",0,4);
 assert.equal(wolfUsage.recipeCount,3,"usage summaries must preserve every recipe variant");
@@ -144,12 +299,22 @@ if(fs.existsSync(bundledDataPath)){
   assert.equal(filterReport.counts.rawRecipes,payload.counts.rawRecipes,"filter report and runtime dataset must describe the same source snapshot");
   assert.deepEqual(filterReport.counts.exclusions,payload.counts.exclusions,"filter report exclusion totals must match the runtime dataset");
   assert.equal(bundled.recipes.length,9854,"the reviewed client snapshot recipe count changed unexpectedly");
-  assert.equal(Object.keys(bundled.items).length,7100,"the reviewed client snapshot item count changed unexpectedly");
-  assert.equal(bundled.resourceItems.length,4118,"the reviewed snapshot ingredient identity count changed unexpectedly");
+  assert.equal(Object.keys(bundled.items).length,7125,"the reviewed client snapshot plus 25 curated group-only material identities changed unexpectedly");
+  assert.equal(bundled.resourceItems.length,4147,"the reviewed snapshot plus curated substitution-member identities changed unexpectedly");
   assert.equal(core.recipeBookResourceCandidates(bundled,"Eltro Sea Crystal",12).length,70,"all exact same-name ingredient identities must remain selectable");
   assert.equal(core.recipeBookResourceCandidates(bundled,"756586",12)[0]?.itemId,"756586","ingredient item IDs must be searchable when client names are ambiguous");
+  const potatoStew=bundled.recipes.find(recipe=>recipe.id==="recipe-9341-e1888a1a50c199ab"),potatoRequirement=core.recipeBookRecipeRequirements(potatoStew,{"7001:0":999},bundled).find(requirement=>requirement.candidateKey==="7003:0");
+  assert.equal(potatoRequirement?.key,"7003:0","The current Chanterelle and Potato Stew recipe must retain its exact Potato requirement");
+  assert.equal(potatoRequirement?.owned,0,"Wheat stock must not satisfy the current exact Potato requirement");
+  const beer=bundled.recipes.find(recipe=>recipe.id==="recipe-9213-18484873a500e6fe"),qualityBeerStock={"7006:0":3,"9059:0":6,"9005:0":2,"9002:0":1};
+  assert.equal(core.recipeBookRecipeCraftCount(beer,qualityBeerStock,bundled),1,"Three high-quality Wheat must safely cover one current generic Beer grain requirement at the conservative tier value");
   const ampleResources=Object.fromEntries(bundled.resourceItems.map(candidate=>[candidate.key,999999999999]));
-  assert.equal(core.recipeBookCraftableRecipes(bundled,ampleResources).length,bundled.recipes.length,"every valid recipe must become directly craftable when every exact ingredient identity is stocked");
+  const reviewedAliases=Object.entries(bundled.substitutionCanonicalRecipeById).sort(([left],[right])=>left.localeCompare(right));
+  assert.equal(JSON.stringify(reviewedAliases),JSON.stringify([
+    ["recipe-566-5c5c1b8235e7782d","recipe-566-afff699b4d59d071"],["recipe-566-a81f259c9ed83df0","recipe-566-afff699b4d59d071"],["recipe-566-cc66c43f469b0276","recipe-566-afff699b4d59d071"],["recipe-566-f7a5068fdc86fa76","recipe-566-afff699b4d59d071"],
+    ["recipe-569-0a8b655f7a02cb3e","recipe-569-f2c6a98dfd8018ff"],["recipe-569-0d9da151969e7aa8","recipe-569-f2c6a98dfd8018ff"],["recipe-569-2aa2c73496e28e93","recipe-569-f2c6a98dfd8018ff"],["recipe-569-3b3f162ac29964d1","recipe-569-f2c6a98dfd8018ff"],["recipe-569-bbe19e456b4d1a82","recipe-569-f2c6a98dfd8018ff"],["recipe-569-daaca9c94f9c47ee","recipe-569-f2c6a98dfd8018ff"],["recipe-569-ff0fdf20c6bed191","recipe-569-f2c6a98dfd8018ff"]
+  ]),"Only the reviewed Grain Juice and Herbal Juice material variants should collapse into canonical pooled recipes");
+  assert.equal(core.recipeBookCraftableRecipes(bundled,ampleResources).length,bundled.recipes.length-Object.keys(bundled.substitutionCanonicalRecipeById).length,"every distinct valid recipe must become craftable while equivalent substitution variants render once");
   assert.equal(core.recipeBookFilterRecipes(bundled,{query:"Wolf's Blood",mode:"ingredient"}).length,36,"Wolf's Blood must resolve to every current Wolf Blood recipe in the reviewed snapshot");
   assert.equal(payload.source.kind,"installed-black-desert-client","recipe facts must come from the installed game client");
   assert.equal(payload.source.locale,"en","the bundled catalog must use English client names");
@@ -254,8 +419,11 @@ for(const iconClass of ["catalog","resources","craftables"]){
 }
 assert.doesNotMatch(workspaceMarkup,/[⌕◇✦]/,"workspace tabs must not use small font glyphs as icons");
 assert.match(html,/id="recipeBookResourcesPanel"[\s\S]*?id="recipeBookResourceForm"[\s\S]*?id="recipeBookResourceList"/,"My Resources must provide ingredient search, quantity entry, and an editable inventory");
+assert.doesNotMatch(html,/id="recipeBookResourceSummary"/,"The removed material-stack/substitute-group summary pill must not return");
+assert.doesNotMatch(js,/resourceSummary:document\.getElementById\("recipeBookResourceSummary"\)/,"The removed resource summary pill must not retain dormant controller wiring");
+assert.doesNotMatch(html,/Quantities are saved locally on this PC\.?/i,"My Resources must not show the removed local-save sentence");
 assert.match(html,/id="recipeBookCraftablesPanel"[\s\S]*?id="recipeBookCraftableGrid"/,"Craftables must provide its own results panel");
-assert.match(html,/<\/section>\s*<div id="recipeBookItemTooltip" class="recipeBookItemTooltip" role="tooltip" hidden><\/div>\s*<section id="dehkiaFuelView"/,"item tooltip must be one body-level portal outside the clipped Recipe Book view");
+assert.match(html,/<\/section>\s*<div id="recipeBookItemTooltip" class="recipeBookItemTooltip" role="tooltip" hidden><\/div>[\s\S]*?<section id="dehkiaFuelView"/,"item tooltip must be one body-level portal outside the clipped Recipe Book view");
 assert.match(html,/id="recipeBookSearchInput"[^>]*aria-label="Search recipes"/,"catalog search must have an explicit accessible name");
 assert.match(html,/id="recipeBookCraftableSearch"[^>]*aria-label="Filter craftable recipes"/,"craftable search must have an explicit accessible name");
 assert.doesNotMatch(html,/id="recipeBookCraftableGrid"[^>]*aria-live/,"full craftable cards must not be announced as one large live region");
@@ -281,6 +449,17 @@ assert.match(js,/counts\.uniqueIcons[\s\S]*?cached images/,"catalog status must 
 assert.match(js,/persistSetting\(RECIPE_BOOK_RESOURCES_SETTING/,"My Resources must persist locally");
 assert.match(js,/persistSetting\(RECIPE_BOOK_CRAFT_PLANS_SETTING/,"craft planner choices must persist locally");
 assert.match(js,/aria-activedescendant/,"resource autocomplete must expose its keyboard-highlighted option");
+const resourceRenderStart=js.indexOf("function recipeBookRenderResources"),resourceRenderEnd=js.indexOf("const RECIPE_BOOK_OCR_MAX_FILES",resourceRenderStart),resourceRenderSource=js.slice(resourceRenderStart,resourceRenderEnd);
+assert.ok(resourceRenderStart>=0&&resourceRenderEnd>resourceRenderStart,"My Resources renderer must remain discoverable for grouped-card regression checks");
+assert.match(resourceRenderSource,/recipeBookResourceInventoryRows\(recipeBookState\.data,recipeBookState\.resources\)/,"My Resources must render the projected inventory rows rather than one duplicate card per substitute");
+assert.match(resourceRenderSource,/class="[^"]*recipeBookResourceGroupCard[^"]*"[^>]*data-resource-group=/,"Each projected substitution group must render as one identifiable group card");
+assert.match(resourceRenderSource,/row\.members\.slice\(0,6\)\.map\([\s\S]*?class="recipeBookResourceGroupIcon"[\s\S]*?recipeBookIconMarkup/,"A group card must render a bounded stack of its tracked material icons");
+assert.match(resourceRenderSource,/class="recipeBookResourceGroupTotals"[\s\S]*?data-resource-group-raw[\s\S]*?row\.rawTotal[\s\S]*?data-resource-group-equivalent[\s\S]*?row\.equivalentTotal/,"A group card must show its literal raw total alongside its normalized recipe-unit total");
+assert.match(resourceRenderSource,/Recipe units\$\{row\.weighted\?"":" \(1:1\)"\}/,"The recipe-unit display must identify genuinely one-to-one groups without hiding weighted totals");
+assert.match(resourceRenderSource,/<details class="recipeBookResourceGroupDetails"[^>]*>[\s\S]*?class="recipeBookResourceGroupMembers"/,"Grouped inventory must keep member-level quantities in an inspectable details section");
+assert.match(resourceRenderSource,/const memberMarkup=[\s\S]*?data-resource-quantity="\$\{escapeHtml\(candidate\.key\)\}"[\s\S]*?data-resource-remove="\$\{escapeHtml\(candidate\.key\)\}"/,"The shared exact-member markup must keep quantity editing and removal keyed to the member identity");
+assert.match(resourceRenderSource,/factor=1[\s\S]*?recipeBookResourceFactor[\s\S]*?1 item = \$\{recipeBookFormatCount\(factor\)\} recipe units/,"Weighted group members must explain their physical-item to recipe-unit conversion");
+assert.match(resourceRenderSource,/row\.members\.map\(member=>memberMarkup\(member,"recipeBookResourceGroupMember"\)\)/,"Every grouped member, including icons beyond the bounded header stack, must render in the editable details list");
 assert.match(css,/Unified complete form controls:[\s\S]*?clip-path:none!important;[\s\S]*?border-radius:10px!important|Unified complete form controls:[\s\S]*?border-radius:10px!important;[\s\S]*?clip-path:none!important;/,"all themed form controls must use complete rounded boxes rather than cropped silhouettes");
 const themeAssetInputRule=css.match(/body\[data-style\]:not\(\[data-style="custom"\]\) :is\([^\n]+\) \{ background-image:var\(--asset-input\)!important;/)?.[0]||"";
 assert.ok(themeAssetInputRule,"theme input artwork rule must remain discoverable");
@@ -294,6 +473,11 @@ for(const className of ["recipeBookResourceName","recipeBookItemId","recipeBookU
 for(const className of ["recipeBookIngredientPer","recipeBookOwnedAmount","recipeBookConsumedAmount"])assert.match(js,new RegExp(`class="${className}"`),`${className} must be independently styled in Craftables`);
 assert.match(css,/#recipeBookView \.recipeBookResourceName\{[^}]*font-size:13px/ ,"resource names must be clearly larger");
 assert.match(css,/#recipeBookView \.recipeBookResourceMeta\{[^}]*font-size:10\.5px/ ,"resource metadata must be legible");
+for(const selector of [".recipeBookResourceGroupCard{",".recipeBookResourceGroupIcons",".recipeBookResourceGroupTotals",".recipeBookResourceGroupDetails",".recipeBookResourceGroupMembers",".recipeBookResourceGroupMember"]){
+  assert.ok(css.includes(selector),`Grouped inventory styling is missing ${selector}`);
+}
+assert.match(css,/body\[data-mode="light"\] #recipeBookView,[\s\S]*?--rb-group-title:#4c1d95;[\s\S]*?--rb-group-value:#0e7490;/,"Light Recipe Book themes must use dark, readable group title and total colors");
+assert.match(js,/addEventListener\("focusin",event=>\{const target=event\.target\.closest\("\[data-recipe-book-item-key\]"\)[\s\S]*?else if\(interactive\)recipeBookHideTooltip\(\)/,"Focusing a nested quantity or remove control must dismiss an item tooltip instead of covering the editor");
 assert.match(css,/\.recipeBookCraftableGrid \.recipeBookIngredientCopy strong\{[^}]*font-size:12px/ ,"craftable ingredient names must be larger");
 assert.match(css,/\.recipeBookIngredientStock \.recipeBookOwnedAmount\{[^}]*font-size:12px/ ,"owned material totals must be larger");
 

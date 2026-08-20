@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.45",
+    "version":  "v0.9.46",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.45/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "0CD6D3E3B0D0B24ED90E1546C5FA1FDCD6766D9E87519D5C4877FA2B0ED1038C",
-    "notes":  "Always fills the Top 3 outfit opportunities with verified recommendations, strong sales watches, or the best available early signals. Stale preorder details are clearly labeled and no longer produce misleading queue estimates."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.46/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "8EDDEA33AE8B3A6F864AA789D0EB48CF6E02BA56EE629322E966152D0D05FEA8",
+    "notes":  "Recipe Book Screenshot Mats now uses fully offline PP-OCRv5 recognition, supports full, partial, and single-item storage screenshots, detects Base, High-quality, and Special borders, groups valid substitute materials, and streamlines review and import. Includes safer quantity abstention and hardened installer packaging."
 }

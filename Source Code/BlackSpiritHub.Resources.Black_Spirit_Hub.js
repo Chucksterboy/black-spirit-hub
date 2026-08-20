@@ -613,7 +613,7 @@ const marketEl = {
   outfitRows: document.getElementById("outfitRows"),
 };
 
-const BRIDGE_TIMEOUTS={downloadAndInstallUpdate:600000,refreshEvents:105000,initializeEvents:105000,searchBdoPlayersGuilds:40000,getBdoGuildProfile:40000,getBdoPlayerProfile:75000,getDehkiaFuelData:100000,healthCheck:6000};
+const BRIDGE_TIMEOUTS={downloadAndInstallUpdate:600000,refreshEvents:105000,initializeEvents:105000,searchBdoPlayersGuilds:40000,getBdoGuildProfile:40000,getBdoPlayerProfile:75000,getDehkiaFuelData:100000,analyzeRecipeBookScreenshot:120000,healthCheck:6000};
 function bridgeCall(command, payload = {}, options = {}) {
   if(!window.chrome?.webview) return Promise.reject(new Error("The Windows application bridge is unavailable."));
   const signal=options?.signal;
@@ -2353,6 +2353,73 @@ const RECIPE_BOOK_TYPE_LABELS=Object.freeze({
   MANUFACTURE:"Manufacture",GUILD:"Guild Processing",GUILD_PROCESSING:"Guild Processing",ROYALGIFT_COOK:"Imperial Cuisine",IMPERIAL_CUISINE:"Imperial Cuisine",
   ROYALGIFT_ALCHEMY:"Imperial Alchemy",IMPERIAL_ALCHEMY:"Imperial Alchemy",HOUSE:"Workshop",WORKSHOP:"Workshop"
 });
+function recipeBookSubstitutionGroupDefinition(id,name,recipeTypes,representativeItemId,fallbackIcon,members,sharedIcon=false){
+  return Object.freeze({
+    id,name,representativeItemId:String(representativeItemId),fallbackIcon,sharedIcon:Boolean(sharedIcon),
+    recipeTypes:Object.freeze(recipeTypes.map(recipeBookTypeKey)),
+    members:Object.freeze(members.map(([itemId,memberName,factor=1,sourceWorth=factor,tier="standard"])=>Object.freeze({
+      itemId:String(itemId),key:recipeBookIngredientKey(itemId,0),name:memberName,factor,sourceWorth,tier
+    })))
+  });
+}
+/*
+ * These are explicit recipe-substitution groups, not visual guesses. Similar-looking
+ * saps, timber, mushrooms, herbs, and other materials stay separate unless the
+ * current BDO recipe rules identify them as substitutes.
+ */
+const RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS=Object.freeze([
+  recipeBookSubstitutionGroupDefinition("blood-1","Blood Group 1",["ALCHEMY"],6214,"icons/items/7133a3c458cef7d13205e504ff12d2fa4466d1d5ad0d8eed200d152cb375b6b0.webp",[
+    [6204,"Rhino Blood",1,1],[6214,"Wolf Blood",1,1],[6216,"Cheetah Dragon Blood",1,2],[6218,"Flamingo Blood",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("blood-2","Blood Group 2",["ALCHEMY"],6205,"icons/items/37bbfa006af0128eb041211e893cca5a2ae937adad2786eac4ab98408715b74e.webp",[
+    [6201,"Deer Blood",1,2],[6202,"Sheep Blood",1,2],[6205,"Pig Blood",1,1],[6206,"Ox Blood",1,2],[6215,"Waragon Blood",1,2],[6227,"Llama Blood",1,2],[6228,"Goat Blood",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("blood-3","Blood Group 3",["ALCHEMY"],6203,"icons/items/2e5e0a99b3d7a2406585a91637c006c697771a50dc4c21d7d4a9f781bc21d650.webp",[
+    [6203,"Fox Blood",1,1],[6210,"Raccoon Blood",1,2],[6211,"Monkey Blood",1,2],[6212,"Weasel Blood",1,2],[6224,"Scorpion Blood",1,1],[6226,"Marmot Blood",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("blood-4","Blood Group 4",["ALCHEMY"],6213,"icons/items/0eb332d73942a88e043b9f62f59d82cdd176382d60b16d9f9ae919f8132d3ead.webp",[
+    [6207,"Dinosaur Blood",1,2],[6213,"Bear Blood",1,1],[6220,"Troll Blood",1,2],[6221,"Ogre Blood",1,2],[6223,"Lion Blood",1,1],[6225,"Yak Blood",1,1],[6359,"Rock Elephant Blood",1,1]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("blood-5","Blood Group 5",["ALCHEMY"],6208,"icons/items/d73cbeafc5dd6747f2b38523360582fbcb88dc3a8ca148175f4cea11b481a123.webp",[
+    [6208,"Lizard Blood",1,1],[6209,"Worm Blood",1,2],[6217,"Kuku Bird Blood",1,2],[6219,"Bat Blood",1,2],[6222,"Cobra Blood",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("meat-1","Meat Group 1",["COOK"],7905,"icons/items/ef4665a1c1b884038cc11c42f32a0c264bafcd288b80b5876e714f73bde3e384.webp",[
+    [7901,"Deer Meat",1,2],[7902,"Lamb Meat",1,2],[7903,"Fox Meat",1,2],[7904,"Rhino Meat",1,2],[7905,"Pork",1,1],[7906,"Beef",1,2],[7910,"Raccoon Meat",1,2],[7911,"Weasel Meat",1,2],[7912,"Bear Meat",1,2],[7913,"Wolf Meat",1,2],[7925,"Gazelle Meat",1,2],[7957,"Goat Meat",1,2],[7960,"Sea Lion Meat",1,2],[7961,"Rabbit Meat",1,2],[7962,"Rock Elephant Meat",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("meat-reptile","Reptile Meat Group",["COOK"],7908,"icons/items/0f480088bc0683a746d8c46af6f0e0fc1364c9630e9f6c283c21ac967f39911d.webp",[
+    [7907,"Dinosaur Meat",1,2],[7908,"Lizard Meat",1,1],[7909,"Worm Meat",1,2],[7914,"Waragon Meat",2,4,"double"],[7915,"Cheetah Dragon Meat",2,4,"double"]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("meat-bird","Bird Meat Group",["COOK"],7921,"icons/items/e3b0ad08fed6b98d51c480060785084230b03807c32927aeefc1f3268da3e58f.webp",[
+    [7916,"Kuku Bird Meat",1,2],[7917,"Flamingo Meat",1,2],[7921,"Chicken Meat",1,1],[7953,"Bird Meat",1,2]
+  ],true),
+  recipeBookSubstitutionGroupDefinition("grain","Grain Group",["COOK","SIMPLE_COOK"],7001,"icons/items/85973e7826b3797718fbce8e3108beea89e14a3fbe4856f4f6d82610cb942e56.webp",[
+    [7001,"Wheat",1,1],[7002,"Barley",1,2],[7003,"Potato",1,2],[7004,"Sweet Potato",1,2],[7005,"Corn",1,2],
+    [7006,"High-quality Wheat",2,6,"high-quality"],[7007,"High-quality Barley",2,6,"high-quality"],[7008,"High-quality Potato",2,6,"high-quality"],[7009,"High-quality Sweet Potato",2,6,"high-quality"],[7010,"High-quality Corn",2,6,"high-quality"],
+    [7011,"Special Wheat",3,36,"special"],[7012,"Special Barley",3,36,"special"],[7013,"Special Potato",3,36,"special"],[7014,"Special Sweet Potato",3,36,"special"],[7015,"Special Corn",3,36,"special"]
+  ]),
+  recipeBookSubstitutionGroupDefinition("flour","Flour Group",["COOK"],7101,"icons/items/983c82f39c5365f2b286cc55a6080cac514642bef8d8ab0af4b6c985dbb246d6.webp",[
+    [7101,"Wheat Flour",1,1],[7102,"Barley Flour",1,2],[7103,"Potato Flour",1,2],[7104,"Sweet Potato Flour",1,2],[7105,"Corn Flour",1,2]
+  ]),
+  recipeBookSubstitutionGroupDefinition("dough","Dough Group",["COOK"],7201,"icons/items/4801ebc4cb262b9ef5e34916fde81a2950d614aefd2dac721cbd60e05507e542.webp",[
+    [7201,"Wheat Dough",1,1],[7202,"Barley Dough",2,4,"double"],[7203,"Potato Dough",2,4,"double"],[7204,"Sweet Potato Dough",2,4,"double"],[7205,"Corn Dough",2,4,"double"]
+  ]),
+  recipeBookSubstitutionGroupDefinition("fruit","Fruit Group",["COOK"],7313,"icons/items/19aa821d3912433d33414a60cd8898aa365cccdc81e63c805876bf6960270602.webp",[
+    [7304,"Strawberry",1,2],[7307,"Grape",1,2],[7313,"Apple",1,1],[7314,"Cherry",1,2],[7315,"Pear",1,2],[7316,"Banana",1,2],[7317,"Pineapple",1,2],[820108,"Wild Berry",1,1],[820113,"Persimmon",1,1],
+    [7321,"High-quality Strawberry",2,12,"high-quality"],[7329,"High-quality Grape",2,12,"high-quality"],[7322,"Special Strawberry",3,72,"special"],[7341,"Special Grape",3,72,"special"]
+  ]),
+  recipeBookSubstitutionGroupDefinition("vegetable","Vegetable Group",["COOK"],7318,"icons/items/be5e87bd89ff0dd27c272751f1f19d46fe07bbcef83949da038e92f99d3be571.webp",[
+    [7306,"Pumpkin",1,1],[7309,"Olive",1,1],[7311,"Tomato",1,1],[7312,"Paprika",1,1],[7318,"Cabbage",1,1],
+    [7328,"High-quality Pumpkin",2,6,"high-quality"],[7331,"High-quality Olive",2,6,"high-quality"],[7333,"High-quality Tomato",2,6,"high-quality"],[7334,"High-quality Paprika",2,6,"high-quality"],
+    [7340,"Special Pumpkin",3,36,"special"],[7343,"Special Olive",3,36,"special"],[7345,"Special Tomato",3,36,"special"],[7346,"Special Paprika",3,36,"special"]
+  ]),
+  recipeBookSubstitutionGroupDefinition("flower","Flower Group",["COOK"],7319,"icons/items/100b8f522d0606e0970ae57a918ab37cb73abe0a16fd8447b7d8c96fde8dc88d.webp",[
+    [7308,"Sunflower",1,2],[7319,"Rose",1,1],[7320,"Tulip",1,2],[7330,"High-quality Sunflower",2,12,"high-quality"],[7342,"Special Sunflower",3,72,"special"]
+  ]),
+  /* Herbal Juice is the reviewed exception where different wild herbs and Weeds share one recipe pool. The 10:3 integer scale preserves the exact 3-herb / 10-Weeds conversion without floating-point stock. */
+  recipeBookSubstitutionGroupDefinition("herb-juice","Herb Group 1",["SIMPLE_ALCHEMY"],5401,"icons/items/a2cf3d61bf8fc2e3f6eacba09e30506ec41efc522d49f4eaa22155c3832eee53.webp",[
+    [5401,"Sunrise Herb",10,1,"herb"],[5402,"Silver Azalea",10,1,"herb"],[5403,"Fire Flake Flower",10,1,"herb"],[5404,"Dry Mane Grass",10,1,"herb"],[5405,"Silk Honey Grass",10,1,"herb"],[5406,"Everlasting Herb",10,1,"herb"],[5439,"Wild Grass",10,1,"wild-grass"],[5600,"Weeds",3,1,"weeds"]
+  ])
+]);
 function recipeBookIsPlainObject(value){return Boolean(value)&&typeof value==="object"&&!Array.isArray(value)}
 function recipeBookSearchNorm(value){
   return String(value??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[’']s\b/g,"").replace(/&/g," and ").replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," ");
@@ -2397,6 +2464,22 @@ function recipeBookPrepareData(payload){
     recipeBookAssert(rawItem.description===undefined||typeof rawItem.description==="string",`item ${id} has an invalid description`);
     items[id]=Object.freeze({id,name,description:String(rawItem.description||"").trim(),grade:rawItem.grade,icon:rawItem.icon.trim(),search:recipeBookSearchNorm(name)});
   }
+  const substitutionDefinitionIds=new Set(),substitutionDefinitionMembers=new Set();
+  for(const definition of RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS){
+    recipeBookAssert(/^[a-z\d]+(?:-[a-z\d]+)*$/.test(definition.id),`substitution group ${definition.id} has an invalid ID`);
+    recipeBookAssert(!substitutionDefinitionIds.has(definition.id),`substitution group ${definition.id} is duplicated`);substitutionDefinitionIds.add(definition.id);
+    recipeBookAssert(Boolean(definition.name)&&definition.recipeTypes.length>0&&definition.members.length>1,`substitution group ${definition.id} is incomplete`);
+    recipeBookAssert(Boolean(recipeBookSafeIconPath(definition.fallbackIcon)),`substitution group ${definition.id} has an invalid fallback icon`);
+    recipeBookAssert(definition.members.some(member=>member.itemId===definition.representativeItemId),`substitution group ${definition.id} has no representative member`);
+    for(const member of definition.members){
+      recipeBookAssert(/^\d+$/.test(member.itemId)&&Boolean(member.name),`substitution group ${definition.id} has an invalid member`);
+      recipeBookAssert(!substitutionDefinitionMembers.has(member.key),`substitution member ${member.key} appears in more than one group`);substitutionDefinitionMembers.add(member.key);
+      recipeBookAssert(Number.isSafeInteger(member.factor)&&member.factor>0&&Number.isSafeInteger(member.sourceWorth)&&member.sourceWorth>0,`substitution member ${member.key} has an invalid value`);
+      if(!Object.hasOwn(items,member.itemId))items[member.itemId]=Object.freeze({
+        id:member.itemId,name:member.name,description:`Verified member of ${definition.name}. This offline entry is included so My Resources can preserve the exact material.`,grade:0,icon:definition.sharedIcon?definition.fallbackIcon:"icons/item-fallback.svg",search:recipeBookSearchNorm(member.name),synthetic:true
+      });
+    }
+  }
   const recipeIds=new Set(),recipes=payload.recipes.map((rawRecipe,index)=>{
     const path=`recipes[${index}]`;
     recipeBookAssert(recipeBookIsPlainObject(rawRecipe),`${path} must be an object`);
@@ -2417,17 +2500,38 @@ function recipeBookPrepareData(payload){
       const enhancement=recipeBookOptionalEnhancement(rawInput.enhancement,`${inputPath}.enhancement`);
       return Object.freeze({itemId,count:rawInput.count,enhancement,key:recipeBookIngredientKey(itemId,enhancement)});
     });
-    const output=items[outputId],station=(rawRecipe.station||"").trim();
+    const output=items[outputId],station=(rawRecipe.station||"").trim(),recipeType=recipeBookTypeKey(type),genericAlternativeSearch=RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS.filter(definition=>definition.recipeTypes.includes(recipeType)&&inputs.some(input=>input.key===recipeBookIngredientKey(definition.representativeItemId,0))).flatMap(definition=>definition.members.map(member=>items[member.itemId]?.search||recipeBookSearchNorm(member.name)));
     return Object.freeze({
       id,outputId,outputEnhancement:recipeBookOptionalEnhancement(rawRecipe.outputEnhancement,`${path}.outputEnhancement`),type,station,inputs:Object.freeze(inputs),
-      outputSearch:output.search,ingredientSearch:inputs.map(input=>items[input.itemId].search).join(" ")
+      outputSearch:output.search,ingredientSearch:[...inputs.map(input=>items[input.itemId].search),...genericAlternativeSearch].join(" ")
     });
   });
   recipeBookAssert(recipes.length>0,"recipes cannot be empty");
   recipes.sort((left,right)=>items[left.outputId].name.localeCompare(items[right.outputId].name,undefined,{sensitivity:"base"})||recipeBookTypeLabel(left.type).localeCompare(recipeBookTypeLabel(right.type))||left.id.localeCompare(right.id,undefined,{numeric:true}));
   const types=[...new Set(recipes.map(recipe=>recipe.type))].sort((left,right)=>recipeBookTypeLabel(left).localeCompare(recipeBookTypeLabel(right))||left.localeCompare(right));
+  const substitutionGroupLookup=Object.create(null),substitutionMemberByKey=Object.create(null);
+  for(const definition of RECIPE_BOOK_SUBSTITUTION_GROUP_DEFINITIONS){
+    const members=definition.members.map(member=>Object.freeze({...member,groupId:definition.id,name:items[member.itemId].name})),weighted=members.some(member=>member.factor!==1),representativeKey=recipeBookIngredientKey(definition.representativeItemId,0);
+    const group=Object.freeze({id:definition.id,name:definition.name,sharedIcon:definition.sharedIcon,representativeItemId:definition.representativeItemId,representativeKey,fallbackIcon:definition.fallbackIcon,recipeTypes:definition.recipeTypes,members:Object.freeze(members),weighted});
+    substitutionGroupLookup[group.id]=group;for(const member of members)substitutionMemberByKey[member.key]=member;
+  }
+  const substitutionCanonicalRecipeById=Object.create(null);
+  for(const group of Object.values(substitutionGroupLookup)){
+    const memberByKey=new Map(group.members.map(member=>[member.key,member])),families=new Map();
+    for(const recipe of recipes){
+      if(!group.recipeTypes.includes(recipeBookTypeKey(recipe.type)))continue;
+      const groupedInputs=recipe.inputs.filter(input=>memberByKey.has(input.key));if(groupedInputs.length!==1)continue;
+      const groupedInput=groupedInputs[0],member=memberByKey.get(groupedInput.key),otherSignature=recipe.inputs.filter(input=>!memberByKey.has(input.key)).map(input=>`${input.key}x${input.count}`).sort().join("|"),familyKey=`${recipe.outputId}:${recipe.outputEnhancement||0}|${recipeBookTypeKey(recipe.type)}|${recipe.station}|${otherSignature}`;
+      (families.get(familyKey)||families.set(familyKey,[]).get(familyKey)).push({recipe,key:groupedInput.key,equivalentCount:groupedInput.count*member.factor});
+    }
+    for(const family of families.values()){
+      const canonical=family.find(entry=>entry.key===group.representativeKey);if(!canonical)continue;
+      for(const entry of family)if(entry.recipe.id!==canonical.recipe.id&&entry.equivalentCount===canonical.equivalentCount)substitutionCanonicalRecipeById[entry.recipe.id]=canonical.recipe.id;
+    }
+  }
   const resourceLookup=Object.create(null),recipesUsingKey=Object.create(null),recipesProducingKey=Object.create(null);
   for(const recipe of recipes){
+    if(substitutionCanonicalRecipeById[recipe.id])continue;
     const outputKey=recipeBookIngredientKey(recipe.outputId,recipe.outputEnhancement);(recipesProducingKey[outputKey]||=[]).push(recipe);
     for(const input of recipe.inputs)(recipesUsingKey[input.key]||=[]).push(Object.freeze({recipe,count:input.count}));
   }
@@ -2435,17 +2539,31 @@ function recipeBookPrepareData(payload){
     if(!resourceLookup[input.key])resourceLookup[input.key]={key:input.key,itemId:input.itemId,enhancement:input.enhancement||0,uses:0};
     resourceLookup[input.key].uses++;
   }
+  for(const group of Object.values(substitutionGroupLookup)){
+    /* Only the canonical representative denotes a generic recipe input. A literal sibling such as Potato in Potato Stew remains exact and must not advertise every grain as valid. */
+    const applicableRecipes=recipes.filter(recipe=>group.recipeTypes.includes(recipeBookTypeKey(recipe.type))&&recipe.inputs.some(input=>input.key===group.representativeKey)),applicableRecipeIds=new Set(applicableRecipes.map(recipe=>recipe.id));
+    for(const member of group.members){
+      const candidate=resourceLookup[member.key]||(resourceLookup[member.key]={key:member.key,itemId:member.itemId,enhancement:0,uses:0});
+      const usageEntries=recipesUsingKey[member.key]||(recipesUsingKey[member.key]=[]);
+      for(const recipe of applicableRecipes){
+        if(usageEntries.some(entry=>entry.recipe.id===recipe.id))continue;
+        const equivalentCount=recipe.inputs.filter(input=>input.key===group.representativeKey).reduce((total,input)=>total+input.count,0);
+        usageEntries.push(Object.freeze({recipe,count:Math.ceil(equivalentCount/member.factor),substitutionGroupId:group.id}));
+      }
+      candidate.uses=new Set([...usageEntries.map(entry=>entry.recipe.id),...applicableRecipeIds]).size;candidate.substitutionGroupId=group.id;candidate.substitutionFactor=member.factor;
+    }
+  }
   const resourceItems=Object.values(resourceLookup).map(candidate=>Object.freeze({...candidate,search:`${items[candidate.itemId].search} ${candidate.itemId}`})).sort((left,right)=>items[left.itemId].name.localeCompare(items[right.itemId].name,undefined,{sensitivity:"base"})||left.enhancement-right.enhancement||Number(left.itemId)-Number(right.itemId));
   for(const candidate of resourceItems)resourceLookup[candidate.key]=candidate;
   for(const index of [recipesUsingKey,recipesProducingKey])for(const key of Object.keys(index))index[key]=Object.freeze(index[key]);
   const source=recipeBookIsPlainObject(payload.source)?Object.freeze({...payload.source}):Object.freeze({});
   const counts=recipeBookIsPlainObject(payload.counts)?Object.freeze({...payload.counts}):Object.freeze({});
-  return Object.freeze({items:Object.freeze(items),recipes:Object.freeze(recipes),types:Object.freeze(types),resourceItems:Object.freeze(resourceItems),resourceLookup:Object.freeze(resourceLookup),recipesUsingKey:Object.freeze(recipesUsingKey),recipesProducingKey:Object.freeze(recipesProducingKey),source,counts});
+  return Object.freeze({items:Object.freeze(items),recipes:Object.freeze(recipes),types:Object.freeze(types),resourceItems:Object.freeze(resourceItems),resourceLookup:Object.freeze(resourceLookup),recipesUsingKey:Object.freeze(recipesUsingKey),recipesProducingKey:Object.freeze(recipesProducingKey),substitutionGroups:Object.freeze(Object.values(substitutionGroupLookup)),substitutionGroupLookup:Object.freeze(substitutionGroupLookup),substitutionMemberByKey:Object.freeze(substitutionMemberByKey),substitutionCanonicalRecipeById:Object.freeze(substitutionCanonicalRecipeById),source,counts});
 }
 function recipeBookFilterRecipes(data,{query="",mode="name",type=""}={}){
   const tokens=recipeBookSearchTokens(query),searchMode=mode==="ingredient"?"ingredient":"name";
   return data.recipes.filter(recipe=>{
-    if(type&&recipe.type!==type)return false;
+    if(data.substitutionCanonicalRecipeById?.[recipe.id]||type&&recipe.type!==type)return false;
     const target=searchMode==="ingredient"?recipe.ingredientSearch:recipe.outputSearch;
     return tokens.every(token=>target.includes(token));
   });
@@ -2470,12 +2588,42 @@ function recipeBookResourceCandidates(data,query="",limit=10){
   const exactNameMatches=matches.filter(candidate=>data.items[candidate.itemId].search===normalizedQuery);
   return (exactNameMatches.length?exactNameMatches:matches).slice(0,exactNameMatches.length?100:cap);
 }
-function recipeBookRecipeRequirements(recipe,resources={}){
-  const required=Object.create(null);for(const input of recipe.inputs)required[input.key]=(required[input.key]||0)+input.count;
-  return Object.entries(required).map(([key,count])=>Object.freeze({key,count,owned:recipeBookResourceAmount(resources[key])}));
+function recipeBookResourceInventoryRows(data,resources={}){
+  if(!data?.resourceLookup)return[];
+  const grouped=new Map(),rows=[];
+  for(const [key,rawAmount] of Object.entries(recipeBookIsPlainObject(resources)?resources:{})){
+    const amount=recipeBookResourceAmount(rawAmount),candidate=data.resourceLookup[key];if(!amount||!candidate)continue;
+    const membership=data.substitutionMemberByKey?.[key],group=membership&&data.substitutionGroupLookup?.[membership.groupId];
+    if(!group){rows.push(Object.freeze({kind:"single",id:key,key,candidate,amount}));continue}
+    let bucket=grouped.get(group.id);if(!bucket){bucket={kind:"group",id:`group:${group.id}`,groupId:group.id,name:group.name,group,rawTotal:0,equivalentTotal:0,weighted:group.weighted,members:[]};grouped.set(group.id,bucket)}
+    bucket.rawTotal+=amount;bucket.equivalentTotal+=amount*membership.factor;bucket.members.push(Object.freeze({key,candidate,amount,factor:membership.factor,sourceWorth:membership.sourceWorth,tier:membership.tier}));
+  }
+  for(const bucket of grouped.values()){
+    bucket.members.sort((left,right)=>data.items[left.candidate.itemId].name.localeCompare(data.items[right.candidate.itemId].name,undefined,{sensitivity:"base"})||Number(left.candidate.itemId)-Number(right.candidate.itemId));
+    bucket.representativeCandidate=data.resourceLookup[bucket.group.representativeKey]||bucket.members[0]?.candidate||null;rows.push(Object.freeze({...bucket,members:Object.freeze(bucket.members)}));
+  }
+  const rowName=row=>row.kind==="group"?row.name:(data.items[row.candidate.itemId]?.name||row.id);
+  return Object.freeze(rows.sort((left,right)=>rowName(left).localeCompare(rowName(right),undefined,{sensitivity:"base"})||left.id.localeCompare(right.id,undefined,{numeric:true})));
 }
-function recipeBookRecipeCraftCount(recipe,resources={}){
-  const requirements=recipeBookRecipeRequirements(recipe,resources);if(!requirements.length)return 0;
+function recipeBookSubstitutionOwnedTotals(data,resources,group){
+  let raw=0,equivalent=0;for(const member of group?.members||[]){const amount=recipeBookResourceAmount(resources?.[member.key]);raw+=amount;equivalent+=amount*member.factor}return Object.freeze({raw,equivalent});
+}
+function recipeBookRecipeRequirements(recipe,resources={},data=null){
+  const required=new Map(),recipeType=recipeBookTypeKey(recipe?.type);
+  for(const input of recipe?.inputs||[]){
+    /* The normalized snapshot uses the representative item for generic category requirements. A recipe that literally names another member (for example Potato Stew) stays exact. */
+    const membership=data?.substitutionMemberByKey?.[input.key],group=membership&&data?.substitutionGroupLookup?.[membership.groupId],useGroup=Boolean(group&&group.recipeTypes.includes(recipeType)&&input.key===group.representativeKey),key=useGroup?`group:${group.id}`:input.key,count=input.count*(useGroup?membership.factor:1),current=required.get(key);
+    if(current){current.count+=count;continue}
+    const candidateKey=useGroup?group.representativeKey:input.key,candidate=data?.resourceLookup?.[candidateKey],name=useGroup?group.name:(candidate&&data?.items?.[candidate.itemId]?.name)||"Material";
+    required.set(key,{key,count,candidateKey,groupId:useGroup?group.id:"",name,weighted:Boolean(useGroup&&group.weighted)});
+  }
+  return Object.freeze([...required.values()].map(requirement=>{
+    if(requirement.groupId){const totals=recipeBookSubstitutionOwnedTotals(data,resources,data.substitutionGroupLookup[requirement.groupId]);return Object.freeze({...requirement,owned:totals.equivalent,rawOwned:totals.raw})}
+    const owned=recipeBookResourceAmount(resources?.[requirement.key]);return Object.freeze({...requirement,owned,rawOwned:owned});
+  }));
+}
+function recipeBookRecipeCraftCount(recipe,resources={},data=null){
+  const requirements=recipeBookRecipeRequirements(recipe,resources,data);if(!requirements.length)return 0;
   return Math.max(0,Math.min(...requirements.map(requirement=>Math.floor(requirement.owned/requirement.count))));
 }
 function recipeBookClampCraftAmount(value,maxCrafts){
@@ -2506,18 +2654,122 @@ function recipeBookCraftableRecipes(data,resources={},options={}){
   if(!data?.recipes)return[];
   const tokens=recipeBookSearchTokens(options.query||""),type=String(options.type||"");
   return data.recipes.reduce((results,recipe)=>{
-    if(type&&recipe.type!==type)return results;
+    if(data.substitutionCanonicalRecipeById?.[recipe.id]||type&&recipe.type!==type)return results;
     const output=data.items[recipe.outputId];if(tokens.length&&!tokens.every(token=>output.search.includes(token)))return results;
-    const maxCrafts=recipeBookRecipeCraftCount(recipe,resources);if(maxCrafts>0)results.push(Object.freeze({recipe,maxCrafts,requirements:Object.freeze(recipeBookRecipeRequirements(recipe,resources))}));
+    const maxCrafts=recipeBookRecipeCraftCount(recipe,resources,data);if(maxCrafts>0)results.push(Object.freeze({recipe,maxCrafts,requirements:recipeBookRecipeRequirements(recipe,resources,data)}));
     return results;
   },[]).sort((left,right)=>right.maxCrafts-left.maxCrafts||data.items[left.recipe.outputId].name.localeCompare(data.items[right.recipe.outputId].name,undefined,{sensitivity:"base"})||left.recipe.id.localeCompare(right.recipe.id,undefined,{numeric:true}));
 }
 /* RECIPE_BOOK_CORE_END */
 
+/* RECIPE_BOOK_OCR_CORE_START */
+const RECIPE_BOOK_OCR_MAX_QUANTITY=999999999999;
+const RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE=.70;
+const RECIPE_BOOK_OCR_MIN_WIDTH=1,RECIPE_BOOK_OCR_MIN_HEIGHT=1,RECIPE_BOOK_OCR_MAX_WIDTH=7680,RECIPE_BOOK_OCR_MAX_HEIGHT=4320,RECIPE_BOOK_OCR_MAX_PIXELS=24000000;
+function recipeBookOcrDimensionsAreSafe(width,height){return Number.isSafeInteger(width)&&Number.isSafeInteger(height)&&width>=RECIPE_BOOK_OCR_MIN_WIDTH&&height>=RECIPE_BOOK_OCR_MIN_HEIGHT&&width<=RECIPE_BOOK_OCR_MAX_WIDTH&&height<=RECIPE_BOOK_OCR_MAX_HEIGHT&&width*height<=RECIPE_BOOK_OCR_MAX_PIXELS}
+function recipeBookOcrPreviewBox(box,imageWidth,imageHeight){
+  const horizontalOverflow=Math.max(4,Math.round(box.width*.12)),verticalOverflow=Math.max(1,Math.round(box.height*.03)),left=Math.max(0,box.x-horizontalOverflow),top=Math.max(0,box.y-verticalOverflow),right=Math.min(imageWidth,box.x+box.width+horizontalOverflow),bottom=Math.min(imageHeight,box.y+box.height+verticalOverflow);return Object.freeze({x:left,y:top,width:Math.max(1,right-left),height:Math.max(1,bottom-top)});
+}
+function recipeBookOcrCanonicalIcon(value){
+  let path=String(value??"").trim().replace(/\\/g,"/").replace(/^\.\//,"");
+  if(path.startsWith("https://recipebook.bdo.local/"))path=path.slice("https://recipebook.bdo.local/".length);
+  if(path.startsWith("Assets/RecipeBook/"))path=path.slice("Assets/RecipeBook/".length);
+  else if(path.startsWith("RecipeBook/"))path=path.slice("RecipeBook/".length);
+  return /^(?:icons\/items\/[a-f\d]{64}\.webp|icons\/item-fallback\.svg)$/i.test(path)?path.toLowerCase():"";
+}
+function recipeBookOcrParseQuantity(value){
+  const text=String(value??"").trim().toUpperCase(),match=text.match(/^(?:(\d{1,3}(?:,\d{3})+|\d{1,5})|(\d{1,3})[.,](\d)([KM]))$/);
+  if(!match)return Object.freeze({valid:false,value:null,approximate:/[KM]$/.test(text),text});
+  const approximate=Boolean(match[4]),numeric=approximate?Number(`${match[2]}.${match[3]}`):Number(match[1].replace(/,/g,"")),multiplier=match[4]==="K"?1000:match[4]==="M"?1000000:1,result=Math.round(numeric*multiplier);
+  if(!Number.isSafeInteger(result)||result<1||result>RECIPE_BOOK_OCR_MAX_QUANTITY)return Object.freeze({valid:false,value:null,approximate,text});
+  return Object.freeze({valid:true,value:result,approximate,text});
+}
+function recipeBookOcrSanitizeResult(value){
+  if(!recipeBookIsPlainObject(value))return null;
+  const imageFingerprint=String(value.imageFingerprint??"").trim().toLowerCase(),width=Number(value.width),height=Number(value.height);
+  if(!/^[a-f\d]{64}$/.test(imageFingerprint)||!recipeBookOcrDimensionsAreSafe(width,height))return null;
+  const rawGrid=recipeBookIsPlainObject(value.grid)?value.grid:{},columns=Number(rawGrid.columns),rows=Number(rawGrid.rows),gridConfidence=Number(rawGrid.confidence),rawSlots=Array.isArray(value.slots)?value.slots.slice(0,192):[];
+  if(!Number.isSafeInteger(columns)||!Number.isSafeInteger(rows)||columns<1||columns>9||rows<0||rows>Math.ceil(192/columns)||(rows===0&&rawSlots.length)||!Number.isFinite(gridConfidence)||gridConfidence<0||gridConfidence>1)return null;
+  const ids=new Set(),slots=[];
+  for(const raw of rawSlots){
+    if(!recipeBookIsPlainObject(raw)||!recipeBookIsPlainObject(raw.box))continue;
+    const id=String(raw.id??"").trim(),row=Number(raw.row),column=Number(raw.column),x=Number(raw.box.x),y=Number(raw.box.y),boxWidth=Number(raw.box.width),boxHeight=Number(raw.box.height);
+    if(!id||id.length>100||ids.has(id)||!Number.isSafeInteger(row)||!Number.isSafeInteger(column)||row<0||column<0||row>=rows||column>=columns||![x,y,boxWidth,boxHeight].every(Number.isSafeInteger)||x<0||y<0||boxWidth<1||boxHeight<1||x+boxWidth>width||y+boxHeight>height)continue;
+    const iconCandidates=[],icons=new Set();
+    for(const rawCandidate of Array.isArray(raw.iconCandidates)?raw.iconCandidates.slice(0,8):[]){
+      if(!recipeBookIsPlainObject(rawCandidate))continue;const icon=recipeBookOcrCanonicalIcon(rawCandidate.icon),score=Number(rawCandidate.score);
+      if(!icon||icons.has(icon)||!Number.isFinite(score)||score<0||score>1)continue;icons.add(icon);iconCandidates.push(Object.freeze({icon,score}));
+    }
+    iconCandidates.sort((left,right)=>right.score-left.score||left.icon.localeCompare(right.icon));
+    const parsed=recipeBookOcrParseQuantity(raw.quantityText),rawQuantity=raw.quantityValue,quantityValue=typeof rawQuantity==="number"&&Number.isSafeInteger(rawQuantity)&&rawQuantity>=1&&rawQuantity<=RECIPE_BOOK_OCR_MAX_QUANTITY?rawQuantity:null,quantityConfidence=Number(raw.quantityConfidence),safeQuantityConfidence=Number.isFinite(quantityConfidence)&&quantityConfidence>=0&&quantityConfidence<=1?quantityConfidence:0,rawBorderGrade=raw.borderGrade,borderGrade=typeof rawBorderGrade==="number"&&Number.isInteger(rawBorderGrade)&&rawBorderGrade>=0&&rawBorderGrade<=2?rawBorderGrade:null,rawBorderGradeConfidence=raw.borderGradeConfidence,borderGradeConfidence=typeof rawBorderGradeConfidence==="number"&&Number.isFinite(rawBorderGradeConfidence)&&rawBorderGradeConfidence>=0&&rawBorderGradeConfidence<=1?rawBorderGradeConfidence:0;
+    ids.add(id);slots.push(Object.freeze({id,row,column,box:Object.freeze({x,y,width:boxWidth,height:boxHeight}),iconCandidates:Object.freeze(iconCandidates),quantityText:String(raw.quantityText??"").trim().slice(0,40),quantityValue,quantityApproximate:Boolean(raw.quantityApproximate)||parsed.approximate,quantityConfidence:safeQuantityConfidence,quantityAssumedOne:Boolean(raw.quantityAssumedOne),borderGrade,borderGradeConfidence}));
+  }
+  const warnings=Array.isArray(value.warnings)?value.warnings.map(item=>String(item??"").trim().slice(0,300)).filter(Boolean).slice(0,20):[];
+  return Object.freeze({imageFingerprint,width,height,grid:Object.freeze({columns,rows,confidence:gridConfidence}),slots:Object.freeze(slots),warnings:Object.freeze(warnings)});
+}
+function recipeBookOcrQualityFamilyResources(resources,data){
+  const exact=(Array.isArray(resources)?resources:[]).filter(resource=>(Number(resource?.enhancement)||0)===0&&data?.items?.[resource.itemId]),byName=new Map(),familyKeys=new Set();
+  for(const resource of exact){const name=String(data.items[resource.itemId].name||"").trim();if(name)(byName.get(name)||byName.set(name,[]).get(name)).push(resource)}
+  for(const base of exact){
+    const item=data.items[base.itemId],baseName=String(item?.name||"").trim();if(item?.grade!==0||!baseName||/^(?:High-quality|Special)\s/u.test(baseName))continue;
+    const high=(byName.get(`High-quality ${baseName}`)||[]).filter(resource=>data.items[resource.itemId]?.grade===1),special=(byName.get(`Special ${baseName}`)||[]).filter(resource=>data.items[resource.itemId]?.grade===2);if(!high.length&&!special.length)continue;
+    familyKeys.add(base.key);for(const resource of [...high,...special])familyKeys.add(resource.key);
+  }
+  return exact.filter(resource=>familyKeys.has(resource.key));
+}
+function recipeBookOcrBorderGradeLabel(grade){return grade===1?"high-quality":grade===2?"special":"base"}
+function recipeBookOcrBuildReviewRows(analysis,data){
+  if(!analysis||!data?.resourceItems||!data?.resourceLookup||!data?.items)return[];
+  const iconIndex=new Map();
+  for(const resource of data.resourceItems){const item=data.items[resource.itemId],icon=recipeBookOcrCanonicalIcon(item?.icon);if(icon)(iconIndex.get(icon)||iconIndex.set(icon,[]).get(icon)).push(resource)}
+  return analysis.slots.map(slot=>{
+    const topIcon=slot.iconCandidates[0],nextIcon=slot.iconCandidates[1],topResources=topIcon?(iconIndex.get(topIcon.icon)||[]):[],gap=topIcon?topIcon.score-(nextIcon?.score||0):0,qualityFamily=recipeBookOcrQualityFamilyResources(topResources,data),trustedBorderGrade=Number.isInteger(slot.borderGrade)&&slot.borderGrade>=0&&slot.borderGrade<=2&&slot.borderGradeConfidence>=RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE&&qualityFamily.length>1,borderGradeMatches=trustedBorderGrade?qualityFamily.filter(resource=>data.items[resource.itemId]?.grade===slot.borderGrade):[],borderGradeResolved=trustedBorderGrade&&borderGradeMatches.length===1,borderGradeConflict=trustedBorderGrade&&!borderGradeResolved,resolvedKey=borderGradeResolved?borderGradeMatches[0].key:"",materialExactResources=trustedBorderGrade?borderGradeMatches:topResources,optionMap=new Map();
+    for(const iconMatch of slot.iconCandidates)for(const resource of iconIndex.get(iconMatch.icon)||[]){const current=optionMap.get(resource.key);if(!current||iconMatch.score>current.score){const item=data.items[resource.itemId],enhancement=Number(resource.enhancement)||0;optionMap.set(resource.key,Object.freeze({key:resource.key,itemId:String(resource.itemId),enhancement,name:`${enhancement?`+${enhancement} `:""}${item?.name||"Unknown item"}`,score:iconMatch.score,uses:Number(resource.uses)||0}))}}
+    const options=[...optionMap.values()].sort((left,right)=>Number(right.key===resolvedKey)-Number(left.key===resolvedKey)||right.score-left.score||right.uses-left.uses||left.name.localeCompare(right.name,undefined,{sensitivity:"base"}));
+    const sharedMeatOrBloodIcon=topResources.length>1&&topResources.some(resource=>{const member=data.substitutionMemberByKey?.[resource.key],group=member&&data.substitutionGroupLookup?.[member.groupId];return Boolean(group?.sharedIcon&&/^(?:meat|blood)-/.test(group.id))}),unresolvedSharedMeatOrBloodIcon=sharedMeatOrBloodIcon&&materialExactResources.length!==1,defaultOption=borderGradeConflict||unresolvedSharedMeatOrBloodIcon?null:borderGradeResolved?optionMap.get(resolvedKey):options[0]||null;
+    const readQuantity=!slot.quantityAssumedOne&&Number.isSafeInteger(slot.quantityValue)?slot.quantityValue:null,iconExact=Boolean(topIcon&&topIcon.score>=.82&&gap>=.08&&materialExactResources.length===1&&!unresolvedSharedMeatOrBloodIcon),quantityExact=Number.isSafeInteger(slot.quantityValue)&&slot.quantityValue>=1&&slot.quantityValue<=RECIPE_BOOK_OCR_MAX_QUANTITY&&slot.quantityConfidence>=.78&&!slot.quantityApproximate&&!slot.quantityAssumedOne,ready=iconExact&&quantityExact;
+    const reasons=[];if(!topIcon||!options.length)reasons.push("No Recipe Book material matched this icon");else if(borderGradeConflict)reasons.push(borderGradeMatches.length?`The detected ${recipeBookOcrBorderGradeLabel(slot.borderGrade)} border still matches multiple materials`:`The detected ${recipeBookOcrBorderGradeLabel(slot.borderGrade)} border conflicts with this icon's verified quality family`);else if(materialExactResources.length>1)reasons.push("This icon is shared by multiple materials or enhancement levels");else if(topIcon.score<.82)reasons.push("The icon match is low confidence");else if(gap<.08)reasons.push("Two icons look nearly identical");if(slot.quantityApproximate)reasons.push("The displayed K/M quantity is rounded and needs confirmation");else if(slot.quantityAssumedOne)reasons.push("The quantity was hidden and cannot be assumed");else if(readQuantity===null)reasons.push("No valid quantity was detected");else if(!Number.isSafeInteger(slot.quantityValue)||slot.quantityConfidence<.78)reasons.push("The quantity read from the screenshot needs confirmation");
+    return {id:`${analysis.imageFingerprint}:${slot.id}`,fingerprint:analysis.imageFingerprint,slotId:slot.id,row:slot.row,column:slot.column,box:slot.box,options,selectedKey:defaultOption?.key||"",quantity:readQuantity??"",suggestedQuantity:readQuantity,quantityText:slot.quantityText,quantityApproximate:Boolean(slot.quantityApproximate),borderGrade:slot.borderGrade,borderGradeConfidence:slot.borderGradeConfidence,reviewRequired:!ready,state:ready?"ready":options.length?"review":"unknown",reasons};
+  });
+}
+function recipeBookOcrBuildMaterialCatalog(data){
+  if(!data?.resourceItems||!data?.items)return[];
+  return Object.freeze(data.resourceItems.map(resource=>{const item=data.items[resource.itemId],enhancement=Number(resource.enhancement)||0,label=`${enhancement?`+${enhancement} `:""}${item?.name||"Unknown item"} · Item ${resource.itemId}`;return Object.freeze({key:resource.key,label})}).sort((left,right)=>left.label.localeCompare(right.label,undefined,{sensitivity:"base",numeric:true})||left.key.localeCompare(right.key,undefined,{numeric:true})))
+}
+function recipeBookOcrRowIsComplete(row,data){const key=String(row?.selectedKey||"");return Object.hasOwn(data?.resourceLookup||{},key)&&Boolean(recipeBookResourceAmount(row?.quantity))}
+function recipeBookOcrBuildImportPlan(rows,data){
+  const sourceRows=Array.isArray(rows)?rows:[],totals=new Map(),errors=[];
+  if(!sourceRows.length)errors.push("Detect at least one material before importing.");
+  for(const row of sourceRows){
+    const key=String(row?.selectedKey||""),quantity=recipeBookResourceAmount(row?.quantity);
+    if(!Object.hasOwn(data?.resourceLookup||{},key)){errors.push(`Choose a valid material for ${row?.slotId||"a detected slot"}.`);continue}
+    if(!quantity){errors.push(`Enter a whole quantity for ${row?.slotId||"a detected slot"}.`);continue}
+    const total=(totals.get(key)||0)+quantity;if(!Number.isSafeInteger(total)||total>RECIPE_BOOK_OCR_MAX_QUANTITY){errors.push(`${key} exceeds the maximum supported quantity when its detected stacks are combined.`);continue}totals.set(key,total);
+  }
+  const entries=[...totals].map(([key,quantity])=>Object.freeze({key,quantity}));
+  return Object.freeze({valid:errors.length===0,entries:Object.freeze(entries),errors:Object.freeze(errors)});
+}
+function recipeBookOcrApplyImportPlan(current,plan,data,mode="update"){
+  const resources=recipeBookSanitizeResources(current,data),next=Object.assign(Object.create(null),resources),errors=[];
+  if(!plan?.valid)return Object.freeze({ok:false,resources:next,changedKeys:Object.freeze([]),errors:Object.freeze([...(plan?.errors||["The import plan is invalid."])])});
+  const changedKeys=[];
+  for(const entry of plan.entries){const amount=recipeBookResourceAmount(entry.quantity);if(!Object.hasOwn(data.resourceLookup,entry.key)||!amount){errors.push(`Invalid import entry ${entry.key}.`);continue}const result=mode==="add"?(next[entry.key]||0)+amount:amount;if(!Number.isSafeInteger(result)||result<1||result>RECIPE_BOOK_OCR_MAX_QUANTITY){errors.push(`${entry.key} would exceed the maximum supported quantity.`);continue}if(next[entry.key]!==result)changedKeys.push(entry.key);next[entry.key]=result}
+  return Object.freeze({ok:errors.length===0,resources:errors.length?Object.assign(Object.create(null),resources):next,changedKeys:Object.freeze(errors.length?[]:changedKeys),errors:Object.freeze(errors)});
+}
+function recipeBookOcrResourceSignature(resources){return JSON.stringify(Object.entries(recipeBookIsPlainObject(resources)?resources:{}).filter(([,amount])=>recipeBookResourceAmount(amount)).sort(([left],[right])=>left.localeCompare(right)).map(([key,amount])=>[key,Number(amount)]))}
+function recipeBookOcrCreateUndoSnapshot(before,after){return Object.freeze({before:Object.freeze({...before}),afterSignature:recipeBookOcrResourceSignature(after)})}
+function recipeBookOcrApplyUndo(snapshot,current,data){
+  const safeCurrent=recipeBookSanitizeResources(current,data);if(!snapshot||snapshot.afterSignature!==recipeBookOcrResourceSignature(safeCurrent))return Object.freeze({ok:false,resources:safeCurrent,reason:"My Resources changed after the screenshot import, so Undo was safely cancelled."});
+  return Object.freeze({ok:true,resources:recipeBookSanitizeResources(snapshot.before,data),reason:""});
+}
+function recipeBookOcrRegisterFingerprint(fingerprints,fingerprint){const list=Array.isArray(fingerprints)?fingerprints:[],value=String(fingerprint||"");return Object.freeze({duplicate:list.includes(value),fingerprints:Object.freeze(list.includes(value)?[...list]:[...list,value])})}
+/* RECIPE_BOOK_OCR_CORE_END */
+
 const recipeBookEl={
-  view:document.getElementById("recipeBookView"),tooltip:document.getElementById("recipeBookItemTooltip"),tabs:[...document.querySelectorAll("[data-recipe-book-section]")],panels:[...document.querySelectorAll(".recipeBookWorkspacePanel")],form:document.getElementById("recipeBookSearchForm"),mode:document.getElementById("recipeBookSearchMode"),search:document.getElementById("recipeBookSearchInput"),searchButton:document.getElementById("recipeBookSearchButton"),clear:document.getElementById("recipeBookClear"),type:document.getElementById("recipeBookTypeFilter"),hint:document.getElementById("recipeBookSearchHint"),status:document.getElementById("recipeBookDataStatus"),summary:document.getElementById("recipeBookResultSummary"),pageSummary:document.getElementById("recipeBookPageSummary"),message:document.getElementById("recipeBookMessage"),retry:document.getElementById("recipeBookRetry"),grid:document.getElementById("recipeBookGrid"),pagination:document.getElementById("recipeBookPagination"),previous:document.getElementById("recipeBookPreviousPage"),next:document.getElementById("recipeBookNextPage"),pageNumbers:document.getElementById("recipeBookPageNumbers"),resourceForm:document.getElementById("recipeBookResourceForm"),resourceSearch:document.getElementById("recipeBookResourceSearch"),resourceSuggestions:document.getElementById("recipeBookResourceSuggestions"),resourceQuantity:document.getElementById("recipeBookResourceQuantity"),resourceAdd:document.getElementById("recipeBookResourceAdd"),resourceSelection:document.getElementById("recipeBookResourceSelection"),resourceList:document.getElementById("recipeBookResourceList"),resourceSummary:document.getElementById("recipeBookResourceSummary"),craftableBadge:document.getElementById("recipeBookCraftablesBadge"),craftableSummary:document.getElementById("recipeBookCraftableSummary"),craftableSearch:document.getElementById("recipeBookCraftableSearch"),craftableType:document.getElementById("recipeBookCraftableType"),craftableGrid:document.getElementById("recipeBookCraftableGrid"),craftablePagination:document.getElementById("recipeBookCraftablePagination"),craftablePrevious:document.getElementById("recipeBookCraftablePrevious"),craftableNext:document.getElementById("recipeBookCraftableNext"),craftablePages:document.getElementById("recipeBookCraftablePages")
+  view:document.getElementById("recipeBookView"),tooltip:document.getElementById("recipeBookItemTooltip"),tabs:[...document.querySelectorAll("[data-recipe-book-section]")],panels:[...document.querySelectorAll(".recipeBookWorkspacePanel")],form:document.getElementById("recipeBookSearchForm"),mode:document.getElementById("recipeBookSearchMode"),search:document.getElementById("recipeBookSearchInput"),searchButton:document.getElementById("recipeBookSearchButton"),clear:document.getElementById("recipeBookClear"),type:document.getElementById("recipeBookTypeFilter"),hint:document.getElementById("recipeBookSearchHint"),status:document.getElementById("recipeBookDataStatus"),summary:document.getElementById("recipeBookResultSummary"),pageSummary:document.getElementById("recipeBookPageSummary"),message:document.getElementById("recipeBookMessage"),retry:document.getElementById("recipeBookRetry"),grid:document.getElementById("recipeBookGrid"),pagination:document.getElementById("recipeBookPagination"),previous:document.getElementById("recipeBookPreviousPage"),next:document.getElementById("recipeBookNextPage"),pageNumbers:document.getElementById("recipeBookPageNumbers"),resourceForm:document.getElementById("recipeBookResourceForm"),resourceSearch:document.getElementById("recipeBookResourceSearch"),resourceSuggestions:document.getElementById("recipeBookResourceSuggestions"),resourceQuantity:document.getElementById("recipeBookResourceQuantity"),resourceAdd:document.getElementById("recipeBookResourceAdd"),resourceSelection:document.getElementById("recipeBookResourceSelection"),resourceList:document.getElementById("recipeBookResourceList"),craftableBadge:document.getElementById("recipeBookCraftablesBadge"),craftableSummary:document.getElementById("recipeBookCraftableSummary"),craftableSearch:document.getElementById("recipeBookCraftableSearch"),craftableType:document.getElementById("recipeBookCraftableType"),craftableGrid:document.getElementById("recipeBookCraftableGrid"),craftablePagination:document.getElementById("recipeBookCraftablePagination"),craftablePrevious:document.getElementById("recipeBookCraftablePrevious"),craftableNext:document.getElementById("recipeBookCraftableNext"),craftablePages:document.getElementById("recipeBookCraftablePages")
 };
-const recipeBookState={initialized:false,loading:false,data:null,filtered:[],mode:"name",type:"",query:"",page:1,searchTimer:null,section:"catalog",resources:Object.create(null),selectedResourceKey:"",craftables:[],craftableQuery:"",craftableType:"",craftablePage:1,craftableTimer:null,craftPlans:Object.create(null),tooltipTarget:null,tooltipOpenTimer:null,tooltipCloseTimer:null};
+Object.assign(recipeBookEl,{screenshotOpen:document.getElementById("recipeBookScreenshotOpen"),screenshotUndo:document.getElementById("recipeBookScreenshotUndo"),screenshotDialog:document.getElementById("recipeBookScreenshotDialog"),screenshotSurface:document.querySelector(".recipeBookScreenshotSurface"),screenshotClose:document.getElementById("recipeBookScreenshotClose"),screenshotFiles:document.getElementById("recipeBookScreenshotFiles"),screenshotDropZone:document.getElementById("recipeBookScreenshotDropZone"),screenshotBrowse:document.getElementById("recipeBookScreenshotBrowse"),screenshotPaste:document.getElementById("recipeBookScreenshotPaste"),screenshotStatus:document.getElementById("recipeBookScreenshotStatus"),screenshotClear:document.getElementById("recipeBookScreenshotClear"),screenshotReview:document.getElementById("recipeBookScreenshotReview"),screenshotWarnings:document.getElementById("recipeBookScreenshotWarnings"),screenshotRows:document.getElementById("recipeBookScreenshotRows"),screenshotAddConfirmWrap:document.getElementById("recipeBookScreenshotAddConfirmWrap"),screenshotAddConfirm:document.getElementById("recipeBookScreenshotAddConfirm"),screenshotCancel:document.getElementById("recipeBookScreenshotCancel"),screenshotApply:document.getElementById("recipeBookScreenshotApply"),screenshotSelectionSummary:document.getElementById("recipeBookScreenshotSelectionSummary")});
+const recipeBookState={initialized:false,loading:false,data:null,filtered:[],mode:"name",type:"",query:"",page:1,searchTimer:null,section:"catalog",resources:Object.create(null),selectedResourceKey:"",craftables:[],craftableQuery:"",craftableType:"",craftablePage:1,craftableTimer:null,craftPlans:Object.create(null),tooltipTarget:null,tooltipOpenTimer:null,tooltipCloseTimer:null,ocr:{open:false,busy:false,generation:0,controller:null,images:[],rows:[],fingerprints:[],warnings:[],undo:null,returnFocus:null,totalBytes:0,materialCatalog:new Map(),materialLabels:new Map()}};
 const RECIPE_BOOK_RESOURCES_SETTING="recipeBookResources";
 const RECIPE_BOOK_CRAFT_PLANS_SETTING="recipeBookCraftPlans";
 function recipeBookSetStatus(message,state="ready"){
@@ -2603,14 +2855,112 @@ function recipeBookRefreshCraftables(){
 function recipeBookRenderResources(){
   recipeBookHideTooltip();
   if(!recipeBookState.data||!recipeBookEl.resourceList)return;
-  const entries=Object.entries(recipeBookState.resources).map(([key,amount])=>({candidate:recipeBookState.data.resourceLookup[key],amount})).filter(entry=>entry.candidate).sort((left,right)=>recipeBookCandidateName(left.candidate).localeCompare(recipeBookCandidateName(right.candidate),undefined,{sensitivity:"base"}));
-  if(recipeBookEl.resourceSummary)recipeBookEl.resourceSummary.textContent=entries.length?`${recipeBookFormatCount(entries.length)} resource${entries.length===1?"":"s"} tracked`:"No resources added";
-  recipeBookEl.resourceList.innerHTML=entries.length?entries.map(({candidate,amount})=>{const item=recipeBookState.data.items[candidate.itemId],name=recipeBookCandidateName(candidate);return `<article class="recipeBookResourceCard" data-resource-key="${escapeHtml(candidate.key)}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<div class="recipeBookResourceCopy"><strong class="recipeBookResourceName">${escapeHtml(name)}</strong><small class="recipeBookResourceMeta"><span class="recipeBookItemId">Item ID: ${escapeHtml(candidate.itemId)}</span><span class="recipeBookUsedIn">Used in ${recipeBookFormatCount(candidate.uses)} recipes</span></small></div><div class="recipeBookResourceControls"><input type="number" min="1" max="999999999999" step="1" inputmode="numeric" value="${amount}" data-resource-quantity="${escapeHtml(candidate.key)}" aria-label="Quantity owned for ${escapeHtml(name)}"><button class="recipeBookResourceRemove" type="button" data-resource-remove="${escapeHtml(candidate.key)}" aria-label="Remove ${escapeHtml(name)}" title="Remove">×</button></div></article>`}).join(""):'<div class="recipeBookEmpty"><span aria-hidden="true">◇</span><strong>Your resource list is empty</strong><p>Add materials above to discover what you can craft.</p></div>';
+  const openGroups=new Set([...recipeBookEl.resourceList.querySelectorAll(".recipeBookResourceGroupDetails[open]")].map(details=>details.dataset.resourceGroupDetails)),rows=recipeBookResourceInventoryRows(recipeBookState.data,recipeBookState.resources);
+  const memberMarkup=({candidate,amount,factor=1},className="recipeBookResourceCard")=>{const item=recipeBookState.data.items[candidate.itemId],name=recipeBookCandidateName(candidate),conversion=factor!==1?`<span class="recipeBookResourceFactor">1 item = ${recipeBookFormatCount(factor)} recipe units</span>`:"";return `<article class="${className}" data-resource-key="${escapeHtml(candidate.key)}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<div class="recipeBookResourceCopy"><strong class="recipeBookResourceName">${escapeHtml(name)}</strong><small class="recipeBookResourceMeta"><span class="recipeBookItemId">Item ID: ${escapeHtml(candidate.itemId)}</span><span class="recipeBookUsedIn">Used in ${recipeBookFormatCount(candidate.uses)} recipes</span>${conversion}</small></div><div class="recipeBookResourceControls"><input type="number" min="1" max="999999999999" step="1" inputmode="numeric" value="${amount}" data-resource-quantity="${escapeHtml(candidate.key)}" aria-label="Quantity owned for ${escapeHtml(name)}"><button class="recipeBookResourceRemove" type="button" data-resource-remove="${escapeHtml(candidate.key)}" aria-label="Remove ${escapeHtml(name)}" title="Remove">×</button></div></article>`};
+  recipeBookEl.resourceList.innerHTML=rows.length?rows.map(row=>{
+    if(row.kind==="single")return memberMarkup(row);
+    const iconStack=row.members.slice(0,6).map(member=>{const candidate=member.candidate,item=recipeBookState.data.items[candidate.itemId],name=recipeBookCandidateName(candidate);return `<span class="recipeBookResourceGroupIcon" title="${escapeHtml(name)}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}</span>`}).join(""),extra=row.members.length>6?`<b class="recipeBookResourceGroupMore">+${row.members.length-6}</b>`:"",open=openGroups.has(row.groupId)?" open":"";
+    return `<article class="recipeBookResourceGroupCard" data-resource-group="${escapeHtml(row.groupId)}"><header><div class="recipeBookResourceGroupIcons" aria-label="${row.members.length} exact materials">${iconStack}${extra}</div><div class="recipeBookResourceGroupCopy"><span>Verified BDO substitutes</span><strong>${escapeHtml(row.name)}</strong><small>${recipeBookFormatCount(row.members.length)} exact material stack${row.members.length===1?"":"s"} preserved</small></div><div class="recipeBookResourceGroupTotals"><span><small>Total items</small><output data-resource-group-raw>${escapeHtml(recipeBookFormatCount(row.rawTotal))}</output></span><span><small>Recipe units${row.weighted?"":" (1:1)"}</small><output data-resource-group-equivalent>${escapeHtml(recipeBookFormatCount(row.equivalentTotal))}</output></span></div></header><details class="recipeBookResourceGroupDetails" data-resource-group-details="${escapeHtml(row.groupId)}"${open}><summary><span>Review and edit exact materials</span><b>${recipeBookFormatCount(row.members.length)}</b></summary><div class="recipeBookResourceGroupMembers">${row.members.map(member=>memberMarkup(member,"recipeBookResourceGroupMember")).join("")}</div></details></article>`;
+  }).join(""):'<div class="recipeBookEmpty"><span aria-hidden="true">◇</span><strong>Your resource list is empty</strong><p>Add materials above to discover what you can craft.</p></div>';
   recipeBookRefreshCraftables();if(recipeBookState.section==="craftables")recipeBookRenderCraftables();
+}
+const RECIPE_BOOK_OCR_MAX_FILES=8,RECIPE_BOOK_OCR_MAX_FILE_BYTES=16*1024*1024,RECIPE_BOOK_OCR_MAX_ENCODED_CHARS=24*1024*1024,RECIPE_BOOK_OCR_MAX_SESSION_BYTES=48*1024*1024;
+const RECIPE_BOOK_OCR_MIME_EXTENSIONS=Object.freeze({"image/png":".png","image/jpeg":".jpg","image/bmp":".bmp"});
+function recipeBookOcrSetStatus(message,state="idle"){
+  if(!recipeBookEl.screenshotStatus)return;recipeBookEl.screenshotStatus.dataset.state=state;const copy=recipeBookEl.screenshotStatus.querySelector("span");if(copy)copy.textContent=message;
+}
+function recipeBookOcrSetBusy(busy){
+  recipeBookState.ocr.busy=Boolean(busy);recipeBookEl.screenshotSurface?.setAttribute("aria-busy",String(Boolean(busy)));recipeBookEl.screenshotDropZone?.classList.toggle("is-busy",Boolean(busy));for(const control of [recipeBookEl.screenshotBrowse,recipeBookEl.screenshotPaste,recipeBookEl.screenshotFiles,recipeBookEl.screenshotClear])if(control)control.disabled=Boolean(busy);recipeBookOcrRefreshSelection();
+}
+function recipeBookOcrPopulateMaterialCatalog(){
+  const entries=recipeBookOcrBuildMaterialCatalog(recipeBookState.data),byLabel=new Map(),byKey=new Map();for(const entry of entries){byLabel.set(entry.label.trim().toLocaleLowerCase(),entry.key);byKey.set(entry.key,entry.label)}recipeBookState.ocr.materialCatalog=byLabel;recipeBookState.ocr.materialLabels=byKey;
+}
+function recipeBookOcrResetSession(){
+  const state=recipeBookState.ocr;state.controller?.abort();state.controller=null;state.generation++;state.busy=false;state.images=[];state.rows=[];state.fingerprints=[];state.warnings=[];state.totalBytes=0;recipeBookEl.screenshotSurface?.setAttribute("aria-busy","false");recipeBookEl.screenshotDropZone?.classList.remove("is-busy","is-dragging");for(const control of [recipeBookEl.screenshotBrowse,recipeBookEl.screenshotPaste,recipeBookEl.screenshotFiles,recipeBookEl.screenshotClear])if(control)control.disabled=false;if(recipeBookEl.screenshotFiles)recipeBookEl.screenshotFiles.value="";if(recipeBookEl.screenshotAddConfirm)recipeBookEl.screenshotAddConfirm.checked=false;const update=recipeBookEl.screenshotDialog?.querySelector('input[name="recipeBookScreenshotMerge"][value="update"]');if(update)update.checked=true;recipeBookOcrSetStatus("Add one or more screenshots to begin.");recipeBookOcrRenderReview();
+}
+function recipeBookOcrOpenDialog(){
+  if(!recipeBookState.data){NotificationService.ShowWarning("The Recipe Book catalog is still loading.","Screenshot Mats");return}if(!recipeBookState.ocr.materialCatalog.size)recipeBookOcrPopulateMaterialCatalog();recipeBookOcrResetSession();const state=recipeBookState.ocr;state.open=true;state.returnFocus=document.activeElement;recipeBookEl.screenshotDialog.hidden=false;document.body.classList.add("recipeBookOcrOpen");requestAnimationFrame(()=>{(recipeBookEl.screenshotClose||recipeBookEl.screenshotSurface)?.focus()});
+}
+function recipeBookOcrCloseDialog(){
+  const state=recipeBookState.ocr;if(!state.open)return;const returnFocus=state.returnFocus;state.open=false;recipeBookOcrResetSession();recipeBookEl.screenshotDialog.hidden=true;document.body.classList.remove("recipeBookOcrOpen");if(returnFocus?.isConnected)requestAnimationFrame(()=>returnFocus.focus());
+}
+function recipeBookOcrReadDataUrl(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(new Error(`Could not read ${file.name||"the image"}.`));reader.onload=()=>resolve(String(reader.result||""));reader.readAsDataURL(file)})}
+function recipeBookOcrDecodeImage(dataUrl){return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("The selected file is not a readable image."));image.src=dataUrl})}
+function recipeBookOcrCanonicalMimeType(value){const type=String(value||"").trim().toLowerCase();if(type==="image/png")return"image/png";if(type==="image/jpeg"||type==="image/jpg")return"image/jpeg";if(type==="image/bmp"||type==="image/x-ms-bmp")return"image/bmp";return""}
+function recipeBookOcrMimeType(file){
+  const declared=String(file?.type||"").trim();if(declared)return recipeBookOcrCanonicalMimeType(declared);const name=String(file?.name||"").toLowerCase();if(name.endsWith(".png"))return"image/png";if(/\.jpe?g$/.test(name))return"image/jpeg";if(name.endsWith(".bmp"))return"image/bmp";return"";
+}
+function recipeBookOcrFileName(file,mimeType){const extension=RECIPE_BOOK_OCR_MIME_EXTENSIONS[mimeType]||".png",raw=String(file?.name||"").trim(),stem=(raw?raw.replace(/\.[^.]*$/u,""):`pasted-${Date.now()}`).replace(/[\\/]/g,"-").slice(0,180-extension.length)||"screenshot";return`${stem}${extension}`}
+async function recipeBookOcrNormalizeFile(file){
+  if(!(file instanceof Blob))throw new Error("Only image files can be scanned.");const sourceMime=recipeBookOcrMimeType(file),displayName=String(file.name||"Pasted screenshot").slice(0,180),fileName=recipeBookOcrFileName(file,sourceMime),bytes=Number(file.size)||0;
+  if(!sourceMime)throw new Error(`${displayName}: use a PNG, JPG, or BMP image.`);if(bytes<1||bytes>RECIPE_BOOK_OCR_MAX_FILE_BYTES)throw new Error(`${displayName}: images must be smaller than 16 MB.`);
+  let dataUrl=await recipeBookOcrReadDataUrl(file),image=await recipeBookOcrDecodeImage(dataUrl),width=image.naturalWidth,height=image.naturalHeight;if(!recipeBookOcrDimensionsAreSafe(width,height))throw new Error(`${displayName}: this image exceeds the scanner's 7,680×4,320 and 24-megapixel safety limits.`);
+  let mimeType=sourceMime,normalizedName=fileName;if(sourceMime==="image/bmp"){const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;const context=canvas.getContext("2d",{alpha:false});if(!context)throw new Error(`${fileName}: BMP conversion is unavailable.`);context.drawImage(image,0,0);dataUrl=canvas.toDataURL("image/png");mimeType="image/png";normalizedName=fileName.replace(/\.bmp$/i,"")+".png";image=await recipeBookOcrDecodeImage(dataUrl)}
+  const comma=dataUrl.indexOf(","),dataBase64=comma>=0?dataUrl.slice(comma+1):"";if(!dataBase64||dataBase64.length>RECIPE_BOOK_OCR_MAX_ENCODED_CHARS)throw new Error(`${fileName}: the prepared image exceeds the scanner's encoded size limit.`);return{fileName:normalizedName,originalName:displayName,mimeType,dataBase64,dataUrl,width,height,bytes,imagePromise:Promise.resolve(image)};
+}
+function recipeBookOcrFindImage(fingerprint){return recipeBookState.ocr.images.find(image=>image.fingerprint===fingerprint)}
+async function recipeBookOcrDrawPreviews(){
+  const generation=recipeBookState.ocr.generation;for(const canvas of recipeBookEl.screenshotRows?.querySelectorAll("canvas[data-ocr-row-index]")||[]){const row=recipeBookState.ocr.rows[Number(canvas.dataset.ocrRowIndex)],record=row&&recipeBookOcrFindImage(row.fingerprint);if(!record)continue;try{const image=await record.imagePromise;if(generation!==recipeBookState.ocr.generation||!canvas.isConnected)return;const context=canvas.getContext("2d",{alpha:false});if(!context)continue;const crop=recipeBookOcrPreviewBox(row.box,image.naturalWidth,image.naturalHeight),scale=Math.min(canvas.width/crop.width,canvas.height/crop.height),drawWidth=Math.max(1,Math.round(crop.width*scale)),drawHeight=Math.max(1,Math.round(crop.height*scale)),drawX=Math.floor((canvas.width-drawWidth)/2),drawY=Math.floor((canvas.height-drawHeight)/2);context.imageSmoothingEnabled=true;context.imageSmoothingQuality="high";context.fillStyle="#05070d";context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,crop.x,crop.y,crop.width,crop.height,drawX,drawY,drawWidth,drawHeight)}catch{}}
+}
+function recipeBookOcrMaterialDisplayName(key){const candidate=recipeBookState.data?.resourceLookup?.[key];return candidate?recipeBookCandidateName(candidate):(recipeBookState.ocr.materialLabels.get(key)||"")}
+function recipeBookOcrCloseMaterialPopups(except=null,{restoreFocus=false}={}){
+  let closed=false,focusTarget=null;for(const popup of recipeBookEl.screenshotRows?.querySelectorAll("[data-ocr-material-menu],[data-ocr-material-results]")||[]){if(popup===except||popup.hidden)continue;const owner=popup.closest("[data-ocr-material-picker],[data-ocr-material-search-wrap]"),controller=popup.matches("[data-ocr-material-menu]")?owner?.querySelector("[data-ocr-material-trigger]"):owner?.querySelector("[data-ocr-material-search]");popup.hidden=true;owner?.classList.remove("is-open","opens-up");controller?.setAttribute("aria-expanded","false");controller?.removeAttribute("aria-activedescendant");if(restoreFocus&&!focusTarget)focusTarget=controller;closed=true}if(focusTarget?.isConnected)focusTarget.focus();return closed;
+}
+function recipeBookOcrPlaceMaterialPopup(popup){
+  const owner=popup?.closest("[data-ocr-material-picker],[data-ocr-material-search-wrap]");if(!owner)return;owner.classList.remove("opens-up");popup.scrollIntoView({block:"nearest",inline:"nearest",behavior:"auto"});
+}
+function recipeBookOcrOpenMaterialMenu(trigger,{focusLast=false,moveFocus=false}={}){
+  const popup=document.getElementById(trigger?.getAttribute("aria-controls")||"");if(!popup||!popup.querySelector("[data-ocr-material-option]"))return;const alreadyOpen=!popup.hidden;recipeBookOcrCloseMaterialPopups(popup);popup.hidden=false;popup.closest("[data-ocr-material-picker]")?.classList.add("is-open");trigger.setAttribute("aria-expanded","true");requestAnimationFrame(()=>{recipeBookOcrPlaceMaterialPopup(popup);if(moveFocus){const options=[...popup.querySelectorAll("[data-ocr-material-option]")];(focusLast?options.at(-1):options.find(option=>option.getAttribute("aria-selected")==="true")||options[0])?.focus()}});return alreadyOpen;
+}
+function recipeBookOcrRenderMaterialSearch(input){
+  const article=input?.closest("[data-ocr-row-index]"),popup=article?.querySelector("[data-ocr-material-results]"),row=article&&recipeBookState.ocr.rows[Number(article.dataset.ocrRowIndex)],query=String(input?.value||"").trim(),selectedLabel=row?.searchSelected&&row.selectedKey?String(recipeBookState.ocr.materialLabels.get(row.selectedKey)||recipeBookOcrMaterialDisplayName(row.selectedKey)).trim():"";if(!popup)return;if(!query||selectedLabel&&query.toLocaleLowerCase()===selectedLabel.toLocaleLowerCase()){popup.innerHTML="";input.setAttribute("aria-expanded","false");if(!popup.hidden)recipeBookOcrCloseMaterialPopups();return}const candidates=recipeBookResourceCandidates(recipeBookState.data,query,12),rowIndex=Number(article.dataset.ocrRowIndex);popup.innerHTML=candidates.length?candidates.map((candidate,index)=>{const item=recipeBookState.data.items[candidate.itemId];return `<button id="recipeBookOcrSearch-${rowIndex}-${index}" class="recipeBookScreenshotMaterialOption recipeBookScreenshotSearchOption" type="button" role="option" aria-selected="false" data-ocr-search-option="${escapeHtml(candidate.key)}"><strong>${escapeHtml(recipeBookCandidateName(candidate))}</strong><small>Item ${escapeHtml(candidate.itemId)} · Used in ${recipeBookFormatCount(candidate.uses)} recipe${candidate.uses===1?"":"s"}</small></button>`}).join(""):`<div class="recipeBookScreenshotSearchEmpty" role="status">No materials match “${escapeHtml(query)}”.</div>`;recipeBookOcrCloseMaterialPopups(popup);popup.hidden=false;popup.closest("[data-ocr-material-search-wrap]")?.classList.add("is-open");input.setAttribute("aria-expanded","true");requestAnimationFrame(()=>recipeBookOcrPlaceMaterialPopup(popup));
+}
+function recipeBookOcrSelectMaterial(article,row,key,source="candidate"){
+  const candidate=recipeBookState.data?.resourceLookup?.[key];if(!article||!row||!candidate)return;const changed=row.selectedKey!==key;row.selectedKey=key;row.searchSelected=source==="search";if(changed||row.reviewRequired){row.reviewRequired=true;row.state="review";article.dataset.state=row.state;const status=article.querySelector(".recipeBookScreenshotSlotMeta>span");if(status)status.textContent="Review required"}const trigger=article.querySelector("[data-ocr-material-trigger]"),displayName=recipeBookOcrMaterialDisplayName(key);if(trigger){trigger.classList.toggle("has-value",Boolean(displayName));const value=trigger.querySelector("[data-ocr-material-value]");if(value)value.textContent=displayName||"Choose a likely material…"}for(const option of article.querySelectorAll("[data-ocr-material-option]"))option.setAttribute("aria-selected",String(option.dataset.ocrMaterialOption===key));const search=article.querySelector("[data-ocr-material-search]");if(search)search.value=source==="search"?(recipeBookState.ocr.materialLabels.get(key)||displayName):"";const focusTarget=source==="search"?search:trigger;recipeBookOcrCloseMaterialPopups();if(focusTarget?.isConnected)requestAnimationFrame(()=>focusTarget.focus());recipeBookOcrRefreshSelection();
+}
+function recipeBookOcrClearMaterialSelection(article,row){
+  if(!article||!row||!row.selectedKey)return;row.selectedKey="";row.searchSelected=false;row.reviewRequired=true;row.state=row.options.length?"review":"unknown";article.dataset.state=row.state;const trigger=article.querySelector("[data-ocr-material-trigger]"),value=trigger?.querySelector("[data-ocr-material-value]");trigger?.classList.remove("has-value");if(value)value.textContent=row.options.length?"Choose a likely material…":"No likely icon match";for(const option of article.querySelectorAll("[data-ocr-material-option]"))option.setAttribute("aria-selected","false");recipeBookOcrRefreshSelection();
+}
+function recipeBookOcrRowMarkup(row,index){
+  const record=recipeBookOcrFindImage(row.fingerprint),status=row.state==="ready"?"Exact match":row.state==="unknown"?"No match":"Review required",reason=row.reasons.join(" · ")||"Unique icon and exact quantity",selected=String(row.selectedKey||""),selectedName=recipeBookOcrMaterialDisplayName(selected),searchedMaterial=row.searchSelected&&selected?(recipeBookState.ocr.materialLabels.get(selected)||selectedName):"",quantity=row.quantity===""?"":String(row.quantity),hasSuggestion=Number.isSafeInteger(row.suggestedQuantity),suggestion=hasSuggestion?`Read as ${recipeBookFormatCount(row.suggestedQuantity)}`:"Enter quantity",quantityNote=row.quantityText?(row.quantityApproximate?(hasSuggestion?`Read as “${row.quantityText}” → ${recipeBookFormatCount(row.suggestedQuantity)}; rounded, review before import`:`Read as “${row.quantityText}”; rounded result needs manual review`):`Read as “${row.quantityText}”${row.reviewRequired?"; review before import":""}`):"No quantity text was readable",menuId=`recipeBookOcrMaterialMenu-${index}`,searchId=`recipeBookOcrMaterialSearch-${index}`,resultsId=`recipeBookOcrMaterialResults-${index}`,quantityNoteId=`recipeBookOcrQuantityNote-${index}`,options=row.options.map((option,optionIndex)=>`<button id="recipeBookOcrMaterial-${index}-${optionIndex}" class="recipeBookScreenshotMaterialOption" type="button" role="option" aria-selected="${option.key===selected}" data-ocr-material-option="${escapeHtml(option.key)}"><strong>${escapeHtml(option.name)}</strong><small>${Math.round(option.score*100)}% visual match</small></button>`).join("");
+  return `<article class="recipeBookScreenshotRow" data-state="${row.state}" data-ocr-row-index="${index}"><canvas class="recipeBookScreenshotCrop" width="84" height="72" data-ocr-row-index="${index}" aria-label="Material and quantity preview for screenshot slot ${escapeHtml(row.slotId)}"></canvas><div class="recipeBookScreenshotSlotMeta"><strong>${escapeHtml(record?.fileName||"Storage screenshot")} · row ${row.row+1}, column ${row.column+1}</strong><span>${status}</span><small>${escapeHtml(reason)}</small></div><div class="recipeBookScreenshotField recipeBookScreenshotMaterialField"><span>Material</span><div class="recipeBookScreenshotPicker" data-ocr-material-picker><button class="recipeBookScreenshotPickerTrigger ${selectedName?"has-value":""}" type="button" data-ocr-material-trigger aria-haspopup="listbox" aria-expanded="false" aria-controls="${menuId}" aria-label="Likely materials for screenshot slot ${escapeHtml(row.slotId)}" ${row.options.length?"":"disabled"}><span data-ocr-material-value>${escapeHtml(selectedName||(row.options.length?"Choose a likely material…":"No likely icon match"))}</span><i aria-hidden="true"></i></button><div id="${menuId}" class="recipeBookScreenshotMaterialMenu" data-ocr-material-menu role="listbox" aria-label="Likely icon matches for screenshot slot ${escapeHtml(row.slotId)}" hidden>${options}</div></div><div class="recipeBookScreenshotFallbackWrap" data-ocr-material-search-wrap><label class="recipeBookScreenshotFallback" for="${searchId}"><span>Not listed?</span><input id="${searchId}" type="search" data-ocr-material-search value="${escapeHtml(searchedMaterial)}" placeholder="Search all materials" aria-label="Search all materials for screenshot slot ${escapeHtml(row.slotId)}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${resultsId}" autocomplete="off" spellcheck="false"></label><div id="${resultsId}" class="recipeBookScreenshotMaterialResults" data-ocr-material-results role="listbox" aria-label="Matching Recipe Book materials" hidden></div></div><small>${row.options.length?`${row.options.length} likely icon match${row.options.length===1?"":"es"} · search the full catalog if needed`:"Search the full Recipe Book material catalog"}</small></div><label class="recipeBookScreenshotField"><span>Quantity to import</span><input type="number" min="1" max="${RECIPE_BOOK_OCR_MAX_QUANTITY}" step="1" inputmode="numeric" data-ocr-quantity value="${escapeHtml(quantity)}" placeholder="${escapeHtml(suggestion)}" aria-label="Quantity to import for screenshot slot ${escapeHtml(row.slotId)}" aria-describedby="${quantityNoteId}"><small id="${quantityNoteId}" class="${row.reviewRequired?"warning":""}">${escapeHtml(quantityNote)}</small></label></article>`;
+}
+function recipeBookOcrRenderReview(){
+  const state=recipeBookState.ocr,hasRows=state.rows.length>0,hasWarnings=state.warnings.length>0,showWarnings=hasWarnings&&!hasRows;if(recipeBookEl.screenshotReview){recipeBookEl.screenshotReview.hidden=!hasRows&&!showWarnings;const merge=recipeBookEl.screenshotReview.querySelector(".recipeBookScreenshotMergeMode");if(merge)merge.hidden=!hasRows}if(recipeBookEl.screenshotClear)recipeBookEl.screenshotClear.hidden=!state.images.length&&!hasWarnings;if(recipeBookEl.screenshotRows)recipeBookEl.screenshotRows.innerHTML=state.rows.map(recipeBookOcrRowMarkup).join("");
+  if(recipeBookEl.screenshotWarnings){recipeBookEl.screenshotWarnings.hidden=!showWarnings;recipeBookEl.screenshotWarnings.setAttribute("role","alert");recipeBookEl.screenshotWarnings.innerHTML=showWarnings?`<ul>${state.warnings.map(warning=>`<li>${escapeHtml(warning)}</li>`).join("")}</ul>`:""}
+  const mode=recipeBookEl.screenshotDialog?.querySelector('input[name="recipeBookScreenshotMerge"]:checked')?.value||"update";if(recipeBookEl.screenshotAddConfirmWrap)recipeBookEl.screenshotAddConfirmWrap.hidden=mode!=="add";recipeBookOcrRefreshSelection();recipeBookOcrDrawPreviews();
+}
+function recipeBookOcrRefreshSelection(){
+  const state=recipeBookState.ocr,plan=recipeBookOcrBuildImportPlan(state.rows,recipeBookState.data),mode=recipeBookEl.screenshotDialog?.querySelector('input[name="recipeBookScreenshotMerge"]:checked')?.value||"update",addConfirmed=mode!=="add"||recipeBookEl.screenshotAddConfirm?.checked,complete=state.rows.filter(row=>recipeBookOcrRowIsComplete(row,recipeBookState.data)).length,total=state.rows.length;
+  if(recipeBookEl.screenshotSelectionSummary)recipeBookEl.screenshotSelectionSummary.textContent=plan.valid?`${total} material${total===1?"":"s"} ready to ${mode==="add"?"add":"update"}.`:total?`${complete} of ${total} rows complete · ${plan.errors[0]}`:state.warnings.length?"Review the scanner message above.":"Add a screenshot to begin.";if(recipeBookEl.screenshotApply)recipeBookEl.screenshotApply.disabled=state.busy||!plan.valid||!addConfirmed;
+}
+async function recipeBookOcrQueueFiles(inputFiles,source="browse"){
+  const state=recipeBookState.ocr;if(!state.open||state.busy)return;const files=[...inputFiles].filter(Boolean);if(!files.length){NotificationService.ShowWarning(source==="paste"?"The clipboard does not contain an image.":"Choose at least one screenshot.","Screenshot Mats");return}
+  const room=Math.max(0,RECIPE_BOOK_OCR_MAX_FILES-state.images.length),queue=files.slice(0,room);if(!room){NotificationService.ShowWarning("A scan session can contain up to 8 screenshots.","Screenshot Mats");return}if(files.length>queue.length)state.warnings.push(`Only the first ${queue.length} image${queue.length===1?" was":"s were"} accepted because a session is limited to 8.`);
+  const token=++state.generation,controller=new AbortController();state.controller=controller;recipeBookOcrSetBusy(true);let accepted=0;
+  for(let index=0;index<queue.length;index++){
+    const file=queue[index],displayName=String(file.name||`Pasted screenshot ${index+1}`);if(token!==state.generation)return;recipeBookOcrSetStatus(`Analyzing ${index+1} of ${queue.length}: ${displayName}…`,"busy");
+    try{
+      if(state.totalBytes+(Number(file.size)||0)>RECIPE_BOOK_OCR_MAX_SESSION_BYTES)throw new Error(`${displayName}: this session would exceed the 48 MB image limit.`);const normalized=await recipeBookOcrNormalizeFile(file);if(token!==state.generation)return;
+      const response=await bridgeCall("analyzeRecipeBookScreenshot",{fileName:normalized.fileName,mimeType:normalized.mimeType,dataBase64:normalized.dataBase64},{signal:controller.signal}),analysis=recipeBookOcrSanitizeResult(response);if(token!==state.generation)return;if(!analysis)throw new Error(`${displayName}: the scanner returned an invalid result.`);if(analysis.width!==normalized.width||analysis.height!==normalized.height)throw new Error(`${displayName}: the analyzed image dimensions did not match the selected file.`);
+      const registered=recipeBookOcrRegisterFingerprint(state.fingerprints,analysis.imageFingerprint);if(registered.duplicate){state.warnings.push(`${displayName} was skipped because the same screenshot is already in this session.`);continue}state.fingerprints=[...registered.fingerprints];state.totalBytes+=normalized.bytes;state.images.push({fingerprint:analysis.imageFingerprint,fileName:normalized.originalName,dataUrl:normalized.dataUrl,width:normalized.width,height:normalized.height,imagePromise:normalized.imagePromise});state.rows.push(...recipeBookOcrBuildReviewRows(analysis,recipeBookState.data));state.warnings.push(...analysis.warnings.map(warning=>`${displayName}: ${warning}`));if(!analysis.slots.length)state.warnings.push(`${displayName}: no storage material slots were detected. Include one or more complete item slots with their quantity labels, or crop tightly around a single item.`);accepted++;
+    }catch(error){if(token!==state.generation)return;state.warnings.push(error?.message||`${displayName}: analysis failed.`)}
+  }
+  if(token!==state.generation)return;if(state.controller===controller)state.controller=null;recipeBookOcrSetBusy(false);recipeBookOcrSetStatus(state.images.length?`${state.images.length} screenshot${state.images.length===1?"":"s"} · ${state.rows.length} material slot${state.rows.length===1?"":"s"} detected`:"No screenshots were accepted. Review the messages below.",state.images.length?"ready":"error");recipeBookOcrRenderReview();if(accepted||state.warnings.length)recipeBookEl.screenshotReview?.scrollIntoView({block:"nearest",behavior:document.body.dataset.motion==="reduced"?"auto":"smooth"});
+}
+async function recipeBookOcrPasteFromClipboard(){
+  if(!navigator.clipboard?.read){NotificationService.ShowInfo("Focus this window and press Ctrl+V to paste a screenshot.","Screenshot Mats");return}try{const items=await navigator.clipboard.read(),files=[];for(const item of items){const offered=item.types.map(type=>({type,mimeType:recipeBookOcrCanonicalMimeType(type)})).find(entry=>entry.mimeType);if(!offered)continue;const blob=await item.getType(offered.type),extension=RECIPE_BOOK_OCR_MIME_EXTENSIONS[offered.mimeType];files.push(new File([blob],`clipboard-${Date.now()}${extension}`,{type:offered.mimeType}))}await recipeBookOcrQueueFiles(files,"paste")}catch{NotificationService.ShowInfo("Clipboard access was not available. Focus this window and press Ctrl+V instead.","Screenshot Mats")}
+}
+function recipeBookOcrApply(){
+  const mode=recipeBookEl.screenshotDialog?.querySelector('input[name="recipeBookScreenshotMerge"]:checked')?.value||"update",plan=recipeBookOcrBuildImportPlan(recipeBookState.ocr.rows,recipeBookState.data);if(mode==="add"&&!recipeBookEl.screenshotAddConfirm?.checked){NotificationService.ShowWarning("Confirm the double-count warning before adding to current totals.","Screenshot Mats");return}if(!plan.valid){NotificationService.ShowWarning(plan.errors[0]||"Complete every detected material.","Screenshot Mats");return}
+  const before={...recipeBookState.resources},result=recipeBookOcrApplyImportPlan(before,plan,recipeBookState.data,mode);if(!result.ok){NotificationService.ShowError(result.errors[0]||"The screenshot import could not be applied.","Screenshot Mats");return}recipeBookState.resources=result.resources;recipeBookState.ocr.undo=recipeBookOcrCreateUndoSnapshot(before,result.resources);recipeBookPersistResources();recipeBookRenderResources();if(recipeBookEl.screenshotUndo)recipeBookEl.screenshotUndo.hidden=false;const changed=result.changedKeys.length;recipeBookOcrCloseDialog();NotificationService.ShowSuccess(`${changed} material${changed===1?"":"s"} ${mode==="add"?"added to":"updated in"} My Resources.`,"Screenshot import complete");
+}
+function recipeBookOcrUndo(){
+  const result=recipeBookOcrApplyUndo(recipeBookState.ocr.undo,recipeBookState.resources,recipeBookState.data);if(!result.ok){recipeBookState.ocr.undo=null;if(recipeBookEl.screenshotUndo)recipeBookEl.screenshotUndo.hidden=true;NotificationService.ShowWarning(result.reason,"Undo screenshot import");return}recipeBookState.resources=result.resources;recipeBookState.ocr.undo=null;recipeBookPersistResources();recipeBookRenderResources();if(recipeBookEl.screenshotUndo)recipeBookEl.screenshotUndo.hidden=true;NotificationService.ShowSuccess("The last screenshot import was undone.","My Resources");
 }
 function recipeBookCraftableCardMarkup(entry){
   const {recipe,maxCrafts,requirements}=entry,data=recipeBookState.data,output=data.items[recipe.outputId],typeLabel=recipeBookTypeLabel(recipe.type),outputEnhancement=recipeBookEnhancementLabel(recipe.outputEnhancement),savedAmount=recipeBookState.craftPlans[recipe.id],craftAmount=recipeBookClampCraftAmount(savedAmount,maxCrafts),progress=maxCrafts<=1?100:Math.round(((craftAmount-1)/(maxCrafts-1))*100),disabled=maxCrafts===1?" disabled":"";
-  const ingredients=requirements.map(requirement=>{const candidate=data.resourceLookup[requirement.key],item=data.items[candidate.itemId],usage=recipeBookCraftMaterialUsage(requirement.count,craftAmount,requirement.owned);return `<li data-craft-requirement data-per-craft="${requirement.count}" data-owned="${requirement.owned}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<span class="recipeBookIngredientCopy"><strong>${escapeHtml(recipeBookCandidateName(candidate))}</strong><small class="recipeBookIngredientPer">Per craft <b>×${escapeHtml(recipeBookFormatCount(requirement.count))}</b></small></span><span class="recipeBookIngredientStock"><b class="recipeBookOwnedAmount">${escapeHtml(recipeBookFormatCount(requirement.owned))} owned</b><small class="recipeBookConsumedAmount"><span data-craft-used>${escapeHtml(recipeBookFormatCount(usage.used))} used</span><span data-craft-remaining>${escapeHtml(recipeBookFormatCount(usage.remaining))} left</span></small></span></li>`}).join("");
+  const ingredients=requirements.map(requirement=>{const candidate=data.resourceLookup[requirement.candidateKey||requirement.key],item=data.items[candidate.itemId],usage=recipeBookCraftMaterialUsage(requirement.count,craftAmount,requirement.owned),name=requirement.groupId?requirement.name:recipeBookCandidateName(candidate),unit=requirement.weighted?" recipe units":"",rawDetail=requirement.weighted?`<em>${escapeHtml(recipeBookFormatCount(requirement.rawOwned))} physical items</em>`:"";return `<li data-craft-requirement data-per-craft="${requirement.count}" data-owned="${requirement.owned}" data-substitution-group="${escapeHtml(requirement.groupId||"")}" ${recipeBookItemTargetAttributes(candidate.itemId,candidate.enhancement)}>${recipeBookIconMarkup(item,"ingredient","",candidate.enhancement)}<span class="recipeBookIngredientCopy"><strong>${escapeHtml(name)}</strong><small class="recipeBookIngredientPer">Per craft <b>×${escapeHtml(recipeBookFormatCount(requirement.count))}</b>${escapeHtml(unit)}</small></span><span class="recipeBookIngredientStock"><b class="recipeBookOwnedAmount">${escapeHtml(recipeBookFormatCount(requirement.owned))}${escapeHtml(unit)} owned</b>${rawDetail}<small class="recipeBookConsumedAmount"><span data-craft-used>${escapeHtml(recipeBookFormatCount(usage.used))} used</span><span data-craft-remaining>${escapeHtml(recipeBookFormatCount(usage.remaining))} left</span></small></span></li>`}).join("");
   return `<article class="recipeBookCard" data-recipe-id="${escapeHtml(recipe.id)}"><header ${recipeBookItemTargetAttributes(recipe.outputId,recipe.outputEnhancement)}>${recipeBookIconMarkup(output,"output","",recipe.outputEnhancement)}<div class="recipeBookCardTitle"><span>${escapeHtml(typeLabel)}</span><h3>${outputEnhancement?`<em>${escapeHtml(outputEnhancement)}</em> `:""}${escapeHtml(output.name)}</h3><small>${escapeHtml(recipe.station||typeLabel)}</small></div><div class="recipeBookCraftCount"><strong>×${escapeHtml(recipeBookFormatCount(maxCrafts))}</strong><small>max crafts</small></div></header><fieldset class="recipeBookCraftPlanner" data-craft-plan data-recipe-id="${escapeHtml(recipe.id)}" data-craft-amount="${craftAmount}" data-max-crafts="${maxCrafts}"><legend class="recipeBookSrOnly">Plan craft batches for ${escapeHtml(output.name)}</legend><div class="recipeBookCraftPlannerHead"><span>Craft amount</span><output><b data-craft-plan-value>×${escapeHtml(recipeBookFormatCount(craftAmount))}</b><small>of ${escapeHtml(recipeBookFormatCount(maxCrafts))} max</small></output></div><div class="recipeBookCraftPlannerControls"><label class="recipeBookCraftRange"><span class="recipeBookSrOnly">Drag craft amount for ${escapeHtml(output.name)}</span><input type="range" min="1" max="${maxCrafts}" step="1" value="${craftAmount}" data-craft-plan-range aria-label="Craft amount for ${escapeHtml(output.name)}" aria-valuetext="${craftAmount} of ${maxCrafts} craft batches" style="--craft-progress:${progress}%"${disabled}></label><label class="recipeBookCraftExact"><span>Exact</span><input type="number" min="1" max="${maxCrafts}" step="1" inputmode="numeric" value="${craftAmount}" data-craft-plan-number aria-label="Exact craft amount for ${escapeHtml(output.name)}"${disabled}></label></div></fieldset><div class="recipeBookIngredientHead"><span>Covered materials</span><b>${requirements.length}</b></div><ul>${ingredients}</ul></article>`;
 }
 function recipeBookUpdateCraftPlanner(control,{commit=false}={}){
@@ -2700,7 +3050,7 @@ async function recipeBookLoadData(){
     recipeBookState.craftPlans=recipeBookSanitizeCraftPlans(readSetting(RECIPE_BOOK_CRAFT_PLANS_SETTING,{}));
     recipeBookPopulateTypes();
     if(recipeBookEl.craftableType)recipeBookEl.craftableType.innerHTML='<option value="">All categories</option>'+recipeBookState.data.types.map(type=>`<option value="${escapeHtml(type)}">${escapeHtml(recipeBookTypeLabel(type))}</option>`).join("");
-    for(const control of [recipeBookEl.search,recipeBookEl.searchButton,recipeBookEl.type,recipeBookEl.resourceSearch,recipeBookEl.craftableSearch,recipeBookEl.craftableType])if(control)control.disabled=false;
+    for(const control of [recipeBookEl.search,recipeBookEl.searchButton,recipeBookEl.type,recipeBookEl.resourceSearch,recipeBookEl.craftableSearch,recipeBookEl.craftableType,recipeBookEl.screenshotOpen])if(control)control.disabled=false;
     const iconCount=Number(recipeBookState.data.counts.uniqueIcons)||Object.values(recipeBookState.data.items).filter(item=>recipeBookSafeIconPath(item.icon)).length;
     recipeBookSetStatus(`${recipeBookFormatCount(recipeBookState.data.recipes.length)} recipes · ${recipeBookFormatCount(iconCount)} cached images`,"ready");
     recipeBookState.page=1;recipeBookRender();recipeBookRenderResources();recipeBookSetSection(recipeBookState.section);
@@ -2732,6 +3082,18 @@ function initializeRecipeBook(){
   recipeBookEl.resourceForm?.addEventListener("submit",event=>{event.preventDefault();const key=recipeBookState.selectedResourceKey,amount=recipeBookResourceAmount(recipeBookEl.resourceQuantity.value);if(!key||!recipeBookState.data.resourceLookup[key]||!amount){NotificationService.ShowWarning("Choose an ingredient and enter a whole quantity of at least 1.","My Resources");return}recipeBookState.resources[key]=amount;recipeBookPersistResources();recipeBookRenderResources();recipeBookEl.resourceAdd.textContent="Update";recipeBookRenderResourceSelection();NotificationService.ShowSuccess(`${recipeBookCandidateName(recipeBookState.data.resourceLookup[key])} saved to My Resources.`,"Resource saved")});
   recipeBookEl.resourceList?.addEventListener("change",event=>{const input=event.target.closest("[data-resource-quantity]");if(!input)return;const amount=recipeBookResourceAmount(input.value);if(!amount){input.value=recipeBookState.resources[input.dataset.resourceQuantity];NotificationService.ShowWarning("Resource quantities must be whole numbers of at least 1.","My Resources");return}recipeBookState.resources[input.dataset.resourceQuantity]=amount;recipeBookPersistResources();recipeBookRenderResources()});
   recipeBookEl.resourceList?.addEventListener("click",event=>{const button=event.target.closest("[data-resource-remove]");if(!button)return;const candidate=recipeBookState.data.resourceLookup[button.dataset.resourceRemove];delete recipeBookState.resources[button.dataset.resourceRemove];recipeBookPersistResources();if(recipeBookState.selectedResourceKey===button.dataset.resourceRemove){recipeBookState.selectedResourceKey="";recipeBookEl.resourceSearch.value="";recipeBookEl.resourceAdd.textContent="Add";recipeBookRenderResourceSelection()}recipeBookRenderResources();NotificationService.ShowInfo(`${recipeBookCandidateName(candidate)} removed.`,"Resource removed")});
+  recipeBookEl.screenshotOpen?.addEventListener("click",recipeBookOcrOpenDialog);recipeBookEl.screenshotUndo?.addEventListener("click",recipeBookOcrUndo);recipeBookEl.screenshotClose?.addEventListener("click",recipeBookOcrCloseDialog);recipeBookEl.screenshotCancel?.addEventListener("click",recipeBookOcrCloseDialog);recipeBookEl.screenshotDialog?.querySelector("[data-recipe-book-ocr-close]")?.addEventListener("click",recipeBookOcrCloseDialog);recipeBookEl.screenshotBrowse?.addEventListener("click",()=>recipeBookEl.screenshotFiles?.click());recipeBookEl.screenshotPaste?.addEventListener("click",recipeBookOcrPasteFromClipboard);recipeBookEl.screenshotClear?.addEventListener("click",recipeBookOcrResetSession);recipeBookEl.screenshotApply?.addEventListener("click",recipeBookOcrApply);
+  recipeBookEl.screenshotFiles?.addEventListener("change",()=>{const files=[...recipeBookEl.screenshotFiles.files];recipeBookEl.screenshotFiles.value="";recipeBookOcrQueueFiles(files,"browse")});
+  let recipeBookOcrDragDepth=0;recipeBookEl.screenshotDropZone?.addEventListener("dragenter",event=>{if(!event.dataTransfer?.types?.includes("Files"))return;event.preventDefault();recipeBookOcrDragDepth++;recipeBookEl.screenshotDropZone.classList.add("is-dragging")});recipeBookEl.screenshotDropZone?.addEventListener("dragover",event=>{if(!event.dataTransfer?.types?.includes("Files"))return;event.preventDefault();event.dataTransfer.dropEffect="copy"});recipeBookEl.screenshotDropZone?.addEventListener("dragleave",event=>{event.preventDefault();recipeBookOcrDragDepth=Math.max(0,recipeBookOcrDragDepth-1);if(!recipeBookOcrDragDepth)recipeBookEl.screenshotDropZone.classList.remove("is-dragging")});recipeBookEl.screenshotDropZone?.addEventListener("drop",event=>{event.preventDefault();recipeBookOcrDragDepth=0;recipeBookEl.screenshotDropZone.classList.remove("is-dragging");recipeBookOcrQueueFiles(event.dataTransfer?.files||[],"drop")});
+  document.addEventListener("paste",event=>{if(!recipeBookState.ocr.open||recipeBookState.ocr.busy)return;const files=[...event.clipboardData?.items||[]].filter(item=>item.kind==="file"&&recipeBookOcrCanonicalMimeType(item.type)).map(item=>item.getAsFile()).filter(Boolean);if(files.length){event.preventDefault();recipeBookOcrQueueFiles(files,"paste")}});
+  recipeBookEl.screenshotRows?.addEventListener("click",event=>{const article=event.target.closest("[data-ocr-row-index]"),row=article&&recipeBookState.ocr.rows[Number(article.dataset.ocrRowIndex)];if(!row)return;const candidate=event.target.closest("[data-ocr-material-option]");if(candidate){event.preventDefault();recipeBookOcrSelectMaterial(article,row,candidate.dataset.ocrMaterialOption,"candidate");return}const searchResult=event.target.closest("[data-ocr-search-option]");if(searchResult){event.preventDefault();recipeBookOcrSelectMaterial(article,row,searchResult.dataset.ocrSearchOption,"search");return}const trigger=event.target.closest("[data-ocr-material-trigger]");if(trigger){event.preventDefault();const popup=document.getElementById(trigger.getAttribute("aria-controls")||"");if(popup&&!popup.hidden)recipeBookOcrCloseMaterialPopups();else recipeBookOcrOpenMaterialMenu(trigger)}});
+  recipeBookEl.screenshotRows?.addEventListener("input",event=>{const article=event.target.closest("[data-ocr-row-index]"),row=article&&recipeBookState.ocr.rows[Number(article.dataset.ocrRowIndex)];if(!row)return;if(event.target.matches("[data-ocr-quantity]")){row.quantity=event.target.value;recipeBookOcrRefreshSelection();return}if(event.target.matches("[data-ocr-material-search]")){const expected=row.searchSelected&&row.selectedKey?(recipeBookState.ocr.materialLabels.get(row.selectedKey)||"").trim().toLocaleLowerCase():"",actual=event.target.value.trim().toLocaleLowerCase();if(row.selectedKey&&actual!==expected)recipeBookOcrClearMaterialSelection(article,row);recipeBookOcrRenderMaterialSearch(event.target)}});
+  recipeBookEl.screenshotRows?.addEventListener("focusin",event=>{const owner=event.target.closest("[data-ocr-material-picker],[data-ocr-material-search-wrap]"),keep=owner?.querySelector("[data-ocr-material-menu],[data-ocr-material-results]")||null;recipeBookOcrCloseMaterialPopups(keep);if(event.target.matches("[data-ocr-material-search]")&&event.target.value.trim())recipeBookOcrRenderMaterialSearch(event.target)});
+  recipeBookEl.screenshotRows?.addEventListener("keydown",event=>{const option=event.target.closest("[data-ocr-material-option],[data-ocr-search-option]");if(option){const popup=option.closest("[data-ocr-material-menu],[data-ocr-material-results]"),options=[...popup.querySelectorAll("[data-ocr-material-option],[data-ocr-search-option]")],index=options.indexOf(option);if(["ArrowDown","ArrowUp","Home","End"].includes(event.key)){event.preventDefault();const next=event.key==="Home"?0:event.key==="End"?options.length-1:(index+(event.key==="ArrowDown"?1:-1)+options.length)%options.length;options[next]?.focus();return}if(event.key==="Escape"){event.preventDefault();event.stopPropagation();recipeBookOcrCloseMaterialPopups(null,{restoreFocus:true});return}return}const trigger=event.target.closest("[data-ocr-material-trigger]");if(trigger&&["ArrowDown","ArrowUp"].includes(event.key)){event.preventDefault();recipeBookOcrOpenMaterialMenu(trigger,{focusLast:event.key==="ArrowUp",moveFocus:true});return}if(trigger&&event.key==="Escape"&&trigger.getAttribute("aria-expanded")==="true"){event.preventDefault();event.stopPropagation();recipeBookOcrCloseMaterialPopups();return}const search=event.target.closest("[data-ocr-material-search]");if(!search)return;const popup=document.getElementById(search.getAttribute("aria-controls")||"");if(["ArrowDown","ArrowUp"].includes(event.key)){if(popup?.hidden)recipeBookOcrRenderMaterialSearch(search);const results=[...popup?.querySelectorAll("[data-ocr-search-option]")||[]];if(results.length){event.preventDefault();(event.key==="ArrowUp"?results.at(-1):results[0]).focus()}return}if(event.key==="Enter"&&!popup?.hidden){const first=popup?.querySelector("[data-ocr-search-option]");if(first){event.preventDefault();first.click()}return}if(event.key==="Escape"&&!popup?.hidden){event.preventDefault();event.stopPropagation();recipeBookOcrCloseMaterialPopups();search.focus()}});
+  recipeBookEl.screenshotRows?.addEventListener("change",event=>{const article=event.target.closest("[data-ocr-row-index]"),row=article&&recipeBookState.ocr.rows[Number(article.dataset.ocrRowIndex)];if(!row)return;if(event.target.matches("[data-ocr-quantity]"))row.quantity=event.target.value;recipeBookOcrRefreshSelection()});
+  document.addEventListener("click",event=>{if(recipeBookState.ocr.open&&!event.target.closest("[data-ocr-material-picker],[data-ocr-material-search-wrap]"))recipeBookOcrCloseMaterialPopups()});
+  recipeBookEl.screenshotDialog?.addEventListener("change",event=>{if(event.target.matches('input[name="recipeBookScreenshotMerge"]')){const add=event.target.value==="add";if(recipeBookEl.screenshotAddConfirmWrap)recipeBookEl.screenshotAddConfirmWrap.hidden=!add;if(!add&&recipeBookEl.screenshotAddConfirm)recipeBookEl.screenshotAddConfirm.checked=false;recipeBookOcrRefreshSelection()}else if(event.target===recipeBookEl.screenshotAddConfirm)recipeBookOcrRefreshSelection()});
+  recipeBookEl.screenshotDialog?.addEventListener("keydown",event=>{if(event.key==="Escape"){event.preventDefault();if(recipeBookOcrCloseMaterialPopups(null,{restoreFocus:true}))return;recipeBookOcrCloseDialog();return}if(event.key!=="Tab")return;const focusable=[...recipeBookEl.screenshotSurface.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter(element=>!element.hidden&&element.getClientRects().length);if(!focusable.length){event.preventDefault();recipeBookEl.screenshotSurface.focus();return}const first=focusable[0],last=focusable.at(-1),active=document.activeElement;if(active===recipeBookEl.screenshotSurface||!recipeBookEl.screenshotSurface.contains(active)){event.preventDefault();(event.shiftKey?last:first).focus()}else if(event.shiftKey&&active===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&active===last){event.preventDefault();first.focus()}});
   recipeBookEl.craftableSearch?.addEventListener("input",()=>{clearTimeout(recipeBookState.craftableTimer);recipeBookState.craftableTimer=setTimeout(()=>{recipeBookState.craftableQuery=recipeBookEl.craftableSearch.value;recipeBookState.craftablePage=1;recipeBookRenderCraftables()},90)});
   recipeBookEl.craftableType?.addEventListener("change",()=>{recipeBookState.craftableType=recipeBookEl.craftableType.value;recipeBookState.craftablePage=1;recipeBookRenderCraftables()});
   recipeBookEl.craftableGrid?.addEventListener("input",event=>{const control=event.target.closest("[data-craft-plan-range],[data-craft-plan-number]");if(control)recipeBookUpdateCraftPlanner(control)});
@@ -2743,7 +3105,7 @@ function initializeRecipeBook(){
   for(const root of [recipeBookEl.resourceSuggestions,recipeBookEl.resourceSelection,recipeBookEl.resourceList,recipeBookEl.craftableGrid,recipeBookEl.tooltip])root?.addEventListener("error",event=>{if(event.target instanceof HTMLImageElement){const wrap=event.target.closest(".recipeBookItemIcon");if(wrap)wrap.classList.add("iconMissing");event.target.hidden=true}},true);
   recipeBookEl.view?.addEventListener("pointerover",event=>{if(event.pointerType==="touch")return;const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(!target||(interactive&&interactive!==target)||target.contains(event.relatedTarget))return;clearTimeout(recipeBookState.tooltipCloseTimer);recipeBookState.tooltipOpenTimer=setTimeout(()=>recipeBookShowTooltip(target),130)});
   recipeBookEl.view?.addEventListener("pointerout",event=>{const target=event.target.closest("[data-recipe-book-item-key]");if(!target||target.contains(event.relatedTarget))return;clearTimeout(recipeBookState.tooltipOpenTimer);recipeBookState.tooltipCloseTimer=setTimeout(recipeBookHideTooltip,80)});
-  recipeBookEl.view?.addEventListener("focusin",event=>{const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(target&&(!interactive||interactive===target))recipeBookShowTooltip(target)});
+  recipeBookEl.view?.addEventListener("focusin",event=>{const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(target&&(!interactive||interactive===target))recipeBookShowTooltip(target);else if(interactive)recipeBookHideTooltip()});
   recipeBookEl.view?.addEventListener("focusout",event=>{const target=event.target.closest("[data-recipe-book-item-key]");if(target===recipeBookState.tooltipTarget&&!target.contains(event.relatedTarget))recipeBookHideTooltip()});
   recipeBookEl.view?.addEventListener("click",event=>{const target=event.target.closest("[data-recipe-book-item-key]"),interactive=event.target.closest("input,button,select,textarea,a");if(!target||(interactive&&interactive!==target))return;if(recipeBookState.tooltipTarget===target&&!recipeBookEl.tooltip.hidden)recipeBookHideTooltip();else recipeBookShowTooltip(target)});
   recipeBookEl.view?.addEventListener("keydown",event=>{if(event.key==="Escape"&&!recipeBookEl.tooltip?.hidden){event.preventDefault();recipeBookHideTooltip()}});

@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "market-top3-20260815";
+	private const string UiRevision = "recipe-book-border-grade-20260820";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -130,6 +130,7 @@ internal sealed class CalculatorForm : Form
 	private readonly BdoPlayerGuildService playerGuildService;
 
 	private readonly DehkiaFuelService dehkiaFuelService;
+	private readonly RecipeBookScreenshotService recipeBookScreenshotService;
 
 	private readonly UpdateCheckerService updateCheckerService;
 	private readonly MarketDatabase marketDatabase;
@@ -192,6 +193,7 @@ internal sealed class CalculatorForm : Form
 		bossScheduleService = new BossScheduleService(paths, logger);
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
 		dehkiaFuelService = new DehkiaFuelService(paths, logger);
+		recipeBookScreenshotService = new RecipeBookScreenshotService(AppContext.BaseDirectory);
 		updateCheckerService = new UpdateCheckerService(logger);
 		marketDatabase = new MarketDatabase(paths.DatabasePath);
 		appHealthService = new AppHealthService(marketDatabase, AppContext.BaseDirectory, logger);
@@ -818,6 +820,7 @@ internal sealed class CalculatorForm : Form
 		try { bossScheduleService.Dispose(); } catch { }
 		try { playerGuildService.Dispose(); } catch { }
 		try { dehkiaFuelService.Dispose(); } catch { }
+		try { recipeBookScreenshotService.Dispose(); } catch { }
 		try { updateCheckerService.Dispose(); } catch { }
 		TrySetTrayVisible(false);
 		try { trayIcon.Dispose(); } catch { }
@@ -1410,6 +1413,7 @@ internal sealed class CalculatorForm : Form
 			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
 			"searchBdoPlayersGuilds" or "getBdoGuildProfile" => TimeSpan.FromSeconds(33),
 			"getDehkiaFuelData" => TimeSpan.FromSeconds(90),
+			"analyzeRecipeBookScreenshot" => TimeSpan.FromSeconds(90),
 			"healthCheck" => TimeSpan.FromSeconds(6),
 			_ => TimeSpan.FromSeconds(45)
 		};
@@ -1450,6 +1454,11 @@ internal sealed class CalculatorForm : Form
 				&& forceRefreshValue.ValueKind is JsonValueKind.True or JsonValueKind.False
 				&& forceRefreshValue.GetBoolean();
 			return await dehkiaFuelService.GetDataAsync(forceRefresh, cancellationToken);
+		}
+		case "analyzeRecipeBookScreenshot":
+		{
+			RecipeBookScreenshotRequest request = RecipeBookScreenshotService.ParsePayload(payload);
+			return await recipeBookScreenshotService.AnalyzeAsync(request, cancellationToken);
 		}
 		case "windowDrag":
 			ReleaseCapture();

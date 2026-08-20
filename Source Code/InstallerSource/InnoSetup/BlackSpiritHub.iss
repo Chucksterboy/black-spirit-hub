@@ -1,8 +1,8 @@
 #ifndef AppVersion
-  #define AppVersion "0.9.45"
+  #define AppVersion "0.9.46"
 #endif
 #ifndef AppFileVersion
-  #define AppFileVersion "0.9.45.0"
+  #define AppFileVersion "0.9.46.0"
 #endif
 #ifndef AppFilesDir
   #define AppFilesDir "..\..\..\artifacts\App Files"
@@ -101,6 +101,17 @@ Type: files; Name: "{app}\Uninstall Black Spirit Hub.cmd"
 Type: files; Name: "{app}\Black Spirit Hub.pdb"
 Type: files; Name: "{app}\Microsoft.Web.WebView2.Core.xml"
 Type: files; Name: "{app}\Microsoft.Web.WebView2.WinForms.xml"
+Type: files; Name: "{app}\Tesseract.dll"
+Type: files; Name: "{app}\x64\leptonica-1.82.0.dll"
+Type: files; Name: "{app}\x64\tesseract50.dll"
+Type: dirifempty; Name: "{app}\x64"
+Type: files; Name: "{app}\x86\leptonica-1.82.0.dll"
+Type: files; Name: "{app}\x86\tesseract50.dll"
+Type: dirifempty; Name: "{app}\x86"
+Type: files; Name: "{app}\Assets\RecipeBook\ocr\tessdata\eng.traineddata"
+Type: dirifempty; Name: "{app}\Assets\RecipeBook\ocr\tessdata"
+Type: files; Name: "{app}\Assets\RecipeBook\ocr\LICENSE-TESSERACT.txt"
+Type: files; Name: "{app}\Assets\RecipeBook\ocr\LICENSE-LEPTONICA.txt"
 Type: files; Name: "{autodesktop}\BDO Multi-Tool.lnk"
 Type: filesandordirs; Name: "{autoprograms}\BDO Multi-Tool"
 

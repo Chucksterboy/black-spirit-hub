@@ -6,6 +6,8 @@ obj/
 *.xml
 *.user
 .vs/
+__pycache__/
+*.py[cod]
 
 # Generated installer payloads
 Payload.zip
