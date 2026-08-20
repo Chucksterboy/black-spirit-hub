@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.46",
+    "version":  "v0.9.47",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.46/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "8EDDEA33AE8B3A6F864AA789D0EB48CF6E02BA56EE629322E966152D0D05FEA8",
-    "notes":  "Recipe Book Screenshot Mats now uses fully offline PP-OCRv5 recognition, supports full, partial, and single-item storage screenshots, detects Base, High-quality, and Special borders, groups valid substitute materials, and streamlines review and import. Includes safer quantity abstention and hardened installer packaging."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.47/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "E6E9BBAF796FDC55A1BAD965477E0F784CA5A79B4A7CD386E05BDEE22FA15592",
+    "notes":  "Moves the window controls to the far right and adds a persistent navigation lock so the top navigation can stay visible when desired."
 }
