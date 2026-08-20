@@ -255,6 +255,7 @@ function applyAppearance(settings = {}) {
 
   NotificationService.configure({toastEnabled,toastDuration});
   saveAppearance({ mode, themeId:theme.id, strength, density, corners, reducedMotion, background, interfaceStyle, toastEnabled, toastDuration });
+  scheduleFixedChromeOffsetSync();
 }
 
 const savedAppearance = loadAppearance();
@@ -3134,15 +3135,26 @@ function syncFixedChromeOffset(){
   document.documentElement.style.setProperty("--titleBarHeight",`${titleHeight}px`);
   document.documentElement.style.setProperty("--fixedTopOffset",`${titleHeight+navOffset}px`);
 }
+function scheduleFixedChromeOffsetSync(){
+  cancelAnimationFrame(window.__bdoFixedChromeSyncFrame||0);
+  window.__bdoFixedChromeSyncFrame=requestAnimationFrame(syncFixedChromeOffset);
+}
 const navigationFrame=document.querySelector(".navFrame");
+const navigationPinButton=document.getElementById("navigationPinButton");
 const NAVIGATION_HIDE_DELAY_MS=3000;
 const NAVIGATION_REVEAL_DEPTH_PX=28;
+const NAVIGATION_PIN_SETTING="navigationPinned";
 let navigationHideTimer=null;
 let navigationLastPointerY=Number.POSITIVE_INFINITY;
 let navigationPointerInside=false;
+let navigationPinned=readSetting(NAVIGATION_PIN_SETTING,false)===true;
 function pointerIsNearNavigationRevealZone(clientY){
   const titleHeight=document.getElementById("windowTitleBar")?.getBoundingClientRect().height||62;
   return Number.isFinite(clientY)&&clientY<=titleHeight+NAVIGATION_REVEAL_DEPTH_PX;
+}
+function pointerIsInNavigationTouchRevealZone(clientY){
+  const titleHeight=document.getElementById("windowTitleBar")?.getBoundingClientRect().height||62;
+  return Number.isFinite(clientY)&&clientY>=titleHeight&&clientY<=titleHeight+NAVIGATION_REVEAL_DEPTH_PX;
 }
 function navigationHasVisibleFocus(){
   const activeElement=document.activeElement;
@@ -3151,6 +3163,7 @@ function navigationHasVisibleFocus(){
     &&activeElement.matches(":focus-visible"));
 }
 function setNavigationHidden(hidden){
+  if(navigationPinned&&hidden)return;
   if(!navigationFrame||document.body.classList.contains("navAutoHidden")===hidden)return;
   document.body.classList.toggle("navAutoHidden",hidden);
   syncFixedChromeOffset();
@@ -3165,7 +3178,8 @@ function showNavigation(){
 }
 function scheduleNavigationHide(){
   cancelNavigationHide();
-  if(!navigationFrame
+  if(navigationPinned
+    ||!navigationFrame
     ||navigationPointerInside
     ||navigationHasVisibleFocus()
     ||pointerIsNearNavigationRevealZone(navigationLastPointerY)){
@@ -3173,13 +3187,33 @@ function scheduleNavigationHide(){
   }
   navigationHideTimer=setTimeout(()=>{
     navigationHideTimer=null;
-    if(navigationPointerInside
+    if(navigationPinned
+      ||navigationPointerInside
       ||navigationHasVisibleFocus()
       ||pointerIsNearNavigationRevealZone(navigationLastPointerY)){
       return;
     }
     setNavigationHidden(true);
   },NAVIGATION_HIDE_DELAY_MS);
+}
+function syncNavigationPinnedState(){
+  document.body.classList.toggle("navPinned",navigationPinned);
+  if(!navigationPinButton)return;
+  const label="Keep navigation visible";
+  navigationPinButton.setAttribute("aria-pressed",String(navigationPinned));
+  navigationPinButton.setAttribute("aria-label",label);
+  navigationPinButton.title=label;
+}
+function setNavigationPinned(pinned,save=false){
+  navigationPinned=pinned===true;
+  syncNavigationPinnedState();
+  if(navigationPinned){
+    showNavigation();
+    syncFixedChromeOffset();
+  }else{
+    scheduleNavigationHide();
+  }
+  if(save)persistSetting(NAVIGATION_PIN_SETTING,navigationPinned);
 }
 function handleNavigationPointerMove(event){
   if(event.pointerType&&event.pointerType!=="mouse"&&event.pointerType!=="pen")return;
@@ -3191,8 +3225,12 @@ function handleNavigationPointerMove(event){
     scheduleNavigationHide();
   }
 }
+function handleNavigationPointerDown(event){
+  if(event.pointerType==="touch"&&pointerIsInNavigationTouchRevealZone(event.clientY))showNavigation();
+}
 function initializeNavigationAutoHide(){
   if(!navigationFrame)return;
+  navigationPinButton?.addEventListener("click",()=>setNavigationPinned(!navigationPinned,true));
   navigationFrame.addEventListener("pointerenter",()=>{
     navigationPointerInside=true;
     showNavigation();
@@ -3205,7 +3243,8 @@ function initializeNavigationAutoHide(){
   navigationFrame.addEventListener("focusin",showNavigation);
   navigationFrame.addEventListener("focusout",()=>setTimeout(scheduleNavigationHide,0));
   document.addEventListener("pointermove",handleNavigationPointerMove,{passive:true});
-  scheduleNavigationHide();
+  document.addEventListener("pointerdown",handleNavigationPointerDown,{passive:true});
+  setNavigationPinned(navigationPinned);
 }
 function initializeAppView(viewId){
   activeAppViewId=viewId;

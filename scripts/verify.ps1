@@ -55,6 +55,7 @@ $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistanc
 $grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
 $marketOutfitJsTestPath = Join-Path $repoRoot "scripts\test-market-outfit-frontend.mjs"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
+$navigationChromeJsTestPath = Join-Path $repoRoot "scripts\test-navigation-chrome.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
 $healthMonitorJsTestPath = Join-Path $repoRoot "scripts\test-health-monitor.mjs"
@@ -775,6 +776,24 @@ if ($html -notmatch 'BlackSpiritHub\.Resources\.Black_Spirit_Hub\.css' -or $html
 }
 if ($html -notmatch 'Assets/AppIcon/app-icon-ui\.png' -or $html -match '<img\s+src="Assets/AppIcon/app-icon\.png"') {
 	throw "The title bar must use the transparent in-app icon asset."
+}
+if ($css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.windowTitleBar\s*\{[^}]*grid-template-columns:\s*minmax\(0,1fr\)\s+auto!important;[^}]*padding:\s*10px\s+8px\s+10px\s+22px!important;' -or
+	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.windowControls\s*\{[^}]*grid-column:\s*2!important;[^}]*justify-self:\s*end!important;') {
+	throw "The non-custom title bar must keep its window controls in the far-right grid column."
+}
+if ($html -notmatch '<button\s+class="navPinButton"\s+id="navigationPinButton"[^>]+aria-pressed="false"[^>]+aria-label="Keep navigation visible"' -or
+	$css -notmatch '(?s)\.navPinButton\s*\{[^}]*position:\s*absolute;[^}]*right:\s*14px;[^}]*bottom:\s*6px;' -or
+	$css -notmatch '(?s)\.navPinButton:focus-visible\s*\{[^}]*outline:' -or
+	$css -notmatch '(?s)\.navPinButton\[aria-pressed="true"\]::before\s*\{[^}]*mask:' -or
+	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.navFrame,\s*body\[data-style="custom"\]\s+\.navFrame\s*\{[^}]*padding-bottom:\s*36px!important;' -or
+	$script -notmatch 'const\s+NAVIGATION_PIN_SETTING="navigationPinned";' -or
+	$script -notmatch 'readSetting\(NAVIGATION_PIN_SETTING,false\)===true' -or
+	$script -notmatch 'persistSetting\(NAVIGATION_PIN_SETTING,navigationPinned\)' -or
+	$script -notmatch 'navigationPinButton\?\.addEventListener\("click",\(\)=>setNavigationPinned\(!navigationPinned,true\)\)' -or
+	$script -notmatch 'document\.addEventListener\("pointerdown",handleNavigationPointerDown,\{passive:true\}\)' -or
+	$script -notmatch '(?s)function\s+applyAppearance\(settings\s*=\s*\{\}\).*?scheduleFixedChromeOffsetSync\(\);' -or
+	$script -notmatch '(?s)function\s+scheduleNavigationHide\(\)\s*\{.*?if\(navigationPinned') {
+	throw "The navigation lock must be accessible, persisted locally, and prevent auto-hide while active."
 }
 if ($css -notmatch '(?s)html,\s*body\s*\{\s*scrollbar-width:\s*none;.*?-ms-overflow-style:\s*none;' -or
 	$css -notmatch '(?s)html::\-webkit-scrollbar,\s*body::\-webkit-scrollbar\s*\{.*?display:\s*none;' -or
@@ -1537,6 +1556,9 @@ if (!(Test-Path -LiteralPath $marketOutfitJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 	throw "The executable app-behavior JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $navigationChromeJsTestPath -PathType Leaf)) {
+	throw "The executable navigation chrome JavaScript regression test is missing."
+}
 if (!(Test-Path -LiteralPath $playerGuildJsTestPath -PathType Leaf)) {
 	throw "The executable Player & Guild JavaScript regression test is missing."
 }
@@ -1589,6 +1611,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $appBehaviorJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "App behavior JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $navigationChromeJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Navigation chrome JavaScript regression tests failed."
 	}
 	& $nodeCommand.Source $playerGuildJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {

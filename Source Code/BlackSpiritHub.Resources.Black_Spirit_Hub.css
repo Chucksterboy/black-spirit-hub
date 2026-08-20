@@ -2848,7 +2848,7 @@
   body[data-style="caravan"] { --asset-window:url("ThemeAssets/DesertCaravan/window-header.png");--asset-crest:url("ThemeAssets/DesertCaravan/center-crest.png");--asset-panel:url("ThemeAssets/DesertCaravan/panel-wide.png");--asset-card:url("ThemeAssets/DesertCaravan/panel-black.png");--asset-card-alt:url("ThemeAssets/DesertCaravan/panel-red.png");--asset-nav:url("ThemeAssets/DesertCaravan/nav-normal.png");--asset-nav-hover:url("ThemeAssets/DesertCaravan/nav-hover.png");--asset-nav-active:url("ThemeAssets/DesertCaravan/nav-active.png");--asset-input:url("ThemeAssets/DesertCaravan/input-normal.png");--asset-input-focus:url("ThemeAssets/DesertCaravan/input-focus.png");--asset-dropdown:url("ThemeAssets/DesertCaravan/dropdown-normal.png");--asset-search:url("ThemeAssets/DesertCaravan/search-normal.png");--asset-divider:url("ThemeAssets/DesertCaravan/divider-long.png");--asset-texture:url("ThemeAssets/DesertCaravan/texture-black.png"); }
 
   body[data-style]:not([data-style="custom"]) .windowTitleBar {
-    min-height:62px!important;height:62px!important;padding:10px 22px!important;border:1px solid color-mix(in srgb,var(--a1) 46%,var(--border))!important;border-radius:14px 14px 0 0!important;
+    min-height:62px!important;height:62px!important;grid-template-columns:minmax(0,1fr) auto!important;padding:10px 8px 10px 22px!important;border:1px solid color-mix(in srgb,var(--a1) 46%,var(--border))!important;border-radius:14px 14px 0 0!important;
     background-image:linear-gradient(90deg,color-mix(in srgb,var(--bg0) 92%,#000),color-mix(in srgb,var(--surface2) 86%,var(--a1) 8%),color-mix(in srgb,var(--bg0) 92%,#000))!important;
     background-size:100% 100%!important;background-repeat:no-repeat!important;
     box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--bg0) 72%,transparent),inset 0 -1px color-mix(in srgb,var(--a1) 34%,transparent),0 10px 28px rgba(0,0,0,.28)!important;
@@ -2901,7 +2901,7 @@
   body[data-style]:not([data-style="custom"]) .windowBrandMark::after { content:""!important;display:none!important; }
   body[data-style]:not([data-style="custom"]) .appNav::after,
   body[data-style]:not([data-style="custom"]) .appNav::before { display:none!important;content:none!important; }
-  body[data-style]:not([data-style="custom"]) .windowControls { justify-self:end!important;margin-left:auto!important; }
+  body[data-style]:not([data-style="custom"]) .windowControls { grid-column:2!important;justify-self:end!important;margin-left:auto!important; }
 
   body[data-style]:not([data-style="custom"]) :is(.card,.panel,.kpi,.settingsCard,.portraitPathCard,.portraitPreviewCard,.portraitPanel,.fontPanel,.fontSidebar,.couponShell,.couponCard,.couponDetailPanel,.tableWrap,.toast) { border-image:var(--asset-card) 24 stretch!important;background-image:linear-gradient(rgba(0,0,0,.08),rgba(0,0,0,.08)),var(--asset-texture)!important;background-size:auto,220px 220px!important;background-repeat:repeat!important; }
   body[data-style]:not([data-style="custom"]) :is(input:not([type="range"]),select,textarea) { background-image:var(--asset-input)!important;background-size:100% 100%!important;background-repeat:no-repeat!important;border-color:transparent!important; }
@@ -3685,6 +3685,7 @@ body[data-style="custom"] .navFrame{
   left:0!important;
   right:0!important;
   z-index:1300!important;
+  padding-bottom:36px!important;
   translate:0 0;
   opacity:1;
   will-change:translate,opacity;
@@ -3697,6 +3698,28 @@ body[data-style="custom"].navAutoHidden .navFrame{
   opacity:0!important;
   pointer-events:none!important;
 }
+.navPinButton{
+  position:absolute;right:14px;bottom:6px;z-index:8;width:24px;height:24px;display:grid;place-items:center;padding:0;
+  border:1px solid color-mix(in srgb,var(--a1) 38%,var(--border));border-radius:6px;
+  background:color-mix(in srgb,var(--bg0) 88%,transparent);color:color-mix(in srgb,var(--muted) 72%,var(--a1));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a1) 7%,transparent),0 3px 10px rgba(0,0,0,.24);
+  cursor:pointer;transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+.navPinButton::before{
+  content:"";width:14px;height:14px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M17 8V6a3 3 0 0 0-5.72-1.26L9.47 3.9A5 5 0 0 1 19 6v2h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h10Zm-5.5 5v4h2v-4h-2Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M17 8V6a3 3 0 0 0-5.72-1.26L9.47 3.9A5 5 0 0 1 19 6v2h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h10Zm-5.5 5v4h2v-4h-2Z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+.navPinButton:hover{transform:translateY(-1px);color:var(--text);border-color:color-mix(in srgb,var(--a1) 72%,white);background:color-mix(in srgb,var(--a1) 16%,var(--surface));box-shadow:0 0 12px color-mix(in srgb,var(--a1) 22%,transparent)}
+.navPinButton:focus-visible{outline:2px solid color-mix(in srgb,var(--a1) 72%,white);outline-offset:2px}
+.navPinButton[aria-pressed="true"]{color:color-mix(in srgb,var(--a1) 70%,white);border-color:color-mix(in srgb,var(--a1) 78%,white);background:color-mix(in srgb,var(--a1) 22%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a1) 24%,transparent),0 0 13px color-mix(in srgb,var(--a1) 28%,transparent)}
+.navPinButton[aria-pressed="true"]::before{
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M7 8V6a5 5 0 0 1 10 0v2h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1Zm2 0h6V6a3 3 0 0 0-6 0v2Zm2 5v4h2v-4h-2Z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M7 8V6a5 5 0 0 1 10 0v2h1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1Zm2 0h6V6a3 3 0 0 0-6 0v2Zm2 5v4h2v-4h-2Z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+body[data-style="void"] .navPinButton{right:22px}
+body[data-style]:not([data-style="custom"]).navPinned .navFrame,
+body[data-style="custom"].navPinned .navFrame{translate:0 0!important;opacity:1!important;pointer-events:auto!important}
 .windowFrame{position:fixed!important;inset:0!important;z-index:0!important;pointer-events:none!important}
 @media(max-width:1080px){:root{--fixedTopOffset:250px}}
 
