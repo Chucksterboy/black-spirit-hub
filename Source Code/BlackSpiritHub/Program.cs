@@ -294,6 +294,18 @@ internal static class Program
 			{
 				return 118;
 			}
+			if (CalculatorForm.GetEnglishSapiVoicePriority("409;9") != 0
+				|| CalculatorForm.GetEnglishSapiVoicePriority("809;9") != 1
+				|| CalculatorForm.GetEnglishSapiVoicePriority("C09;9") != 2
+				|| CalculatorForm.GetEnglishSapiVoicePriority("407") != int.MaxValue
+				|| CalculatorForm.GetEnglishSapiVoicePriority("not-a-language") != int.MaxValue
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "809;9", "409;9"]) != 2
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "809;9"]) != 1
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["409"]) != 0
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "40C", "not-a-language", null]) != -1)
+			{
+				return 121;
+			}
 
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();

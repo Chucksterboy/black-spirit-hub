@@ -1430,6 +1430,19 @@ if ($calculatorSource -notmatch 'internal const int DefaultAlertVolumePercent\s*
 	$calculatorSource -notmatch '"Volume",\s*System\.Reflection\.BindingFlags\.SetProperty,\s*null,\s*voice,\s*new object\[\]\s*\{\s*DefaultAlertVolumePercent\s*\}') {
 	throw "Alarm.mp3 and Windows TTS must share the exact 50 percent default output volume."
 }
+if ($calculatorSource -notmatch 'GetEnglishSapiVoicePriority' -or
+	$calculatorSource -notmatch 'SelectEnglishSapiVoiceIndex' -or
+	$calculatorSource -notmatch 'GetVoices' -or
+	$calculatorSource -notmatch '"Item",\s*System\.Reflection\.BindingFlags\.InvokeMethod' -or
+	$calculatorSource -notmatch 'GetAttribute' -or
+	$calculatorSource -notmatch '"Language"' -or
+	$calculatorSource -notmatch '"Voice",\s*System\.Reflection\.BindingFlags\.SetProperty' -or
+	$calculatorSource -notmatch 'No English Windows text-to-speech voice is installed' -or
+	$calculatorSource -notmatch '\(string voiceName, string voiceLanguage\)\s*=\s*SelectEnglishSapiVoice\(voiceType, voice\)' -or
+	$calculatorSource.IndexOf('SelectEnglishSapiVoice(voiceType, voice)', [System.StringComparison]::Ordinal) -gt
+		$calculatorSource.IndexOf('"Speak",', [System.StringComparison]::Ordinal)) {
+	throw "Windows TTS must select an installed English SAPI voice before speaking and must never fall back to a localized default voice."
+}
 if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
 	$bossScheduleSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
 	$bossScheduleSource -notmatch 'Europe/Berlin' -or

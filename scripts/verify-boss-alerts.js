@@ -43,6 +43,8 @@ const extractedCode = [
   "let bridgePayloads = [];",
   "let bridgeFailures = new Set();",
   "let scheduleSpawns = [];",
+	"const testTtsButton={disabled:false,textContent:'Test TTS',attributes:{},setAttribute(name,value){this.attributes[name]=value},removeAttribute(name){delete this.attributes[name]}};",
+	"const homeEl={testTts:testTtsButton,footer:null};",
   "function readSetting(){ return savedHomeSettings; }",
   "function defaultBossSelection(){ return { Kzarka:true, Garmoth:true, Vell:true }; }",
   "function allBossSpawns(){ return scheduleSpawns; }",
@@ -54,7 +56,7 @@ const extractedCode = [
   "function pruneHomeNotifications(){}",
   "function saveHomeSettings(settings){ savedHomeSettings = JSON.parse(JSON.stringify(settings)); savedDeliverySettings = JSON.parse(JSON.stringify(settings)); }",
   "function bridgeCall(command,payload){ bridgeCalls.push(command); bridgePayloads.push({command,payload:JSON.parse(JSON.stringify(payload??null))}); return bridgeFailures.has(command) ? Promise.reject(new Error(command + ' failed')) : Promise.resolve({ok:true}); }",
-  "const NotificationService={ShowInfo(){},ShowWarning(){},ShowError(){}};",
+  "const NotificationService={ShowInfo(){},ShowWarning(){},ShowError(){},ShowSuccess(){}};",
   extractFunction("normalizedHomeSettings", "saveHomeSettings"),
   requireMatch(/const homeAlertInFlight=new Set\(\);/, "the in-flight delivery guard"),
   requireMatch(/const HOME_SPAWNING_NOW_GRACE_MS=60\*1000;/, "the Spawning Now polling grace window"),
@@ -67,7 +69,11 @@ const extractedCode = [
   extractFunction("persistDeliveredHomeAlert", "checkBossNotifications"),
   extractFunction("checkBossNotifications", "checkGuildBossNotifications"),
   extractFunction("checkGuildBossNotifications", "runBackgroundNotifications"),
-  "globalThis.alertTests={normalizedHomeSettings,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,setSaved:value=>{savedHomeSettings=value},setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings};"
+  extractFunction("setBossAlertTestStatus", "runBossAlertTest"),
+  extractFunction("runBossAlertTest", "bossTestTtsText"),
+  extractFunction("bossTestTtsText", "runBossTtsTest"),
+  extractFunction("runBossTtsTest", "runBossAlarmTest"),
+  "globalThis.alertTests={normalizedHomeSettings,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,bossTestTtsText,runBossTtsTest,setSaved:value=>{savedHomeSettings=value},setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings,getTestTtsButton:()=>testTtsButton};"
 ].join("\n");
 
 const context = { console:{ debug(){}, warn(){}, log(){}, error(){} } };
@@ -77,6 +83,9 @@ const tests = context.alertTests;
 
 if (!/<option\b[^>]*\bvalue=["']0["'][^>]*>\s*Spawning Now\s*<\/option>/i.test(appHtml)) {
   throw new Error("The First alert selector must offer a Spawning Now option with value 0.");
+}
+if (!/TTS announcements<\/strong><span>Speak boss alerts with an installed English Windows voice<\/span>/i.test(appHtml)) {
+  throw new Error("The TTS setting must explain that alerts use an installed English Windows voice.");
 }
 
 tests.setSaved({ ttsEnabled:true, soundEnabled:true, leadMinutes:10 });
@@ -243,6 +252,38 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
   await verifyChannels(true, false, ["showDesktopNotification", "playAlarmSound"]);
   await verifyChannels(false, true, ["showDesktopNotification", "speakText"]);
   await verifyChannels(true, true, ["showDesktopNotification", "playAlarmSound", "speakText"]);
+
+	const testTtsNow = new Date();
+	tests.setSaved({
+		leadMinutes:0,
+		bosses:{ Kzarka:true },
+		notified:{}
+	});
+	tests.setSpawns([{
+		date:new Date(testTtsNow.getTime() - 5 * 1000),
+		bosses:["Kzarka"]
+	}]);
+	tests.setFailures([]);
+	tests.resetCalls();
+	await tests.runBossTtsTest();
+	let testTtsPayloads = tests.getPayloads();
+	if (testTtsPayloads.length !== 1
+		|| testTtsPayloads[0].command !== "speakText"
+		|| testTtsPayloads[0].payload?.text !== "Kzarka spawning now."
+		|| tests.getTestTtsButton().disabled
+		|| tests.getTestTtsButton().attributes["aria-busy"] !== undefined) {
+		throw new Error(`The Test TTS button did not route its English Spawning Now copy through the native speech bridge: ${JSON.stringify(testTtsPayloads)}`);
+	}
+
+	tests.setSpawns([]);
+	tests.resetCalls();
+	await tests.runBossTtsTest();
+	testTtsPayloads = tests.getPayloads();
+	if (testTtsPayloads.length !== 1
+		|| testTtsPayloads[0].command !== "speakText"
+		|| testTtsPayloads[0].payload?.text !== "Black Spirit Hub text to speech test.") {
+		throw new Error("The Test TTS button lost its English fallback announcement.");
+	}
 
   tests.resetCalls();
   tests.setFailures(["speakText"]);

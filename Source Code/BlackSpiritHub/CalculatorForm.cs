@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "ocr-relevance-filter-20260821";
+	private const string UiRevision = "english-tts-20260821";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -643,6 +643,210 @@ internal sealed class CalculatorForm : Form
 			: $"MCI error {errorCode}";
 	}
 
+	internal static int GetEnglishSapiVoicePriority(string? languageAttribute)
+	{
+		if (string.IsNullOrWhiteSpace(languageAttribute))
+		{
+			return int.MaxValue;
+		}
+
+		int bestPriority = int.MaxValue;
+		foreach (string rawLanguage in Regex.Split(languageAttribute, @"[;,\s]+"))
+		{
+			string language = rawLanguage.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+				? rawLanguage[2..]
+				: rawLanguage;
+			if (!int.TryParse(
+				language,
+				System.Globalization.NumberStyles.AllowHexSpecifier,
+				System.Globalization.CultureInfo.InvariantCulture,
+				out int lcid))
+			{
+				continue;
+			}
+
+			try
+			{
+				System.Globalization.CultureInfo culture =
+					System.Globalization.CultureInfo.GetCultureInfo(lcid);
+				if (!string.Equals(
+					culture.TwoLetterISOLanguageName,
+					"en",
+					StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				int priority = string.Equals(culture.Name, "en-US", StringComparison.OrdinalIgnoreCase)
+					? 0
+					: string.Equals(culture.Name, "en-GB", StringComparison.OrdinalIgnoreCase)
+						? 1
+						: 2;
+				bestPriority = Math.Min(bestPriority, priority);
+			}
+			catch (System.Globalization.CultureNotFoundException)
+			{
+				// Ignore malformed or unregistered third-party voice language identifiers.
+			}
+		}
+
+		return bestPriority;
+	}
+
+	internal static int SelectEnglishSapiVoiceIndex(IReadOnlyList<string?> languageAttributes)
+	{
+		ArgumentNullException.ThrowIfNull(languageAttributes);
+
+		int selectedIndex = -1;
+		int selectedPriority = int.MaxValue;
+		for (int index = 0; index < languageAttributes.Count; index++)
+		{
+			int priority = GetEnglishSapiVoicePriority(languageAttributes[index]);
+			if (priority < selectedPriority)
+			{
+				selectedIndex = index;
+				selectedPriority = priority;
+			}
+		}
+
+		return selectedIndex;
+	}
+
+	private static (string Name, string Language) SelectEnglishSapiVoice(Type voiceType, object voice)
+	{
+		object? voices = null;
+		object? selectedToken = null;
+		List<object?> voiceTokens = new();
+		List<string?> languageAttributes = new();
+		string selectedName = "English Windows voice";
+		string selectedLanguage = "en";
+		try
+		{
+			voices = voiceType.InvokeMember(
+				"GetVoices",
+				System.Reflection.BindingFlags.InvokeMethod,
+				null,
+				voice,
+				new object[] { "", "" });
+			if (voices is null)
+			{
+				throw new InvalidOperationException(
+					"No Windows speech voices are available. Install an English Windows speech voice in Settings.");
+			}
+
+			Type voicesType = voices.GetType();
+			int count = Convert.ToInt32(
+				voicesType.InvokeMember(
+					"Count",
+					System.Reflection.BindingFlags.GetProperty,
+					null,
+					voices,
+					Array.Empty<object>()),
+				System.Globalization.CultureInfo.InvariantCulture);
+			for (int index = 0; index < count; index++)
+			{
+				object? candidate = null;
+				try
+				{
+					candidate = voicesType.InvokeMember(
+						"Item",
+						System.Reflection.BindingFlags.InvokeMethod,
+						null,
+						voices,
+						new object[] { index });
+					if (candidate is null)
+					{
+						continue;
+					}
+
+					Type tokenType = candidate.GetType();
+					string? languageAttribute;
+					try
+					{
+						languageAttribute = Convert.ToString(
+							tokenType.InvokeMember(
+								"GetAttribute",
+								System.Reflection.BindingFlags.InvokeMethod,
+								null,
+								candidate,
+								new object[] { "Language" }),
+							System.Globalization.CultureInfo.InvariantCulture);
+					}
+					catch
+					{
+						// A malformed third-party token must not prevent a later English voice
+						// from being selected.
+						continue;
+					}
+
+					voiceTokens.Add(candidate);
+					languageAttributes.Add(languageAttribute);
+					candidate = null;
+				}
+				finally
+				{
+					if (candidate is not null && Marshal.IsComObject(candidate))
+					{
+						Marshal.FinalReleaseComObject(candidate);
+					}
+				}
+			}
+
+			int selectedIndex = SelectEnglishSapiVoiceIndex(languageAttributes);
+			if (selectedIndex < 0)
+			{
+				throw new InvalidOperationException(
+					"No English Windows text-to-speech voice is installed. Add an English speech voice in Windows Settings.");
+			}
+
+			selectedToken = voiceTokens[selectedIndex];
+			voiceTokens[selectedIndex] = null;
+			selectedLanguage = languageAttributes[selectedIndex] ?? "en";
+			Type selectedTokenType = selectedToken!.GetType();
+			try
+			{
+				selectedName = Convert.ToString(
+					selectedTokenType.InvokeMember(
+						"GetDescription",
+						System.Reflection.BindingFlags.InvokeMethod,
+						null,
+						selectedToken,
+						new object[] { 0 }),
+					System.Globalization.CultureInfo.InvariantCulture) ?? "English Windows voice";
+			}
+			catch
+			{
+				selectedName = "English Windows voice";
+			}
+
+			voiceType.InvokeMember(
+				"Voice",
+				System.Reflection.BindingFlags.SetProperty,
+				null,
+				voice,
+				new object[] { selectedToken });
+			return (selectedName, selectedLanguage);
+		}
+		finally
+		{
+			if (selectedToken is not null && Marshal.IsComObject(selectedToken))
+			{
+				Marshal.FinalReleaseComObject(selectedToken);
+			}
+			foreach (object? token in voiceTokens)
+			{
+				if (token is not null && Marshal.IsComObject(token))
+				{
+					Marshal.FinalReleaseComObject(token);
+				}
+			}
+			if (voices is not null && Marshal.IsComObject(voices))
+			{
+				Marshal.FinalReleaseComObject(voices);
+			}
+		}
+	}
+
 	private async Task<object> SpeakTextAsync(string text, CancellationToken cancellationToken)
 	{
 		string safeText = string.IsNullOrWhiteSpace(text) ? "Black Spirit Hub alert." : text.Trim();
@@ -678,6 +882,7 @@ internal sealed class CalculatorForm : Form
 						null,
 						voice,
 						new object[] { DefaultAlertVolumePercent });
+					(string voiceName, string voiceLanguage) = SelectEnglishSapiVoice(voiceType, voice);
 					voiceType.InvokeMember(
 						"Speak",
 						System.Reflection.BindingFlags.InvokeMethod,
@@ -688,13 +893,16 @@ internal sealed class CalculatorForm : Form
 					{
 						spoken = true,
 						characters = safeText.Length,
-						volumePercent = DefaultAlertVolumePercent
+						volumePercent = DefaultAlertVolumePercent,
+						voiceName,
+						voiceLanguage
 					});
 				}
 				catch (Exception ex)
 				{
-					completion.TrySetException(
-						new InvalidOperationException("Windows text to speech playback failed.", ex));
+					completion.TrySetException(ex is InvalidOperationException
+						? ex
+						: new InvalidOperationException("Windows text to speech playback failed.", ex));
 				}
 				finally
 				{
