@@ -42,6 +42,36 @@ const context = {};
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 const tests = context.couponTests;
+const intervalDeclaration = appScript.match(
+  /const COUPON_AUTO_REFRESH_INTERVAL_MS=([^;]+);/);
+if (!intervalDeclaration) {
+  throw new Error("The coupon auto-refresh interval declaration is missing.");
+}
+
+const autoRefreshCode = [
+  intervalDeclaration[0],
+  "const couponState={autoTimer:123};",
+  "let clearedTimer=null,scheduledCallback=null,scheduledDelay=null,refreshOptions=null;",
+  "function clearInterval(timer){clearedTimer=timer}",
+  "function setInterval(callback,delay){scheduledCallback=callback;scheduledDelay=delay;return 456}",
+  "function refreshCoupons(options){refreshOptions=options}",
+  extractFunction("startCouponAutoRefresh", "refreshCoupons"),
+  "startCouponAutoRefresh();",
+  "scheduledCallback();",
+  "globalThis.autoRefreshTests={clearedTimer,scheduledDelay,refreshOptions,timer:couponState.autoTimer};"
+].join("\n");
+const autoRefreshContext = {};
+vm.createContext(autoRefreshContext);
+vm.runInContext(autoRefreshCode, autoRefreshContext);
+const autoRefreshTests = autoRefreshContext.autoRefreshTests;
+if (autoRefreshTests.clearedTimer !== 123
+  || autoRefreshTests.timer !== 456
+  || autoRefreshTests.scheduledDelay !== 2 * 60 * 60 * 1000
+  || autoRefreshTests.refreshOptions?.auto !== true
+  || autoRefreshTests.refreshOptions?.silent !== false) {
+  throw new Error("Coupons must automatically refresh every two hours while the app is open.");
+}
+
 const rewards = Array.from({ length: 8 }, (_, index) => ({
   itemName:index === 0
     ? "Choose Your Transcendent Hammer Box"

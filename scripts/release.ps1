@@ -282,6 +282,7 @@ $appVersionFile = Join-Path $sourceRoot "BlackSpiritHub\AppVersion.cs"
 $htmlFile = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.html"
 $assemblyInfoFile = Join-Path $sourceRoot "Properties\AssemblyInfo.cs"
 $updateManifestFile = Join-Path $repoRoot "update.json"
+$sourceUpdateManifestFile = Join-Path $sourceRoot "update.json"
 $artifactRoot = Join-Path $repoRoot "artifacts"
 $appOut = Join-Path $artifactRoot "App Files"
 $installerOut = Join-Path $artifactRoot "Installer"
@@ -337,7 +338,7 @@ $manifestJson = $manifest | ConvertTo-Json
 	$manifestJson + [Environment]::NewLine,
 	[System.Text.UTF8Encoding]::new($false)
 )
-Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
+Copy-Item -LiteralPath $updateManifestFile -Destination $sourceUpdateManifestFile -Force
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $iconBuildScript
 if ($LASTEXITCODE -ne 0) {
@@ -399,14 +400,26 @@ $manifestJson = $manifest | ConvertTo-Json
 	$manifestJson + [Environment]::NewLine,
 	[System.Text.UTF8Encoding]::new($false)
 )
-Copy-Item -LiteralPath $updateManifestFile -Destination (Join-Path $sourceRoot "update.json") -Force
+Copy-Item -LiteralPath $updateManifestFile -Destination $sourceUpdateManifestFile -Force
 
 & $gh auth status | Out-Host
 if ($LASTEXITCODE -ne 0) {
 	throw "GitHub CLI is not logged in."
 }
 
-& $git add --all
+$releasePaths = @(
+	$appVersionFile,
+	$assemblyInfoFile,
+	$legacyInstallerProject,
+	$nativeInstallerSource,
+	$htmlFile,
+	$updateManifestFile,
+	$sourceUpdateManifestFile
+)
+& $git -C $repoRoot add -- @releasePaths
+if ($LASTEXITCODE -ne 0) {
+	throw "Git staging failed."
+}
 & $git commit -m "Release $versionTag"
 if ($LASTEXITCODE -ne 0) {
 	throw "Git commit failed."

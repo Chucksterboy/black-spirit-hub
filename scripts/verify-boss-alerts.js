@@ -9,6 +9,10 @@ const appScript = fs.readFileSync(path.join(
   repoRoot,
   "Source Code",
   "BlackSpiritHub.Resources.Black_Spirit_Hub.js"), "utf8");
+const appHtml = fs.readFileSync(path.join(
+  repoRoot,
+  "Source Code",
+  "BlackSpiritHub.Resources.Black_Spirit_Hub.html"), "utf8");
 
 function extractFunction(name, nextName) {
   let start = appScript.indexOf(`function ${name}(`);
@@ -36,6 +40,7 @@ const extractedCode = [
   "let savedHomeSettings = {};",
   "let savedDeliverySettings = null;",
   "let bridgeCalls = [];",
+  "let bridgePayloads = [];",
   "let bridgeFailures = new Set();",
   "let scheduleSpawns = [];",
   "function readSetting(){ return savedHomeSettings; }",
@@ -48,11 +53,12 @@ const extractedCode = [
   "const HOME_TIMER_CONFIG={region:'EU'};",
   "function pruneHomeNotifications(){}",
   "function saveHomeSettings(settings){ savedHomeSettings = JSON.parse(JSON.stringify(settings)); savedDeliverySettings = JSON.parse(JSON.stringify(settings)); }",
-  "function bridgeCall(command){ bridgeCalls.push(command); return bridgeFailures.has(command) ? Promise.reject(new Error(command + ' failed')) : Promise.resolve({ok:true}); }",
+  "function bridgeCall(command,payload){ bridgeCalls.push(command); bridgePayloads.push({command,payload:JSON.parse(JSON.stringify(payload??null))}); return bridgeFailures.has(command) ? Promise.reject(new Error(command + ' failed')) : Promise.resolve({ok:true}); }",
   "const NotificationService={ShowInfo(){},ShowWarning(){},ShowError(){}};",
   extractFunction("normalizedHomeSettings", "saveHomeSettings"),
   requireMatch(/const homeAlertInFlight=new Set\(\);/, "the in-flight delivery guard"),
-  requireMatch(/const HOME_ALERT_MILESTONES=Object\.freeze\(\[5,10,15,30\]\);/, "the ordered boss alert milestones"),
+  requireMatch(/const HOME_SPAWNING_NOW_GRACE_MS=60\*1000;/, "the Spawning Now polling grace window"),
+  requireMatch(/const HOME_ALERT_MILESTONES=Object\.freeze\(\[0,5,10,15,30\]\);/, "the ordered boss alert milestones"),
   extractFunction("alertStage", "alertLeadText"),
   extractFunction("alertLeadText", "spokenBossList"),
   extractFunction("spokenBossList", "notificationKeyDate"),
@@ -61,13 +67,17 @@ const extractedCode = [
   extractFunction("persistDeliveredHomeAlert", "checkBossNotifications"),
   extractFunction("checkBossNotifications", "checkGuildBossNotifications"),
   extractFunction("checkGuildBossNotifications", "runBackgroundNotifications"),
-  "globalThis.alertTests={normalizedHomeSettings,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,setSaved:value=>{savedHomeSettings=value},setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},resetCalls:()=>{bridgeCalls=[]},getCalls:()=>bridgeCalls.slice(),getSavedDelivery:()=>savedDeliverySettings};"
+  "globalThis.alertTests={normalizedHomeSettings,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,setSaved:value=>{savedHomeSettings=value},setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings};"
 ].join("\n");
 
 const context = { console:{ debug(){}, warn(){}, log(){}, error(){} } };
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 const tests = context.alertTests;
+
+if (!/<option\b[^>]*\bvalue=["']0["'][^>]*>\s*Spawning Now\s*<\/option>/i.test(appHtml)) {
+  throw new Error("The First alert selector must offer a Spawning Now option with value 0.");
+}
 
 tests.setSaved({ ttsEnabled:true, soundEnabled:true, leadMinutes:10 });
 let settings = tests.normalizedHomeSettings();
@@ -81,12 +91,19 @@ if (settings.leadMinutes !== 15) {
   throw new Error("Unsupported alert lead times must fall back to 15 minutes.");
 }
 
+tests.setSaved({ leadMinutes:0 });
+settings = tests.normalizedHomeSettings();
+if (settings.leadMinutes !== 0) {
+  throw new Error("Spawning Now must remain a selectable zero-minute first alert.");
+}
+
 const alertKeyBase = "boss|2026-07-29T12:00:00.000Z";
 const expectedMilestones = new Map([
-  [5, [5]],
-  [10, [10, 5]],
-  [15, [15, 10, 5]],
-  [30, [30, 15, 10, 5]]
+  [0, [0]],
+  [5, [5, 0]],
+  [10, [10, 5, 0]],
+  [15, [15, 10, 5, 0]],
+  [30, [30, 15, 10, 5, 0]]
 ]);
 for (const [leadMinutes, milestones] of expectedMilestones) {
   settings = { leadMinutes, notified:{} };
@@ -116,6 +133,21 @@ if (tests.alertStage(settings, 4 * 60 * 1000, alertKeyBase) !== 5) {
 settings.notified[`${alertKeyBase}|5`] = true;
 if (tests.alertStage(settings, 4 * 60 * 1000, alertKeyBase) !== null) {
   throw new Error("A delivered milestone must remain suppressed without backfilling older warnings.");
+}
+if (tests.alertStage(settings, 0, alertKeyBase) !== 0) {
+  throw new Error("A delivered 5-minute warning must not consume the Spawning Now stage.");
+}
+
+settings = { leadMinutes:30, notified:{} };
+if (tests.alertStage(settings, -10 * 1000, alertKeyBase) !== 0
+  || tests.alertStage(settings, -60 * 1000, alertKeyBase) !== 0
+  || tests.alertStage(settings, -60 * 1000 - 1, alertKeyBase) !== null) {
+  throw new Error("Spawning Now must use a bounded 60-second post-spawn polling grace window.");
+}
+settings.notified[`${alertKeyBase}|0`] = true;
+if (tests.alertStage(settings, 0, alertKeyBase) !== null
+  || tests.alertStage(settings, -10 * 1000, alertKeyBase) !== null) {
+  throw new Error("A delivered Spawning Now stage must remain suppressed throughout its grace window.");
 }
 
 for (const [remainingMinutes, expected] of [[29,30],[14,15],[9,10],[4,5]]) {
@@ -160,6 +192,36 @@ if (!candidate
   || candidate.date.toISOString() !== "2026-07-29T10:10:00.000Z"
   || candidate.bosses.join(",") !== "Garmoth") {
   throw new Error("Disabled nearer spawns must not hide the next enabled boss alert.");
+}
+
+const justSpawned = new Date(now.getTime() - 10 * 1000);
+const laterSpawn = new Date(now.getTime() + 10 * 60 * 1000);
+tests.setSpawns([
+  { date:justSpawned, bosses:["Kzarka"] },
+  { date:laterSpawn, bosses:["Garmoth"] }
+]);
+settings = {
+  leadMinutes:0,
+  bosses:{ Kzarka:true, Garmoth:true },
+  notified:{}
+};
+let spawnCandidate = tests.nextAlertableBossSpawn(settings, now);
+if (!spawnCandidate || spawnCandidate.date.toISOString() !== justSpawned.toISOString()) {
+  throw new Error("A just-spawned boss must remain alertable during the Spawning Now grace window.");
+}
+settings.notified[`boss|${justSpawned.toISOString()}|0`] = true;
+spawnCandidate = tests.nextAlertableBossSpawn(settings, now);
+if (!spawnCandidate || spawnCandidate.date.toISOString() !== laterSpawn.toISOString()) {
+  throw new Error("A delivered Spawning Now occurrence must yield to the next future boss.");
+}
+tests.setSpawns([
+  { date:new Date(now.getTime() - 60 * 1000 - 1), bosses:["Kzarka"] },
+  { date:laterSpawn, bosses:["Garmoth"] }
+]);
+settings.notified = {};
+spawnCandidate = tests.nextAlertableBossSpawn(settings, now);
+if (!spawnCandidate || spawnCandidate.date.toISOString() !== laterSpawn.toISOString()) {
+  throw new Error("An expired Spawning Now occurrence must not hide the next future boss.");
 }
 
 async function verifyChannels(soundEnabled, ttsEnabled, expected) {
@@ -281,6 +343,73 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
     || !orchestratedDelivery.notified[`guild|${sharedSpawnDate.toISOString()}|10`]
     || tests.getCalls().join(",") !== "showDesktopNotification,showDesktopNotification") {
     throw new Error(`World and guild alerts did not persist independent milestones at the same timestamp: ${JSON.stringify({worldDelivered,guildDelivered,orchestratedDelivery,calls:tests.getCalls()})}`);
+  }
+
+  const spawningNowDate = new Date("2026-07-29T13:00:00.000Z");
+  const spawningNowCheck = new Date(spawningNowDate.getTime() + 10 * 1000);
+  const retrySettings = {
+    masterNotifications:true,
+    leadMinutes:0,
+    soundEnabled:false,
+    ttsEnabled:false,
+    bosses:{ Kzarka:true },
+    notified:{}
+  };
+  const retryKey = `boss|${spawningNowDate.toISOString()}|0`;
+  tests.setSaved(retrySettings);
+  tests.setFailures(["showDesktopNotification"]);
+  tests.resetCalls();
+  if (await tests.checkBossNotifications(retrySettings, spawningNowCheck, {
+    date:spawningNowDate,
+    bosses:["Kzarka"]
+  }) || retrySettings.notified[retryKey]) {
+    throw new Error("A failed Spawning Now delivery must remain unmarked and retryable.");
+  }
+  tests.setFailures([]);
+  if (!await tests.checkBossNotifications(retrySettings, spawningNowCheck, {
+    date:spawningNowDate,
+    bosses:["Kzarka"]
+  }) || !retrySettings.notified[retryKey]) {
+    throw new Error("A failed Spawning Now delivery did not retry successfully during its grace window.");
+  }
+
+  const spawningNowSettings = {
+    masterNotifications:true,
+    guildBossNotifications:true,
+    leadMinutes:0,
+    soundEnabled:false,
+    ttsEnabled:true,
+    bosses:{ Kzarka:true },
+    notified:{}
+  };
+  tests.setSaved(spawningNowSettings);
+  tests.setGuildTarget({ date:spawningNowDate, day:3, time:"20:00" });
+  tests.setFailures([]);
+  tests.resetCalls();
+  const [worldSpawningNow, guildSpawningNow] = await Promise.all([
+    tests.checkBossNotifications(spawningNowSettings, spawningNowCheck, {
+      date:spawningNowDate,
+      bosses:["Kzarka"]
+    }),
+    tests.checkGuildBossNotifications(spawningNowSettings, spawningNowCheck)
+  ]);
+  const spawningNowDelivery = tests.getSavedDelivery();
+  const spawningNowPayloads = tests.getPayloads();
+  const desktopCopy = spawningNowPayloads
+    .filter(call => call.command === "showDesktopNotification")
+    .map(call => `${call.payload?.title || ""} ${call.payload?.message || ""}`);
+  const spokenCopy = spawningNowPayloads
+    .filter(call => call.command === "speakText")
+    .map(call => call.payload?.text || "");
+  if (!worldSpawningNow
+    || !guildSpawningNow
+    || !spawningNowDelivery.notified[`boss|${spawningNowDate.toISOString()}|0`]
+    || !spawningNowDelivery.notified[`guild|${spawningNowDate.toISOString()}|0`]
+    || desktopCopy.length !== 2
+    || spokenCopy.length !== 2
+    || [...desktopCopy, ...spokenCopy].some(copy => !/spawning now/i.test(copy))
+    || [...desktopCopy, ...spokenCopy].some(copy => /minute warning|spawning in 1 minute/i.test(copy))) {
+    throw new Error(`Spawning Now alerts used the wrong delivery, ledger key, or copy: ${JSON.stringify({worldSpawningNow,guildSpawningNow,spawningNowDelivery,spawningNowPayloads})}`);
   }
 
   const stagedDeliveryKeys = appScript.match(/const key=`\$\{keyBase\}\|\$\{stage\}`/g) ?? [];
