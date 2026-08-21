@@ -299,6 +299,26 @@ $gh = Resolve-ToolPath "gh" @("$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GitHu
 
 Set-Location $repoRoot
 
+$currentBranch = (& $git branch --show-current).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentBranch)) {
+	throw "Release must run from a named branch."
+}
+$pendingChanges = & $git status --porcelain
+if ($LASTEXITCODE -ne 0) {
+	throw "Could not inspect the Git working tree."
+}
+if ($pendingChanges) {
+	throw "Release requires a clean working tree. Commit the intended feature changes first."
+}
+& $git fetch origin main
+if ($LASTEXITCODE -ne 0) {
+	throw "Could not refresh origin/main before release."
+}
+& $git merge-base --is-ancestor origin/main HEAD
+if ($LASTEXITCODE -ne 0) {
+	throw "The release branch must be based on the current origin/main."
+}
+
 $bdoAlertsReleaseCredential = Resolve-BdoAlertsReleaseCredential
 Assert-CredentialNotTracked `
 	-RepoRoot $repoRoot `
@@ -430,6 +450,11 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Git tag failed. The tag may already exist."
 }
 
+& $git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) {
+	throw "Git push failed. The release commit and manifest were not published to main."
+}
+
 & $git push origin $versionTag
 if ($LASTEXITCODE -ne 0) {
 	throw "Git tag push failed."
@@ -451,11 +476,6 @@ if ($Draft) {
 & $gh @releaseArgs
 if ($LASTEXITCODE -ne 0) {
 	throw "GitHub release creation failed."
-}
-
-& $git push origin main
-if ($LASTEXITCODE -ne 0) {
-	throw "Git push failed. The release exists, but the update manifest has not been published."
 }
 
 Write-Host "Release complete: $versionTag"

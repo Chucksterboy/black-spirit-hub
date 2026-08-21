@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Build the offline Recipe Book screenshot icon atlas.
+"""Build the offline Recipe Book screenshot reference icon atlas.
 
 The runtime deliberately receives only an icon path and similarity score from the
 native image analyzer. Item identity remains a frontend review decision because
-many Black Desert materials share the exact same source icon.
+many Black Desert materials share the exact same source icon. The atlas includes
+both usable recipe inputs and known output-only items: output icons are negative
+references that stop a finished product from being forced onto the nearest
+ingredient icon.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ SCHEMA_VERSION = 1
 TILE_SIZE = 20
 COLUMNS = 64
 BACKGROUND = (22, 23, 27)
+FALLBACK_ICON = "icons/item-fallback.svg"
 
 # Runtime My Resources exposes these verified substitution members even when a
 # particular member is not a literal input in the normalized recipe snapshot.
@@ -102,13 +106,17 @@ def main() -> None:
         for item_id in VERIFIED_SUBSTITUTION_MEMBER_IDS
         if str(item_id) in data["items"]
     )
+    # Every bundled item is either a usable input, a verified substitution
+    # member, or a known non-input reference (most commonly a crafted output).
+    # The frontend owns that positive/negative distinction through
+    # resourceItems; native matching only needs the complete reference set.
     icon_paths = sorted({
-        data["items"][item_id]["icon"]
-        for item_id in input_ids
-        if item_id in data["items"] and data["items"][item_id].get("icon")
+        item["icon"]
+        for item in data["items"].values()
+        if item.get("icon") and item["icon"] != FALLBACK_ICON
     })
     if not icon_paths:
-        raise RuntimeError("Recipe Book contains no ingredient icons")
+        raise RuntimeError("Recipe Book contains no reference icons")
 
     rows = math.ceil(len(icon_paths) / COLUMNS)
     atlas = Image.new("RGB", (COLUMNS * TILE_SIZE, rows * TILE_SIZE), BACKGROUND)
@@ -136,7 +144,8 @@ def main() -> None:
         newline="\n",
     )
     print(
-        f"Built {len(icon_paths)} Recipe Book ingredient icons: "
+        f"Built {len(icon_paths)} Recipe Book reference icons "
+        f"({len(input_ids)} usable input identities): "
         f"{ATLAS_PATH.relative_to(REPO_ROOT)} ({atlas.width}x{atlas.height})"
     )
 

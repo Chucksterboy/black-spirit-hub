@@ -1300,7 +1300,7 @@ if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 6 -or $script -match 
 if ($html.Length -gt 100000) { throw "The HTML shell exceeded the 100 KB performance budget." }
 # The local OCR review flow and reviewed BDO substitution metadata intentionally share
 # this dependency-free script; retain a narrow measured ceiling with modest headroom.
-if ($script.Length -gt 565000) { throw "The main UI script exceeded the OCR/group-aware 565 KB performance budget." }
+if ($script.Length -gt 580000) { throw "The main UI script exceeded the OCR relevance-aware 580 KB performance budget." }
 if ($css -notmatch 'body\[data-motion="reduced"\]' -or $script -notmatch 'visibilitychange') {
 	throw "Reduced-motion or visibility lifecycle handling is missing."
 }

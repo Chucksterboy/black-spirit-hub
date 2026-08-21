@@ -46,8 +46,10 @@ vm.runInContext(`${recipeCore}\n${ocrCore}\nglobalThis.ocrCore={
   dimensionsAreSafe:recipeBookOcrDimensionsAreSafe,
   previewBox:recipeBookOcrPreviewBox,
   sanitizeResult:recipeBookOcrSanitizeResult,
-  buildReviewRows:recipeBookOcrBuildReviewRows,
+  partitionReviewRows:recipeBookOcrPartitionReviewRows,
+  buildReviewRows:(analysis,data)=>recipeBookOcrPartitionReviewRows(analysis,data).rows,
   buildMaterialCatalog:recipeBookOcrBuildMaterialCatalog,
+  removeReviewRow:recipeBookOcrRemoveReviewRow,
   rowIsComplete:recipeBookOcrRowIsComplete,
   buildImportPlan:recipeBookOcrBuildImportPlan,
   applyImportPlan:recipeBookOcrApplyImportPlan,
@@ -108,6 +110,13 @@ const fixture = {
     "50":{ name:"Onion", grade:0, icon:icon("f") },
     "51":{ name:"High-quality Onion", grade:1, icon:icon("f") },
     "52":{ name:"Special Onion", grade:2, icon:icon("f") },
+    "60":{ name:"Weapon Box", grade:2, icon:icon("1") },
+    "61":{ name:"Event Coupon", grade:0, icon:icon("2") },
+    "62":{ name:"Silk Drapeless Curtain", grade:2, icon:icon("3") },
+    "63":{ name:"Goat Hide", grade:0, icon:icon("4") },
+    "64":{ name:"Mixed-use Material", grade:0, icon:icon("5") },
+    "66":{ name:"Shared-art Ingredient", grade:0, icon:icon("7") },
+    "67":{ name:"Finished Shared-art Product", grade:0, icon:icon("7") },
     "100":{ name:"Test Output", grade:0, icon:icon("e") }
   },
   recipes:[
@@ -123,14 +132,28 @@ const fixture = {
     { id:"onion-two", outputId:"100", type:"COOK", inputs:[{ itemId:"50", count:2 }] },
     { id:"onion-three", outputId:"100", type:"COOK", inputs:[{ itemId:"50", count:3 }] },
     { id:"onion-high-quality", outputId:"100", type:"COOK", inputs:[{ itemId:"51", count:1 }] },
-    { id:"onion-special", outputId:"100", type:"COOK", inputs:[{ itemId:"52", count:1 }] }
+    { id:"onion-special", outputId:"100", type:"COOK", inputs:[{ itemId:"52", count:1 }] },
+    { id:"house-curtain", outputId:"100", type:"HOUSE", inputs:[{ itemId:"62", count:1 }] },
+    { id:"dry-hide", outputId:"100", type:"DRY", inputs:[{ itemId:"63", count:1 }] },
+    { id:"house-mixed", outputId:"100", type:"HOUSE", inputs:[{ itemId:"64", count:1 }] },
+    { id:"heat-mixed", outputId:"100", type:"HEAT", inputs:[{ itemId:"64", count:1 }] },
+    { id:"shared-art-input", outputId:"100", type:"COOK", inputs:[{ itemId:"66", count:1 }] },
+    { id:"generic-red-meat", outputId:"100", type:"COOK", inputs:[{ itemId:"7905", count:5 }] },
+    { id:"generic-blood", outputId:"100", type:"ALCHEMY", inputs:[{ itemId:"6214", count:2 }] }
   ]
 };
 const data = core.prepareData(fixture);
 const materialCatalog = core.buildMaterialCatalog(data);
-assert.equal(materialCatalog.length, data.resourceItems.length, "The review fallback must expose every exact Recipe Book resource identity");
+assert.equal(materialCatalog.length,data.resourceItems.length,"The review fallback must expose every exact Recipe Book input identity across every recipe category");
 assert.ok(materialCatalog.some(entry => entry.key === "40:0" && /Salt · Item 40$/.test(entry.label)), "A material outside the native icon shortlist must remain searchable by name and item ID");
 assert.ok(materialCatalog.some(entry => entry.key === "30:2" && /^\+2 Magic Log · Item 30$/.test(entry.label)), "Full-catalog correction must preserve enhancement identity");
+assert.equal(data.resourceLookup["60:0"],undefined,"A weapon box that is never used as a recipe input must not become an importable material");
+assert.equal(data.resourceLookup["61:0"],undefined,"An event coupon that is never used as a recipe input must not become an importable material");
+assert.equal(data.resourceLookup["100:0"],undefined,"A recipe output must not become importable unless another supported recipe actually uses it as an input");
+assert.ok(!materialCatalog.some(entry=>["60:0","61:0","100:0"].includes(entry.key)),"The correction catalog must contain usable recipe materials only");
+assert.ok(materialCatalog.some(entry=>entry.key==="62:0"),"A HOUSE recipe input is still a real usable material and must remain available to Screenshot Mats");
+assert.ok(materialCatalog.some(entry=>entry.key==="63:0"),"A DRY processing ingredient must remain available to Screenshot Mats");
+assert.ok(materialCatalog.some(entry=>entry.key==="64:0"),"An item used by multiple recipe categories must remain available to Screenshot Mats");
 const fingerprint = "f".repeat(64);
 const analysisPayload = {
   imageFingerprint:fingerprint,
@@ -272,6 +295,71 @@ const manySlots = Array.from({ length:193 }, (_, position) => ({
 assert.equal(core.sanitizeResult({ ...analysisPayload, height:900, grid:{ columns:9, rows:22, confidence:1 }, slots:manySlots }).slots.length, 192, "The result sanitizer must cap native slot volume");
 assert.equal(core.sanitizeResult({ ...analysisPayload, grid:{ columns:10, rows:3, confidence:1 } }), null, "A storage result may expose at most the native nine columns");
 
+const irrelevantAnalysis=core.sanitizeResult({
+  imageFingerprint:"8".repeat(64),width:330,height:90,grid:{columns:4,rows:1,confidence:.95},
+  slots:[
+    {id:"output-only",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99}],quantityText:"10",quantityValue:10,quantityConfidence:.95},
+    {id:"weapon-box",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("1"),score:.99}],quantityText:"6",quantityValue:6,quantityConfidence:.95},
+    {id:"event-coupon",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99}],quantityText:"5",quantityValue:5,quantityConfidence:.95},
+    {id:"random-nearest-icon",row:0,column:3,box:{x:250,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.40},{icon:icon("d"),score:.39}],quantityText:"1",quantityValue:1,quantityConfidence:.95}
+  ],warnings:[]
+});
+const irrelevantRows=core.buildReviewRows(irrelevantAnalysis,data);
+assert.deepEqual(clone(irrelevantRows),[],"Output-only items, non-material inventory items, and weak nearest-icon guesses must not become review rows");
+const irrelevantPartition=core.partitionReviewRows(irrelevantAnalysis,data);
+assert.equal(irrelevantPartition.ignoredRows.length,4,"Filtered clutter must remain recoverable without entering the main import rows");
+assert.ok(irrelevantPartition.ignoredRows.every(row=>row.selectedKey===""),"A hidden or uncertain slot must never carry a preselected import identity");
+const irrelevantPlan=core.buildImportPlan(irrelevantRows,data);
+assert.equal(irrelevantPlan.valid,false,"An all-irrelevant screenshot must leave Apply disabled instead of producing a zero-entry import");
+assert.equal(irrelevantPlan.entries.length,0);
+assert.match(irrelevantPlan.errors.join(" "),/Detect at least one material/i,"The zero-import state must explain that no usable material is ready");
+
+const mixedRelevanceAnalysis=core.sanitizeResult({
+  imageFingerprint:"9".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
+  slots:[
+    {id:"genuine-low-confidence-material",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("d"),score:.70},{icon:icon("a"),score:.45}],quantityText:"87255",quantityValue:87255,quantityConfidence:.95},
+    {id:"irrelevant-coupon",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99}],quantityText:"1",quantityValue:1,quantityConfidence:.95},
+    {id:"ambiguous-noise",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.46},{icon:icon("d"),score:.455}],quantityText:"34",quantityValue:34,quantityConfidence:.95}
+  ],warnings:[]
+});
+const mixedRelevanceRows=core.buildReviewRows(mixedRelevanceAnalysis,data);
+assert.deepEqual(clone(mixedRelevanceRows.map(row=>row.slotId)),["genuine-low-confidence-material"],"Filtering must retain a credible material for review while omitting irrelevant and visually ambiguous slots");
+assert.equal(mixedRelevanceRows[0].selectedKey,"40:0","The retained credible material may preselect its own top candidate");
+assert.equal(mixedRelevanceRows[0].reviewRequired,true,"A retained low-confidence material must remain visibly review-derived");
+assert.equal(core.buildImportPlan(mixedRelevanceRows,data).valid,true,"Ignored inventory clutter must not block Apply for the usable material rows");
+assert.ok(!mixedRelevanceRows.some(row=>["irrelevant-coupon","ambiguous-noise"].includes(row.slotId)),"An irrelevant slot must never receive a random first-option selection");
+const mixedRelevancePartition=core.partitionReviewRows(mixedRelevanceAnalysis,data);
+assert.deepEqual(clone(mixedRelevancePartition.ignoredRows.map(row=>row.slotId).sort()),["ambiguous-noise","irrelevant-coupon"],"Weak and known-negative slots must be hidden but recoverable");
+
+const positiveNegativeAtlasAnalysis=core.sanitizeResult({
+  imageFingerprint:"0".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
+  slots:[
+    {id:"known-output-negative",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99},{icon:icon("4"),score:.88}],quantityText:"2",quantityValue:2,quantityConfidence:.95},
+    {id:"house-recipe-input",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("3"),score:.70},{icon:icon("5"),score:.40}],quantityText:"117400",quantityValue:117400,quantityConfidence:.95},
+    {id:"mixed-recipe-input",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("5"),score:.91}],quantityText:"104",quantityValue:104,quantityConfidence:.95}
+  ],warnings:[]
+});
+const positiveNegativeAtlasRows=core.buildReviewRows(positiveNegativeAtlasAnalysis,data);
+assert.deepEqual(clone(positiveNegativeAtlasRows.map(row=>row.slotId)),["house-recipe-input","mixed-recipe-input"],"Known output-only artwork must be a negative reference while inputs from every real recipe category remain eligible");
+assert.ok(!positiveNegativeAtlasRows.some(row=>row.slotId==="known-output-negative"),"A known irrelevant top atlas match must be ignored even when its second candidate is a high-scoring recipe input");
+assert.equal(positiveNegativeAtlasRows.find(row=>row.slotId==="house-recipe-input")?.selectedKey,"62:0","A credible HOUSE recipe input must remain reviewable");
+assert.equal(positiveNegativeAtlasRows.find(row=>row.slotId==="mixed-recipe-input")?.selectedKey,"64:0","An item used as any real recipe input must remain eligible");
+assert.deepEqual(clone(core.partitionReviewRows(positiveNegativeAtlasAnalysis,data).ignoredRows.map(row=>row.slotId)),["known-output-negative"],"A finished-product winner must be preserved only in the hidden review queue");
+
+const relevanceSafetyAnalysis=core.sanitizeResult({
+  imageFingerprint:"7".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
+  slots:[
+    {id:"positive-negative-near-tie",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.82},{icon:icon("e"),score:.815}],quantityText:"100",quantityValue:100,quantityConfidence:.95},
+    {id:"mixed-artwork",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("7"),score:.96},{icon:icon("a"),score:.70}],quantityText:"20",quantityValue:20,quantityConfidence:.95},
+    {id:"recoverable-real-low-score",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.64},{icon:icon("e"),score:.60}],quantityText:"30",quantityValue:30,quantityConfidence:.95}
+  ],warnings:[]
+});
+const relevanceSafetyPartition=core.partitionReviewRows(relevanceSafetyAnalysis,data);
+assert.deepEqual(clone(relevanceSafetyPartition.rows),[],"Near-tie, mixed-artwork, and weak matches must not auto-enter the import list");
+assert.deepEqual(clone(relevanceSafetyPartition.ignoredRows.map(row=>row.slotId)),["positive-negative-near-tie","mixed-artwork","recoverable-real-low-score"],"Every conservative abstention must remain recoverable through hidden-slot review");
+assert.ok(relevanceSafetyPartition.ignoredRows.every(row=>row.selectedKey===""),"Restorable uncertainty must start blank so Apply cannot silently import a guessed material");
+assert.match(relevanceSafetyPartition.ignoredRows.find(row=>row.slotId==="mixed-artwork").reasons[0],/shared by usable and finished/i,"Exact artwork reused by a finished product must be explained as visually ambiguous");
+
 const qualityAnalysis=core.sanitizeResult({
   imageFingerprint:"6".repeat(64),width:260,height:90,grid:{columns:3,rows:1,confidence:.97},
   slots:[0,1,2].map((borderGrade,column)=>({
@@ -379,6 +467,18 @@ assert.equal(core.buildImportPlan(sharedGroupRows,data).valid,false,"Unresolved 
 actualMeat.selectedKey=actualMeat.options[0].key;actualBlood.selectedKey=actualBlood.options[0].key;
 assert.equal(core.buildImportPlan(sharedGroupRows,data).valid,true,"Choosing each shared-group material must complete the rows without checkmarks");
 
+const removableRows=[rounded,pine],removableSnapshot=clone(removableRows),afterIndexLikeRemoval=core.removeReviewRow(removableRows,"0");
+assert.notEqual(afterIndexLikeRemoval,removableRows,"Row removal must return a new collection instead of mutating live review state in place");
+assert.deepEqual(clone(afterIndexLikeRemoval),removableSnapshot,"An array index must not masquerade as a stable review-row identity");
+const afterFirstRemoval=core.removeReviewRow(removableRows,pine.id);
+assert.deepEqual(clone(afterFirstRemoval.map(row=>row.id)),[rounded.id],"The row × must remove exactly the matching stable row ID regardless of its array position");
+assert.deepEqual(clone(removableRows),removableSnapshot,"Removing a review row must leave the caller's previous array untouched");
+assert.equal(core.buildImportPlan(afterFirstRemoval,data).valid,true,"Removing one row must recompute readiness from the material rows that remain");
+const afterFinalRemoval=core.removeReviewRow(afterFirstRemoval,rounded.id);
+assert.deepEqual(clone(afterFinalRemoval),[],"Removing the final detected material must produce the normal zero-row state");
+assert.equal(core.buildImportPlan(afterFinalRemoval,data).valid,false,"Removing the final row must disable Apply");
+assert.equal(core.buildImportPlan(afterFinalRemoval,data).entries.length,0,"Removing the final row must never leave a stale import entry");
+
 const current = { "10:0":5, "20:0":7, "40:0":99 };
 const beforePlanning = JSON.stringify(current);
 const updatePlan = core.buildImportPlan([{ selectedKey:"10:0", quantity:15, slotId:"pine" }], data);
@@ -426,7 +526,7 @@ assert.deepEqual(clone(fingerprints.fingerprints), [fingerprint], "The same scre
 for (const id of [
   "recipeBookScreenshotOpen", "recipeBookScreenshotUndo", "recipeBookScreenshotDialog", "recipeBookScreenshotClose",
   "recipeBookScreenshotDropZone", "recipeBookScreenshotFiles", "recipeBookScreenshotBrowse", "recipeBookScreenshotPaste",
-  "recipeBookScreenshotStatus", "recipeBookScreenshotReview", "recipeBookScreenshotRows", "recipeBookScreenshotApply",
+  "recipeBookScreenshotStatus", "recipeBookScreenshotReviewIgnored", "recipeBookScreenshotReview", "recipeBookScreenshotRows", "recipeBookScreenshotApply",
   "recipeBookScreenshotCancel", "recipeBookScreenshotAddConfirm"
 ]) assert.match(html, new RegExp(`id="${id}"`), `Missing Screenshot Mats control #${id}`);
 assert.match(html, /role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="recipeBookScreenshotTitle"[^>]*aria-describedby="recipeBookScreenshotDescription"/);
@@ -437,7 +537,32 @@ assert.match(html, /id="recipeBookScreenshotAddConfirm" type="checkbox"/, "Add m
 assert.match(html, /Apply becomes available when every detected row has a material and quantity\./, "The dialog description must explain the all-rows-required workflow");
 assert.match(html, /Amber<\/b> rows contain readings worth checking before you apply them\./, "Review guidance must no longer imply a removed per-row confirmation control");
 assert.doesNotMatch(source, /data-ocr-include|reviewConfirmed|row\.included/, "The removed per-row checkmark state must not remain in markup or event logic");
+const reviewRowMarkupSource=sourceBetween(source,"function recipeBookOcrRowMarkup(row,index){","function recipeBookOcrRenderReview(){");
+assert.match(reviewRowMarkupSource,/removeLabel=selectedName\|\|`row \$\{row\.row\+1\}, column \$\{row\.column\+1\}`/,"Each review-row × must identify the selected material or stable screenshot location");
+assert.match(reviewRowMarkupSource,/class="recipeBookScreenshotRowRemove"[^>]*type="button"/,"The row removal control must use explicit button semantics");
+assert.match(reviewRowMarkupSource,/data-ocr-row-remove="\$\{escapeHtml\(row\.id\)\}"/,"The row removal control must carry the stable review-row ID instead of a shifting array index");
+assert.match(reviewRowMarkupSource,/aria-label="Remove \$\{escapeHtml\(removeLabel\)\} from this scan"/,"The visual × must expose its full removal action to assistive technology");
+const reviewRowClickSource=sourceBetween(source,'recipeBookEl.screenshotRows?.addEventListener("click",event=>{','recipeBookEl.screenshotRows?.addEventListener("input"');
+assert.match(reviewRowClickSource,/closest\("\[data-ocr-row-remove\]"\)/,"Review-row removal must use the existing delegated rows click listener");
+assert.match(reviewRowClickSource,/\.rows=recipeBookOcrRemoveReviewRow\([^,]+\.rows,remove\.dataset\.ocrRowRemove\)/,"Delegated removal must resolve the stable ID through the non-mutating OCR-core helper");
+assert.match(reviewRowClickSource,/recipeBookOcrRenderReview\(\)/,"Removing a row must rerender and recompute the summary and Apply readiness immediately");
+assert.match(reviewRowClickSource,/querySelectorAll\("\[data-ocr-row-remove\]"\)[\s\S]*?\.focus\(\)/,"Keyboard removal must move focus to another stable control after the focused × disappears");
+const selectMaterialSource=sourceBetween(source,'function recipeBookOcrSelectMaterial(article,row,key,source="candidate"){','function recipeBookOcrClearMaterialSelection(article,row){');
+assert.match(selectMaterialSource,/remove\.setAttribute\("aria-label",`Remove \$\{displayName/,"Changing a material must keep the row × accessible name synchronized");
+const screenshotQueueSource=sourceBetween(source,'async function recipeBookOcrQueueFiles(inputFiles,source="browse"){','async function recipeBookOcrPasteFromClipboard(){');
+assert.match(screenshotQueueSource,/const partition=recipeBookOcrPartitionReviewRows\(analysis,recipeBookState\.data\),reviewRows=partition\.rows,ignoredRows=partition\.ignoredRows/,"The scan queue must partition usable rows from recoverable irrelevant or uncertain slots");
+assert.match(screenshotQueueSource,/state\.rows\.push\(\.\.\.reviewRows\);state\.ignoredRows\.push\(\.\.\.ignoredRows\)/,"Only clear inputs may enter Apply while hidden slots remain recoverable");
+assert.match(screenshotQueueSource,/if\(!reviewRows\.length\)[^;]*no detected slots confidently matched an item used as an input by a Recipe Book recipe or craft/i,"An all-irrelevant screenshot must show a clear zero-usable-material scanner message");
+assert.match(screenshotQueueSource,/state\.rows\.length\} usable recipe input/,"The scan summary must count usable review rows rather than every occupied storage cell");
+const hiddenReviewSource=sourceBetween(source,"function recipeBookOcrReviewIgnoredRows(){","function recipeBookOcrClearMaterialSelection(article,row){");
+assert.match(hiddenReviewSource,/selectedKey:""[\s\S]*?reviewRequired:true/,"Reviewing hidden slots must restore them blank and non-importable until the user chooses a usable input");
+assert.match(hiddenReviewSource,/state\.rows\.push\(\.\.\.restored\);state\.ignoredRows=\[\]/,"Reviewing hidden slots must atomically move them into the editable list");
+assert.match(source,/screenshotReviewIgnored\?\.addEventListener\("click",recipeBookOcrReviewIgnoredRows\)/,"The recovery control must expose conservative OCR abstentions without auto-importing them");
 assert.match(css, /\.recipeBookScreenshotDialog\[hidden\]\{display:none!important\}/);
+assert.match(css,/\.recipeBookScreenshotRow\{(?=[^}]*position:relative)[^}]*\}/,"Review rows must establish the positioning context for their top-right ×");
+assert.match(css,/\.recipeBookScreenshotRowRemove\{(?=[^}]*position:absolute)(?=[^}]*top:)(?=[^}]*right:)(?=[^}]*width:)(?=[^}]*height:)[^}]*\}/,"The row × must remain a small top-right control instead of consuming a grid column");
+assert.match(css,/\.recipeBookScreenshotRowRemove:focus-visible\{[^}]*outline:/,"The row × must have a visible keyboard focus treatment");
+assert.match(css,/\.recipeBookScreenshotSessionActions\{[^}]*display:flex/,"Hidden-slot review and session clearing must remain grouped without displacing scanner status");
 assert.match(css, /\.recipeBookScreenshotSurface\{[^}]*overflow:hidden/, "The modal must contain its scrolling content");
 assert.match(css, /\.recipeBookScreenshotMergeMode\[hidden\],\.recipeBookScreenshotMergeMode>\.recipeBookScreenshotAddConfirm\[hidden\]\{display:none!important\}/, "No-row and non-add review controls must stay hidden despite their component display rules");
 assert.match(css, /\.recipeBookScreenshotRow\{[^}]*grid-template-columns:84px minmax\(145px,\.8fr\) minmax\(230px,1\.5fr\) 150px/, "Desktop review rows must start with the preview now that the checkbox column is gone");
@@ -471,7 +596,9 @@ assert.match(source, /await recipeBookOcrQueueFiles\(files,"paste"\)/, "The Past
 assert.match(source, /function recipeBookOcrCanonicalMimeType\(value\)[\s\S]*?image\/png[\s\S]*?image\/jpeg[\s\S]*?image\/bmp[\s\S]*?return""/, "Clipboard intake must explicitly allow only the native PNG, JPEG, and BMP contract");
 assert.match(source, /item\.types\.map\(type=>\(\{type,mimeType:recipeBookOcrCanonicalMimeType\(type\)\}\)\)\.find\(entry=>entry\.mimeType\)/, "The explicit Clipboard API must skip unsupported image formats and use a supported alternative when offered");
 assert.match(source, /function recipeBookOcrFileName\(file,mimeType\)[\s\S]*?RECIPE_BOOK_OCR_MIME_EXTENSIONS\[mimeType\]/, "Nameless and mismatched-extension clipboard files must be normalized to the declared raster type");
-assert.match(source, /hasRows=state\.rows\.length>0,hasWarnings=state\.warnings\.length>0,showWarnings=hasWarnings&&!hasRows/, "Warnings must render only when scanning produced no review rows");
+assert.match(source, /hasRows=state\.rows\.length>0,hasIgnored=state\.ignoredRows\.length>0,hasWarnings=state\.warnings\.length>0,showWarnings=!hasRows&&\(hasWarnings\|\|state\.images\.length>0\)/, "The review alert must remain visible when filtering or row removal leaves an accepted screenshot with zero usable rows");
+assert.match(source,/displayWarnings=hasWarnings\?state\.warnings:\[hasIgnored\?"No confident Recipe Book inputs were found\.[^"]*":"No usable Recipe Book materials remain in this scan\.[^"]*"\]/,"Zero-row feedback must distinguish recoverable hidden slots from a truly empty import");
+assert.match(source,/screenshotReviewIgnored\.hidden=!hasIgnored[\s\S]*?Review \$\{state\.ignoredRows\.length\} hidden slot/,"The recovery control must show the exact number of hidden slots");
 assert.match(source, /screenshotReview\.hidden=!hasRows&&!showWarnings/, "A zero-row scanner alert must keep the review region visible");
 assert.match(source, /screenshotWarnings\.hidden=!showWarnings[\s\S]*?setAttribute\("role","alert"\)/, "Accepted-row warning pills must stay hidden while a zero-row scanner message remains an alert");
 assert.match(source, /no storage material slots were detected\. Include one or more complete item slots with their quantity labels, or crop tightly around a single item\./, "Zero-result feedback must explain both partial-grid and single-item recovery");
@@ -523,7 +650,7 @@ assert.ok(popupEscapeIndex>=0&&dialogEscapeIndex>popupEscapeIndex,"Escape must c
 assert.match(source, /active===recipeBookEl\.screenshotSurface\|\|!recipeBookEl\.screenshotSurface\.contains\(active\)\)\{event\.preventDefault\(\);\(event\.shiftKey\?last:first\)\.focus\(\)\}/, "Tabbing from the fallback surface must enter the modal in the requested direction");
 assert.match(source, /event\.shiftKey&&active===first\)\{event\.preventDefault\(\);last\.focus\(\)\}else if\(!event\.shiftKey&&active===last\)\{event\.preventDefault\(\);first\.focus\(\)\}/, "Keyboard focus must wrap at both ends of the modal");
 assert.match(source, /screenshotSurface\?\.setAttribute\("aria-busy",String\(Boolean\(busy\)\)\)/, "The modal must expose native analysis as an accessible busy state");
-assert.match(source, /for\(const control of \[recipeBookEl\.screenshotBrowse,recipeBookEl\.screenshotPaste,recipeBookEl\.screenshotFiles,recipeBookEl\.screenshotClear\]\)if\(control\)control\.disabled=Boolean\(busy\)/, "Image intake controls must be disabled during native analysis");
+assert.match(source, /for\(const control of \[recipeBookEl\.screenshotBrowse,recipeBookEl\.screenshotPaste,recipeBookEl\.screenshotFiles,recipeBookEl\.screenshotReviewIgnored,recipeBookEl\.screenshotClear\]\)if\(control\)control\.disabled=Boolean\(busy\)/, "Image intake and hidden-slot recovery controls must be disabled during native analysis");
 assert.match(source, /screenshotApply\.disabled=state\.busy\|\|!plan\.valid\|\|!addConfirmed/, "Apply must stay disabled while analysis is busy or review is incomplete");
 assert.match(source, /rawBorderGrade=raw\.borderGrade,borderGrade=typeof rawBorderGrade==="number"&&Number\.isInteger\(rawBorderGrade\)&&rawBorderGrade>=0&&rawBorderGrade<=2\?rawBorderGrade:null/, "Only numeric integer BDO border grades 0 through 2 may cross the frontend trust boundary");
 assert.match(source, /rawBorderGradeConfidence=raw\.borderGradeConfidence,borderGradeConfidence=typeof rawBorderGradeConfidence==="number"&&Number\.isFinite\(rawBorderGradeConfidence\)&&rawBorderGradeConfidence>=0&&rawBorderGradeConfidence<=1\?rawBorderGradeConfidence:0/, "Border-grade confidence must remain a finite numeric probability without coercion");
@@ -531,8 +658,8 @@ assert.match(source, /function recipeBookOcrQualityFamilyResources[\s\S]*?item\?
 assert.match(source, /RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE=\.70/, "Frontend quality resolution must share the native fixture gate's calibrated confidence floor");
 assert.match(source, /qualityFamily=recipeBookOcrQualityFamilyResources\(topResources,data\)[\s\S]*?slot\.borderGradeConfidence>=RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE[\s\S]*?borderGradeMatches\.length===1/, "Only high-confidence evidence with one same-family grade match may resolve a quality identity");
 assert.match(source, /for\(const iconMatch of slot\.iconCandidates\)[\s\S]*?optionMap\.set\(resource\.key[\s\S]*?Number\(right\.key===resolvedKey\)-Number\(left\.key===resolvedKey\)/, "Quality resolution must rank its exact identity while preserving all icon correction options");
-assert.match(source, /defaultOption=borderGradeConflict\|\|unresolvedSharedMeatOrBloodIcon\?null:borderGradeResolved\?optionMap\.get\(resolvedKey\)/, "Conflicting quality evidence and unresolved shared meat or blood icons must remain blank");
-assert.match(source, /iconExact=Boolean\(topIcon&&topIcon\.score>=\.82&&gap>=\.08&&materialExactResources\.length===1/, "A unique border-resolved top-icon identity may become exact only with strong icon score and separation");
+assert.match(source, /defaultOption=relevance!=="eligible"\|\|borderGradeConflict\|\|unresolvedSharedMeatOrBloodIcon\?null:borderGradeResolved\?optionMap\.get\(resolvedKey\)/, "Hidden relevance, conflicting quality evidence, and unresolved shared meat or blood icons must remain blank");
+assert.match(source, /iconExact=Boolean\(relevance==="eligible"&&matchedIcon&&matchedIcon\.score>=\.82&&gap>=\.08&&materialExactResources\.length===1/, "A unique border-resolved identity may become exact only after relevance, strong score, and separation all agree");
 
 assert.ok(fs.existsSync(servicePath), "The native Screenshot Mats service is missing");
 assert.ok(fs.existsSync(recognizerPath), "The local PP-OCRv5 quantity recognizer is missing");
@@ -701,24 +828,18 @@ assert.equal(index.schemaVersion, 1);
 assert.equal(index.tileSize, 20);
 assert.equal(index.columns, 64);
 assert.deepEqual(index.background, [22,23,27]);
-assert.equal(index.icons.length, 2396, "The reviewed Recipe Book ingredient icon atlas changed unexpectedly");
 assert.deepEqual(index.icons.map(entry => entry.index), Array.from({ length:index.icons.length }, (_, position) => position), "Atlas indexes must be dense and deterministic");
 const recipePayload = JSON.parse(fs.readFileSync(recipeDataPath, "utf8"));
-const inputIds = new Set(recipePayload.recipes.flatMap(recipe => recipe.inputs.map(input => String(input.itemId))));
-const substitutionMemberIds = new Set([
-  5401,5402,5403,5404,5405,5406,5439,5600,
-  6201,6202,6203,6204,6205,6206,6207,6208,6209,6210,6211,6212,6213,6214,6215,6216,6217,6218,6219,6220,6221,6222,6223,6224,6225,6226,6227,6228,6359,
-  7901,7902,7903,7904,7905,7906,7907,7908,7909,7910,7911,7912,7913,7914,7915,7916,7917,7921,7925,7953,7957,7960,7961,7962,
-  7001,7002,7003,7004,7005,7006,7007,7008,7009,7010,7011,7012,7013,7014,7015,7101,7102,7103,7104,7105,7201,7202,7203,7204,7205,
-  7304,7306,7307,7308,7309,7311,7312,7313,7314,7315,7316,7317,7318,7319,7320,7321,7322,7328,7329,7330,7331,7333,7334,7340,7341,7342,7343,7345,7346
-].map(String));
-for (const itemId of substitutionMemberIds) if (recipePayload.items[itemId]) inputIds.add(itemId);
-const expectedIcons = [...new Set([...inputIds].map(itemId => recipePayload.items[itemId]?.icon).filter(Boolean))].sort();
-assert.deepEqual(index.icons.map(entry => entry.icon), expectedIcons, "The OCR atlas must contain every and only current ingredient icon once");
+const expectedIcons = [...new Set(Object.values(recipePayload.items).map(item=>item?.icon).filter(iconPath=>iconPath&&iconPath!=="icons/item-fallback.svg"))].sort();
+assert.equal(index.icons.length,expectedIcons.length,"The OCR atlas must contain one reference for every unique bundled Recipe Book item icon");
+assert.deepEqual(index.icons.map(entry => entry.icon), expectedIcons, "The OCR atlas must include both recipe-input positives and known non-input negatives in deterministic order");
+assert.ok(!index.icons.some(entry=>entry.icon==="icons/item-fallback.svg"),"The generic manual-search fallback must never participate in visual OCR matching");
 const atlasBytes = fs.readFileSync(atlasPath);
 assert.ok(atlasBytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])), "The OCR atlas must be a PNG");
-assert.equal(atlasBytes.readUInt32BE(16), 1280);
-assert.equal(atlasBytes.readUInt32BE(20), 760);
+assert.equal(atlasBytes.readUInt32BE(16),index.columns*index.tileSize,"Atlas width must match its declared tile grid");
+assert.equal(atlasBytes.readUInt32BE(20),Math.ceil(expectedIcons.length/index.columns)*index.tileSize,"Atlas height must contain every positive and negative reference without an unused row");
+assert.equal(atlasBytes.readUInt32BE(16),1280);
+assert.equal(atlasBytes.readUInt32BE(20),1220);
 assert.match(project, /<None Update="Assets\\\*\*\\\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" \/>/, "The OCR atlas, index, model, and notices must be copied into build and publish payloads");
 
 const release = fs.readFileSync(releasePath, "utf8");
