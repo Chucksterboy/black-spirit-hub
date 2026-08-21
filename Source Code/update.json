@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.48",
+    "version":  "v0.9.49",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.48/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "3DB473D6D7ABE91117F9FE8601E050D5E3B664CE2693392F781A94E07EED612F",
-    "notes":  "Fixes the Events timeline so refreshed event strips keep their correct remaining span and stay contained inside the schedule frame."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.49/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "229775BF3F5F5827AE5EC830D9146FD3A0C481A86B97749BBF8D8DF8787039AA",
+    "notes":  "Refreshes coupons every two hours while the app is open, adds a Spawning Now boss alert, and filters Screenshot Mats OCR to Recipe Book inputs with removable review rows."
 }
