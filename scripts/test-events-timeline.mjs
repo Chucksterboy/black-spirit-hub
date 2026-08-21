@@ -67,17 +67,22 @@ positionContext.exactRange = { startUtc: "2026-08-05T00:00:00Z", endUtc: "2026-0
 assert.deepEqual({ ...vm.runInContext("eventTimelinePosition(exactRange,firstDay,31,today)", positionContext) }, { start: 5, end: 9 }, "known event dates must retain their exact inclusive duration");
 positionContext.startOnly = { startUtc: "2026-08-05T00:00:00Z", endUtc: null };
 assert.deepEqual({ ...vm.runInContext("eventTimelinePosition(startOnly,firstDay,31,today)", positionContext) }, { start: 5, end: 6 }, "a one-sided date must render as a one-day marker instead of an invented duration");
+positionContext.activeEndOnly = { startUtc: null, endUtc: "2026-08-20T23:59:00Z" };
+assert.deepEqual({ ...vm.runInContext("eventTimelinePosition(activeEndOnly,firstDay,31,today)", positionContext) }, { start: 13, end: 21 }, "an active event with only a known end must show its honest remaining span from today");
 
 assert.match(html, /id="eventsTimelineScroller"[^>]*class="eventsTimeline"[^>]*aria-label="[^"]*Drag horizontally[^>]*tabindex="0"/);
 assert.match(css, /\.eventsTimeline\{[^}]*overflow-x:auto;[^}]*overflow-y:hidden;[^}]*scrollbar-width:none;[^}]*touch-action:pan-x pan-y;[^}]*cursor:grab/);
 assert.match(css, /\.eventsTimeline\.isDragging,[^{]+\{[^}]*cursor:grabbing!important;[^}]*user-select:none!important/);
-assert.match(css, /\.eventsTimelineBar\{[^}]*overflow:visible/);
-assert.match(css, /\.eventsTimelineBarText\{[^}]*min-width:max-content;[^}]*overflow:visible;[^}]*text-overflow:clip;[^}]*max-width:none/);
-assert.match(css, /\.eventsTimelineBarText\{[^}]*position:relative;[^}]*transform:translateX\(var\(--event-label-shift,0px\)\)/, "event titles must use the measured visible-viewport offset rather than unreliable sticky positioning");
-assert.match(js, /function eventsSyncTimelineLabels\([^)]*\)[^{]*\{[^\n]*--event-label-shift/, "horizontal scrolling must update the title's visible offset");
+assert.match(css, /\.eventsTimelineBar\{[^}]*box-sizing:border-box;[^}]*overflow:hidden/, "event strips must be a hard clipping boundary");
+assert.doesNotMatch(css, /\.eventsTimelineBar\{[^}]*overflow:visible/);
+assert.match(css, /\.eventsTimelineBarContent\{[^}]*left:var\(--event-content-left,0px\);[^}]*right:var\(--event-content-right,0px\);[^}]*overflow:hidden/, "the readable strip content must stay inside the visible bar/viewport intersection");
+assert.match(css, /\.eventsTimelineBarText\{[^}]*flex:1 1 auto;[^}]*min-width:0;[^}]*max-width:100%;[^}]*overflow:hidden;[^}]*text-overflow:ellipsis;[^}]*white-space:nowrap/);
+assert.doesNotMatch(css, /\.eventsTimelineBarText\{[^}]*(?:min-width:max-content|overflow:visible|text-overflow:clip|max-width:none)/);
+assert.match(js, /function eventsSyncTimelineLabels\([^)]*\)[^{]*\{[^\n]*--event-content-left[^\n]*--event-content-right/, "horizontal scrolling must clamp content to both visible edges");
 assert.match(js, /addEventListener\("scroll",onScroll,\{passive:true\}\)/, "label visibility must update for drag, wheel, and keyboard scrolling");
-assert.match(css, /\.eventsTimelinePill\{[^}]*position:sticky;[^}]*right:10px/, "event countdown pills must remain attached to the visible part of long strips");
-assert.doesNotMatch(css, /\.eventsTimelineBarText\{[^}]*text-overflow:ellipsis/);
+assert.match(css, /\.eventsTimelineBarContent>\.eventsTimelinePill\{[^}]*position:static;[^}]*right:auto;[^}]*overflow:hidden;[^}]*text-overflow:ellipsis/, "event countdown pills must be contained inside the strip");
+assert.match(css, /\.eventsTimelineBar\[data-event-span="1"\] \.eventsTimelineBarContent\{[^}]*justify-content:center;[^}]*padding-inline:5px/, "true one-day markers need a compact contained layout");
+assert.match(js, /data-event-span="\$\{span\}"[^>]*title="\$\{escapeHtml\(event\.title\)\}"[^>]*aria-label="\$\{escapeHtml\(`\$\{event\.title\}, \$\{countdown\}`\)\}"[^>]*>[\s\S]*?class="eventsTimelineBarContent"/, "rendered strips must expose their span, retain the full tooltip/accessibility title, and contain their visible content");
 assert.doesNotMatch(css, /#calculatorView #originSelect,\.eventsTimeline/, "the late global scrollbar rule must not expose the Events scrollbar");
 assert.match(css, /#eventsView \.eventsTimeline\{[^}]*scrollbar-width:none!important/);
 assert.match(css, /#eventsView \.eventsTimeline::-webkit-scrollbar\{[^}]*display:none!important;[^}]*height:0!important/);
@@ -99,6 +104,32 @@ assert.match(css, /\.eventsOngoingCopy strong\{[^}]*white-space:normal;[^}]*over
 assert.match(js, /eventsState\.events\.filter\(event=>!eventHasOpenEndedSchedule\(event\)\)/, "undated ongoing events must be excluded from dated bars");
 assert.match(js, /eventsState\.events\.filter\(eventHasOpenEndedSchedule\)/, "undated ongoing events must render in their dedicated section");
 assert.match(js, /eventsEl\.ongoingList\?\.addEventListener\("click",selectEvent\)/, "ongoing cards must select and render their event details");
+
+class FakeStyle {
+  constructor() { this.properties = new Map(); }
+  setProperty(name, value) { this.properties.set(name, value); }
+  getPropertyValue(name) { return this.properties.get(name) || ""; }
+}
+
+const makeTimelineBar = rect => {
+  const content = { style: new FakeStyle() };
+  return { content, getBoundingClientRect: () => rect, querySelector: selector => selector === ".eventsTimelineBarContent" ? content : null };
+};
+const longBar = makeTimelineBar({ left: -300, right: 900, width: 1200 });
+const rightEdgeBar = makeTimelineBar({ left: 550, right: 614, width: 64 });
+const hiddenBar = makeTimelineBar({ left: 700, right: 764, width: 64 });
+const labelScroller = {
+  getBoundingClientRect: () => ({ left: 100, right: 600, width: 500 }),
+  querySelectorAll: selector => selector === ".eventsTimelineBar" ? [longBar, rightEdgeBar, hiddenBar] : []
+};
+const layoutContext = vm.createContext({ eventsEl: { timeline: null }, labelScroller });
+new vm.Script(`${functionLine("eventsSyncTimelineLabels")}\neventsSyncTimelineLabels(labelScroller);`).runInContext(layoutContext);
+assert.equal(longBar.content.style.getPropertyValue("--event-content-left"), "412px", "a bar starting before the viewport must inset its content from the left");
+assert.equal(longBar.content.style.getPropertyValue("--event-content-right"), "312px", "a bar ending after the viewport must inset its content from the right");
+assert.equal(rightEdgeBar.content.style.getPropertyValue("--event-content-left"), "0px");
+assert.equal(rightEdgeBar.content.style.getPropertyValue("--event-content-right"), "26px", "a short right-edge bar must not paint beyond the frame");
+assert.equal(hiddenBar.content.style.getPropertyValue("--event-content-left"), "0px");
+assert.equal(hiddenBar.content.style.getPropertyValue("--event-content-right"), "0px");
 
 const dashboardContext = vm.createContext({ Date, eventsState: { events: [], lastStatus: "" }, capturedStatus: null });
 dashboardContext.setEventsStatus = (message, error, state) => { dashboardContext.capturedStatus = { message, error, state }; };
@@ -208,4 +239,4 @@ vm.runInContext("cleanup()", dragContext);
 assert.equal(scroller.classList.contains("isDragging"), false);
 assert.equal((scroller.listeners.get("pointerdown") || []).length, 0);
 
-console.log("Events timeline full-title and drag-scroll verification passed.");
+console.log("Events timeline containment and drag-scroll verification passed.");

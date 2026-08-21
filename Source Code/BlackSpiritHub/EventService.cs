@@ -71,8 +71,20 @@ internal sealed class EventService : IDisposable
 		{
 			logger.Info("Events refresh started.");
 			logger.Info("Events official source URL: " + OfficialEventsUrl);
+			EventCache? previousCache = await ReadJsonAsync<EventCache>(paths.EventsCachePath, cancellationToken);
+			if (!HasEvents(previousCache))
+			{
+				EventCache? backup = await ReadJsonAsync<EventCache>(paths.EventsBackupCachePath, cancellationToken);
+				if (HasEvents(backup))
+					previousCache = backup;
+			}
 			string html = await GetStringAsync(OfficialEventsUrl, cancellationToken);
-			return await BuildAndCacheDashboardAsync(html, attemptTime, enrichDetails: true, cancellationToken);
+			return await BuildAndCacheDashboardAsync(
+				html,
+				attemptTime,
+				enrichDetails: true,
+				cancellationToken,
+				previousCache?.Events);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -139,28 +151,13 @@ internal sealed class EventService : IDisposable
 		if (events.Count == 0)
 			throw new InvalidDataException(GetEmptyEventsReason(html));
 
-		if (!enrichDetails && previousEvents is { Count: > 0 })
+		if (previousEvents is { Count: > 0 })
 		{
-			Dictionary<string, EventEntry> previousById = previousEvents
-				.GroupBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase)
-				.ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-			int preservedDetails = 0;
-			events = events.Select(entry =>
-			{
-				if (!previousById.TryGetValue(entry.Id, out EventEntry? previous))
-					return entry;
-
-				preservedDetails++;
-				return entry with
-				{
-					ImageUrl = FirstNonBlank(entry.ImageUrl, previous.ImageUrl),
-					Summary = FirstNonBlank(entry.Summary, previous.Summary),
-					PublishedUtc = entry.PublishedUtc ?? previous.PublishedUtc,
-					StartUtc = entry.StartUtc ?? previous.StartUtc
-				};
-			}).ToList();
+			HashSet<string> currentIds = events.Select(entry => entry.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+			int preservedDetails = previousEvents.Count(entry => currentIds.Contains(entry.Id));
+			events = PreserveCachedEventDetails(events, previousEvents);
 			if (preservedDetails > 0)
-				logger.Info($"Events browser refresh preserved cached details for {preservedDetails} event(s).");
+				logger.Info($"Events refresh preserved cached details for {preservedDetails} event(s).");
 		}
 
 		if (enrichDetails)
@@ -220,6 +217,34 @@ internal sealed class EventService : IDisposable
 		logger.Info($"Events parsed: {events.Count}.");
 		logger.Info("Events cache updated: yes.");
 		return BuildDashboard(cache, "LIVE", null, attemptTime);
+	}
+
+	internal static List<EventEntry> PreserveCachedEventDetails(
+		IReadOnlyList<EventEntry> entries,
+		IReadOnlyList<EventEntry>? previousEvents)
+	{
+		if (previousEvents is not { Count: > 0 })
+			return entries.ToList();
+
+		Dictionary<string, EventEntry> previousById = previousEvents
+			.GroupBy(entry => entry.Id, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+		return entries.Select(entry =>
+		{
+			if (!previousById.TryGetValue(entry.Id, out EventEntry? previous))
+				return entry;
+			bool ongoing = string.Equals(entry.TimeLeftText?.Trim(), "Ongoing", StringComparison.OrdinalIgnoreCase);
+
+			return entry with
+			{
+				ImageUrl = FirstNonBlank(entry.ImageUrl, previous.ImageUrl),
+				Summary = FirstNonBlank(entry.Summary, previous.Summary),
+				PublishedUtc = entry.PublishedUtc ?? previous.PublishedUtc,
+				StartUtc = entry.StartUtc ?? previous.StartUtc,
+				EndUtc = ongoing ? null : entry.EndUtc ?? previous.EndUtc
+			};
+		}).ToList();
 	}
 
 	private async Task<string> GetStringAsync(string url, CancellationToken cancellationToken)
@@ -674,8 +699,12 @@ internal sealed class EventService : IDisposable
 
 	private static EventEntry ApplyExactEventRange(EventEntry entry)
 	{
+		if (string.Equals(entry.TimeLeftText?.Trim(), "Ongoing", StringComparison.OrdinalIgnoreCase))
+			return entry;
 		EventDateRange? range = FindLikelyEventRange(entry.Summary, entry.EndUtc);
-		if (range == null)
+		if (range == null
+			|| (entry.EndUtc.HasValue
+				&& Math.Abs((range.EndUtc - entry.EndUtc.Value).TotalHours) > 36))
 			return entry;
 		return entry with
 		{

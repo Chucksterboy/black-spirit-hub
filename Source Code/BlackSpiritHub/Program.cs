@@ -2408,6 +2408,47 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				return 133;
 			}
 
+			DateTimeOffset refreshedEnd = eventTestNow.AddDays(9);
+			EventService.EventEntry refreshedListEntry = cachedEventFixture with
+			{
+				ImageUrl = "",
+				Summary = "",
+				PublishedUtc = null,
+				StartUtc = null,
+				EndUtc = refreshedEnd
+			};
+			EventService.EventEntry preservedEvent = EventService.PreserveCachedEventDetails(
+				[refreshedListEntry],
+				[cachedEventFixture])[0];
+			if (preservedEvent.Summary != cachedEventFixture.Summary
+				|| preservedEvent.StartUtc != cachedEventFixture.StartUtc
+				|| preservedEvent.EndUtc != refreshedEnd)
+			{
+				return 270;
+			}
+			EventService.EventEntry? preparedPreservedEvent = EventService.PrepareEventForDashboard(
+				preservedEvent,
+				"LIVE",
+				eventTestNow);
+			if (preparedPreservedEvent?.EndUtc != refreshedEnd)
+			{
+				return 271;
+			}
+			EventService.EventEntry refreshedOngoingEntry = refreshedListEntry with
+			{
+				EndUtc = null,
+				TimeLeftText = "Ongoing",
+				RemainingHours = null
+			};
+			EventService.EventEntry preservedOngoingEvent = EventService.PreserveCachedEventDetails(
+				[refreshedOngoingEntry],
+				[cachedEventFixture])[0];
+			if (preservedOngoingEvent.EndUtc != null
+				|| EventService.PrepareEventForDashboard(preservedOngoingEvent, "LIVE", eventTestNow)?.EndUtc != null)
+			{
+				return 272;
+			}
+
 			EventService.EventEntry sameDayMaintenanceEvent = cachedEventFixture with
 			{
 				Summary = "July 30, 2026 after maintenance - Aug 13, 2026 before maintenance",
