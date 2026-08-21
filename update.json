@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.49",
+    "version":  "v0.9.50",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.49/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "229775BF3F5F5827AE5EC830D9146FD3A0C481A86B97749BBF8D8DF8787039AA",
-    "notes":  "Refreshes coupons every two hours while the app is open, adds a Spawning Now boss alert, and filters Screenshot Mats OCR to Recipe Book inputs with removable review rows."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.50/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "7C7ECE4693A9BBD6B62E8E02E39D73B9ECFCF96EFB124BA092AB3D636656E45B",
+    "notes":  "Forces boss-alert text-to-speech to use an installed English Windows voice, preferring US English, and prevents fallback to a localized system voice."
 }
