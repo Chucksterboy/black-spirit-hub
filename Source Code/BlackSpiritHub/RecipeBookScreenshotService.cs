@@ -104,6 +104,27 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		}
 	}
 
+	internal IReadOnlyList<RecipeBookScreenshotIconCandidate> MatchBundledAtlasTileColorForSmoke(string icon)
+	{
+		ObjectDisposedException.ThrowIf(disposed, this);
+		if (string.IsNullOrWhiteSpace(icon))
+		{
+			throw new ArgumentException("The bundled icon path is required.", nameof(icon));
+		}
+
+		IconAtlas atlas = iconAtlas.Value;
+		IconTemplate template = atlas.Templates.FirstOrDefault(candidate =>
+			string.Equals(candidate.Icon, icon, StringComparison.Ordinal))
+			?? throw new InvalidDataException("The requested smoke-test icon is not in the bundled Recipe Book atlas.");
+		SlotFeature feature = new(
+			template.Rgb,
+			template.BackgroundLuminance,
+			true,
+			template.Luminance,
+			template.Gradient);
+		return RankIcons(feature, atlas, CompareFeature, MaximumReturnedCandidates);
+	}
+
 	internal static RecipeBookScreenshotRequest ParsePayload(JsonElement payload)
 	{
 		if (payload.ValueKind != JsonValueKind.Object)
@@ -311,6 +332,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 					borderGrade.Confidence,
 					quantity.Text,
 					quantity.Value,
+					quantity.SuggestedValue,
 					quantity.Approximate,
 					quantity.Confidence,
 					quantity.AssumedOne));
@@ -824,11 +846,12 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 				entry.Icon,
 				entry.MaterialEligible,
 				pixels,
+				EstimateBackgroundLuminance(pixels, index.TileSize, comparedRows),
 				structural.Luminance,
 				structural.Gradient));
 		}
 
-		return new IconAtlas(index.TileSize, comparedRows, index.Background, templates);
+		return new IconAtlas(index.TileSize, comparedRows, templates);
 	}
 
 	private static SlotFeature ExtractSlotFeature(
@@ -848,20 +871,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		}
 
 		byte[] rgb = CopyRgbTile(normalized, new Rectangle(0, 0, tileSize, tileSize));
-		List<int> cornerLuminance = new();
-		for (int y = 0; y < Math.Min(4, comparedRows); y++)
-		{
-			for (int x = 0; x < tileSize; x++)
-			{
-				if (x < 3 || x >= tileSize - 3)
-				{
-					int offset = (y * tileSize + x) * 3;
-					cornerLuminance.Add((rgb[offset] * 30 + rgb[offset + 1] * 59 + rgb[offset + 2] * 11) / 100);
-				}
-			}
-		}
-		cornerLuminance.Sort();
-		int backgroundLuminance = cornerLuminance.Count == 0 ? 25 : cornerLuminance[cornerLuminance.Count / 2];
+		int backgroundLuminance = EstimateBackgroundLuminance(rgb, tileSize, comparedRows);
 
 		int foreground = 0;
 		double sum = 0;
@@ -896,6 +906,24 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			occupied,
 			structural.Luminance,
 			structural.Gradient);
+	}
+
+	private static int EstimateBackgroundLuminance(byte[] rgb, int tileSize, int comparedRows)
+	{
+		List<int> cornerLuminance = new();
+		for (int y = 0; y < Math.Min(4, comparedRows); y++)
+		{
+			for (int x = 0; x < tileSize; x++)
+			{
+				if (x < 3 || x >= tileSize - 3)
+				{
+					int offset = (y * tileSize + x) * 3;
+					cornerLuminance.Add((rgb[offset] * 30 + rgb[offset + 1] * 59 + rgb[offset + 2] * 11) / 100);
+				}
+			}
+		}
+		cornerLuminance.Sort();
+		return cornerLuminance.Count == 0 ? 25 : cornerLuminance[cornerLuminance.Count / 2];
 	}
 
 	internal static BorderGradeRecognition DetectBorderGrade(
@@ -1435,15 +1463,15 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 				int screenshotGreen = feature.Rgb[offset + 1];
 				int screenshotBlue = feature.Rgb[offset + 2];
 				int screenshotLuminance = (screenshotRed * 30 + screenshotGreen * 59 + screenshotBlue * 11) / 100;
-				double templateForeground = Math.Clamp(Math.Abs(templateLuminance - Luminance(atlas.Background)) / 80.0, 0.08, 1);
+				double templateForeground = Math.Clamp(Math.Abs(templateLuminance - template.BackgroundLuminance) / 80.0, 0.08, 1);
 				double screenshotForeground = Math.Clamp(Math.Abs(screenshotLuminance - feature.BackgroundLuminance) / 80.0, 0.08, 1);
 				double weight = Math.Max(templateForeground, screenshotForeground);
 
-				// Remove the respective dark slot background before comparing. This keeps the
+				// Remove each icon's local background before comparing. This keeps the
 				// score stable across BDO gamma settings and screenshot compression.
-				int tr = templateRed - atlas.Background[0];
-				int tg = templateGreen - atlas.Background[1];
-				int tb = templateBlue - atlas.Background[2];
+				int tr = templateRed - template.BackgroundLuminance;
+				int tg = templateGreen - template.BackgroundLuminance;
+				int tb = templateBlue - template.BackgroundLuminance;
 				int sr = screenshotRed - feature.BackgroundLuminance;
 				int sg = screenshotGreen - feature.BackgroundLuminance;
 				int sb = screenshotBlue - feature.BackgroundLuminance;
@@ -1581,6 +1609,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			return new QuantityRecognition(
 				decision.ConfirmedToken,
 				exactQuantity,
+				null,
 				decision.IsRounded,
 				Math.Round(Math.Clamp(decision.ConsensusMinConfidence, 0, 1), 3),
 				false,
@@ -1596,21 +1625,26 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		// compressed, or partially clipped visible label can also make every model view
 		// return an empty string. Inspect the source pixels before assigning the special
 		// assumed-one state so an unreadable visible label remains review-only.
-		bool hasVisibleText = HasVisibleQuantityInk(screenshot, sourceSlot);
+		bool hasVisibleText = decision.Suggestion is not null
+			|| HasVisibleQuantityInk(screenshot, sourceSlot);
 		if (!hasVisibleText)
 		{
-			return new QuantityRecognition(string.Empty, 1, false, 0.72, true, false);
+			return new QuantityRecognition(string.Empty, 1, null, false, 0.72, true, false);
 		}
 
-		if (string.IsNullOrWhiteSpace(rawText))
+		PpOcrv5QuantitySuggestion? suggestion = decision.Suggestion;
+		string displayText = suggestion?.Token ?? rawText;
+		if (string.IsNullOrWhiteSpace(displayText))
 		{
-			rawText = "Unreadable";
+			displayText = "Unreadable";
 		}
-		bool approximate = rawText.Contains('K', StringComparison.OrdinalIgnoreCase)
-			|| rawText.Contains('M', StringComparison.OrdinalIgnoreCase);
+		bool approximate = suggestion?.IsRounded
+			?? (displayText.Contains('K', StringComparison.OrdinalIgnoreCase)
+				|| displayText.Contains('M', StringComparison.OrdinalIgnoreCase));
 		return new QuantityRecognition(
-			rawText,
+			displayText,
 			null,
+			suggestion?.Quantity,
 			approximate,
 			Math.Round(Math.Clamp(decision.ConsensusMinConfidence, 0, 1), 3),
 			false,
@@ -1978,11 +2012,6 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		}
 	}
 
-	private static int Luminance(int[] color)
-	{
-		return (color[0] * 30 + color[1] * 59 + color[2] * 11) / 100;
-	}
-
 	private static int Luminance(byte[] rgb, int offset)
 	{
 		return (rgb[offset] * 30 + rgb[offset + 1] * 59 + rgb[offset + 2] * 11) / 100;
@@ -2062,10 +2091,11 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		string Icon,
 		bool? MaterialEligible,
 		byte[] Rgb,
+		int BackgroundLuminance,
 		double[] Luminance,
 		double[] Gradient);
 	private readonly record struct PhotometricCandidate(IconTemplate Template, IconAtlas Atlas);
-	private sealed record IconAtlas(int TileSize, int ComparedRows, int[] Background, IReadOnlyList<IconTemplate> Templates);
+	private sealed record IconAtlas(int TileSize, int ComparedRows, IReadOnlyList<IconTemplate> Templates);
 	private readonly record struct IconMaterialClassification(bool? IsMaterial, double Confidence, double Margin);
 	private sealed record DetectedOccupiedSlot(
 		string Id,
@@ -2083,6 +2113,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	internal sealed record QuantityRecognition(
 		string Text,
 		long? Value,
+		long? SuggestedValue,
 		bool Approximate,
 		double Confidence,
 		bool AssumedOne,
@@ -2152,6 +2183,7 @@ internal sealed record RecipeBookScreenshotSlot(
 	double BorderGradeConfidence,
 	string QuantityText,
 	long? QuantityValue,
+	long? QuantitySuggestedValue,
 	bool QuantityApproximate,
 	double QuantityConfidence,
 	bool QuantityAssumedOne);

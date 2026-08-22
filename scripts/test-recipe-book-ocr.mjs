@@ -201,10 +201,19 @@ const candidateRetentionAnalysis=core.sanitizeResult({
 });
 assert.equal(candidateRetentionAnalysis.slots[0].iconCandidates.length,12,"The frontend trust boundary must preserve all twelve native icon candidates so a weak real material can survive unrelated nearest matches");
 assert.deepEqual(clone(candidateRetentionAnalysis.slots[0].iconCandidates.map(candidate=>candidate.icon)),[..."0123456789ab"].map(icon),"The sanitizer must retain the native candidate order up to the reviewed twelve-candidate cap");
+const confirmedWithSuggestionAnalysis=core.sanitizeResult({
+  ...analysisPayload,
+  imageFingerprint:"6".repeat(64),
+  grid:{columns:1,rows:1,confidence:.9},
+  slots:[{...analysisPayload.slots[0],id:"confirmed-with-suggestion",row:0,column:0,quantityText:"500",quantityValue:500,quantitySuggestedValue:500}]
+});
+assert.equal(confirmedWithSuggestionAnalysis.slots[0].quantityValue,500);
+assert.equal(confirmedWithSuggestionAnalysis.slots[0].quantitySuggestedValue,null,"A payload must not retain a redundant or conflicting suggestion beside a confirmed quantity");
 const missingQuantitySlot={ ...analysisPayload.slots[0], id:"missing-quantity" };
 delete missingQuantitySlot.quantityValue;
 const missingQuantityAnalysis=core.sanitizeResult({ ...analysisPayload, slots:[missingQuantitySlot] });
 assert.equal(missingQuantityAnalysis.slots[0].quantityValue,null,"A missing native quantity must not be reconstructed from OCR display text");
+assert.equal(missingQuantityAnalysis.slots[0].quantitySuggestedValue,null,"Display text alone must not cross the suggestion trust boundary");
 const missingQuantityReviewRow=core.buildReviewRows(missingQuantityAnalysis,data)[0];
 assert.equal(missingQuantityReviewRow.quantity,"","A missing native quantity must leave the editable quantity field blank");
 assert.equal(missingQuantityReviewRow.suggestedQuantity,null,"Display text alone must not become an importable quantity suggestion");
@@ -234,17 +243,20 @@ const exactLowConfidenceAnalysis=core.sanitizeResult({
     iconCandidates:[{ icon:icon("a"), score:.96 }],
     quantityText:"36717",
     quantityValue:null,
+    quantitySuggestedValue:36717,
     quantityConfidence:.41
   }]
 });
 const exactLowConfidenceRow=core.buildReviewRows(exactLowConfidenceAnalysis,data)[0];
 assert.equal(exactLowConfidenceAnalysis.slots[0].quantityValue,null,"Low-confidence native null must remain untrusted after sanitizing");
-assert.equal(exactLowConfidenceRow.quantity,"","A low-confidence native null must leave the editable quantity blank");
-assert.equal(exactLowConfidenceRow.suggestedQuantity,null);
+assert.equal(exactLowConfidenceAnalysis.slots[0].quantitySuggestedValue,36717,"A strict numeric suggestion matching its OCR text must cross the review boundary");
+assert.equal(exactLowConfidenceRow.quantity,36717,"A valid low-confidence OCR suggestion must prefill the editable quantity");
+assert.equal(exactLowConfidenceRow.suggestedQuantity,36717);
 assert.equal(exactLowConfidenceRow.quantityText,"36717","The literal low-confidence read must remain visible for manual entry");
 assert.equal(exactLowConfidenceRow.reviewRequired,true);
-assert.equal(core.rowIsComplete(exactLowConfidenceRow,data),false,"A low-confidence native null must not complete the row from display text");
-assert.equal(core.buildImportPlan([exactLowConfidenceRow],data).valid,false);
+assert.equal(exactLowConfidenceRow.state,"review","A suggested quantity must never upgrade a row to an exact automatic match");
+assert.equal(core.rowIsComplete(exactLowConfidenceRow,data),true,"A validated suggestion should make the editable row complete");
+assert.deepEqual(clone(core.buildImportPlan([exactLowConfidenceRow],data)),{valid:true,entries:[{key:"10:0",quantity:36717}],errors:[]},"Apply must use the visible validated suggestion while retaining review state");
 const tomatoAnalysis=core.sanitizeResult({
   imageFingerprint:"e".repeat(64),
   width:673,
@@ -258,6 +270,7 @@ const tomatoAnalysis=core.sanitizeResult({
     iconCandidates:[{ icon:icon("a"), score:.96 }],
     quantityText:"143.0K",
     quantityValue:null,
+    quantitySuggestedValue:143000,
     quantityApproximate:true,
     quantityConfidence:.41
   }],
@@ -265,15 +278,45 @@ const tomatoAnalysis=core.sanitizeResult({
 });
 assert.ok(tomatoAnalysis,"The reviewed 673×783 full-storage tomato slot must cross the frontend trust boundary");
 assert.equal(tomatoAnalysis.slots[0].quantityValue,null,"An explicit native null quantity must not be reconstructed from its display text");
+assert.equal(tomatoAnalysis.slots[0].quantitySuggestedValue,143000,"A rounded native suggestion must be validated against its strict K/M token");
 assert.equal(tomatoAnalysis.slots[0].quantityText,"143.0K");
 assert.equal(tomatoAnalysis.slots[0].quantityApproximate,true);
 const tomatoReviewRow=core.buildReviewRows(tomatoAnalysis,data)[0];
-assert.equal(tomatoReviewRow.quantity,"","A native-null 143.0K read must not prefill a numeric value");
-assert.equal(tomatoReviewRow.suggestedQuantity,null,"A rounded display label cannot substitute for a missing native value");
+assert.equal(tomatoReviewRow.quantity,143000,"A validated 143.0K suggestion must prefill its expanded numeric value");
+assert.equal(tomatoReviewRow.suggestedQuantity,143000);
 assert.equal(tomatoReviewRow.quantityText,"143.0K","The visible rounded label must remain available for the review message");
 assert.match(tomatoReviewRow.reasons.join(" "),/rounded.*(?:confirm|review)|(?:confirm|review).*rounded/i);
 assert.equal(tomatoReviewRow.reviewRequired,true,"A parsed K/M label must still require explicit review because BDO abbreviates it");
-assert.equal(core.buildImportPlan([tomatoReviewRow],data).valid,false,"A native-null rounded value must keep Apply blocked until manual entry");
+assert.equal(core.buildImportPlan([tomatoReviewRow],data).valid,true,"A validated rounded suggestion must be importable from the prefilled field");
+for(const [quantityText,quantitySuggestedValue] of [["3",3],["2199",2199],["23796",23796],["278.8K",278800]]){
+  const reportedSuggestion=core.sanitizeResult({
+    ...analysisPayload,
+    imageFingerprint:(quantityText.startsWith("2")?"2":"8").repeat(64),
+    grid:{columns:1,rows:1,confidence:.9},
+    slots:[{...analysisPayload.slots[0],id:`reported-${quantityText}`,row:0,column:0,quantityText,quantityValue:null,quantitySuggestedValue,quantityApproximate:/[KM]$/i.test(quantityText),quantityConfidence:.4}]
+  });
+  const reportedRow=core.buildReviewRows(reportedSuggestion,data)[0];
+  assert.equal(reportedSuggestion.slots[0].quantityValue,null,`${quantityText} must remain a review suggestion rather than a confirmed read`);
+  assert.equal(reportedRow.quantity,quantitySuggestedValue,`${quantityText} must prefill ${quantitySuggestedValue}`);
+  assert.equal(reportedRow.reviewRequired,true,`${quantityText} must remain review-required`);
+}
+for(const rejectedSuggestion of [
+  {id:"string-suggestion",quantityText:"500",quantitySuggestedValue:"500",quantityAssumedOne:false},
+  {id:"zero-suggestion",quantityText:"0",quantitySuggestedValue:0,quantityAssumedOne:false},
+  {id:"mismatched-suggestion",quantityText:"500",quantitySuggestedValue:499,quantityAssumedOne:false},
+  {id:"malformed-suggestion",quantityText:"7455K",quantitySuggestedValue:174500,quantityAssumedOne:false},
+  {id:"assumed-one-suggestion",quantityText:"1",quantitySuggestedValue:1,quantityAssumedOne:true},
+  {id:"oversized-suggestion",quantityText:"999,999,999,999,999",quantitySuggestedValue:999999999999999,quantityAssumedOne:false}
+]){
+  const rejectedAnalysis=core.sanitizeResult({
+    ...analysisPayload,
+    imageFingerprint:crypto.createHash("sha256").update(rejectedSuggestion.id).digest("hex"),
+    grid:{columns:1,rows:1,confidence:.9},
+    slots:[{...analysisPayload.slots[0],...rejectedSuggestion,row:0,column:0,quantityValue:null,quantityConfidence:.4}]
+  });
+  assert.equal(rejectedAnalysis.slots[0].quantitySuggestedValue,null,`${rejectedSuggestion.id} must not cross the numeric suggestion boundary`);
+  assert.equal(core.buildReviewRows(rejectedAnalysis,data)[0].quantity,"",`${rejectedSuggestion.id} must leave the editable quantity blank`);
+}
 for(const [quantityText,actual] of [["7455K","174.5K"],["440K","498.8K"]]){
   const malformedAnalysis=core.sanitizeResult({
     imageFingerprint:(quantityText.startsWith("7")?"7":"4").repeat(64),
@@ -288,6 +331,7 @@ for(const [quantityText,actual] of [["7455K","174.5K"],["440K","498.8K"]]){
       iconCandidates:[{icon:icon("a"),score:.96}],
       quantityText,
       quantityValue:null,
+      quantitySuggestedValue:quantityText==="7455K"?174500:498800,
       quantityApproximate:true,
       quantityConfidence:.4
     }],
@@ -702,6 +746,8 @@ assert.match(source, /screenshotSurface\?\.setAttribute\("aria-busy",String\(Boo
 assert.match(source, /for\(const control of \[recipeBookEl\.screenshotBrowse,recipeBookEl\.screenshotPaste,recipeBookEl\.screenshotFiles,recipeBookEl\.screenshotReviewIgnored,recipeBookEl\.screenshotClear\]\)if\(control\)control\.disabled=Boolean\(busy\)/, "Image intake and hidden-slot recovery controls must be disabled during native analysis");
 assert.match(source, /screenshotApply\.disabled=state\.busy\|\|!plan\.valid\|\|!addConfirmed/, "Apply must stay disabled while analysis is busy or review is incomplete");
 assert.match(source, /rawBorderGrade=raw\.borderGrade,borderGrade=typeof rawBorderGrade==="number"&&Number\.isInteger\(rawBorderGrade\)&&rawBorderGrade>=0&&rawBorderGrade<=2\?rawBorderGrade:null/, "Only numeric integer BDO border grades 0 through 2 may cross the frontend trust boundary");
+assert.match(source,/rawSuggestedQuantity=raw\.quantitySuggestedValue,quantitySuggestedValue=quantityValue===null&&!quantityAssumedOne&&parsed\.valid&&typeof rawSuggestedQuantity==="number"&&Number\.isSafeInteger\(rawSuggestedQuantity\)[\s\S]*?parsed\.value===rawSuggestedQuantity\?rawSuggestedQuantity:null/,"Only a bounded numeric suggestion that exactly matches strict OCR text may prefill a quantity");
+assert.match(source,/const readQuantity=!slot\.quantityAssumedOne&&Number\.isSafeInteger\(slot\.quantityValue\)\?slot\.quantityValue:!slot\.quantityAssumedOne&&Number\.isSafeInteger\(slot\.quantitySuggestedValue\)\?slot\.quantitySuggestedValue:null[\s\S]*?quantityExact=Number\.isSafeInteger\(slot\.quantityValue\)/,"Suggested quantities may prefill review, but exact readiness must remain confirmed-only");
 assert.match(source, /rawBorderGradeConfidence=raw\.borderGradeConfidence,borderGradeConfidence=typeof rawBorderGradeConfidence==="number"&&Number\.isFinite\(rawBorderGradeConfidence\)&&rawBorderGradeConfidence>=0&&rawBorderGradeConfidence<=1\?rawBorderGradeConfidence:0/, "Border-grade confidence must remain a finite numeric probability without coercion");
 assert.match(source, /materialEligible=typeof rawCandidate\.materialEligible==="boolean"\?rawCandidate\.materialEligible:null/, "Candidate material classes must cross the frontend boundary only as native booleans");
 assert.match(source, /iconMaterialEligible=typeof raw\.iconMaterialEligible==="boolean"\?raw\.iconMaterialEligible:null/, "The full-catalog slot decision must reject string and numeric coercion");
@@ -723,6 +769,21 @@ const calculator = fs.readFileSync(calculatorPath, "utf8");
 const service = fs.readFileSync(servicePath, "utf8");
 const recognizer = fs.readFileSync(recognizerPath, "utf8");
 const project = fs.readFileSync(projectPath, "utf8");
+const suggestionSelector = recognizer.slice(
+  recognizer.indexOf("private static PpOcrv5QuantitySuggestion? SelectQuantitySuggestion"),
+  recognizer.indexOf("private static PpOcrv5QuantityDecision ReviewDecision")
+);
+assert.ok(suggestionSelector.length > 0,"The bounded quantity suggestion selector must exist");
+assert.match(suggestionSelector,/IReadOnlyList<PpOcrv5QuantityCandidate> candidates[\s\S]*?GroupBy\([\s\S]*?group\.Count\(\) >= 2[\s\S]*?OrderByDescending\(candidate => candidate\.Confidence\)/,"Review suggestions must prefer a two-of-three majority, then the strongest valid read within each OCR tier");
+assert.match(recognizer,/SelectQuantitySuggestion\(main\)[\s\S]*?\?\? SelectQuantitySuggestion\(right\)/,"Every strict OCR number must prefill, while full-number views remain preferred over right-edge fallback guesses");
+assert.match(service,/quantity\.SuggestedValue[\s\S]*?QuantitySuggestedValue/,"The native result DTO must keep confirmed and suggested quantities separate");
+assert.match(service,/private static int EstimateBackgroundLuminance\(byte\[\] rgb, int tileSize, int comparedRows\)/,"Every atlas template and screenshot feature must share one bounded background estimator");
+assert.match(service,/new IconTemplate\([\s\S]*?EstimateBackgroundLuminance\(pixels, index\.TileSize, comparedRows\)/,"Atlas templates must retain their own composited background luminance");
+assert.match(service,/private sealed record IconTemplate\([\s\S]*?int BackgroundLuminance/);
+const colorComparator = service.slice(service.indexOf("private static double CompareFeature"),service.indexOf("private static double CompareZeroMeanLuminance"));
+assert.match(colorComparator,/template\.BackgroundLuminance[\s\S]*?templateRed - template\.BackgroundLuminance[\s\S]*?templateGreen - template\.BackgroundLuminance[\s\S]*?templateBlue - template\.BackgroundLuminance/,"Color identity must remove each icon tile's own background rather than a global atlas color");
+assert.doesNotMatch(colorComparator,/Luminance\(atlas\.Background\)|atlas\.Background\[/,"Color identity must not reintroduce the retired global-background subtraction");
+assert.match(service,/MatchBundledAtlasTileColorForSmoke\(string icon\)[\s\S]*?template\.BackgroundLuminance[\s\S]*?RankIcons\(feature, atlas, CompareFeature, MaximumReturnedCandidates\)/,"Offline smoke must exercise production color ranking against an exact bundled tile");
 assert.match(source, /bridgeCall\("analyzeRecipeBookScreenshot",\{fileName:normalized\.fileName,mimeType:normalized\.mimeType,dataBase64:normalized\.dataBase64\},\{signal:controller\.signal\}\)/, "Every screenshot intake path must send the same strict, cancellable bridge payload");
 assert.match(source, /state\.controller\?\.abort\(\);state\.controller=null;state\.generation\+\+/, "Clear and close must cancel in-flight native analysis before discarding the session");
 assert.match(calculator, /case\s+"analyzeRecipeBookScreenshot"\s*:/, "The OCR bridge caller must have a native handler");
@@ -764,12 +825,16 @@ assert.match(service, /DetectTightSingleSlot/, "Tight single-item crops must hav
 assert.match(service, /GridUpscaleFactors[\s\S]*?GridDownscaleFactors[\s\S]*?MapDetectedGridToOriginal/, "Tiny and oversized screenshots must receive bounded scale-normalized detection passes mapped back to their original pixels");
 assert.match(recognizer, /StrictQuantityPattern[\s\S]*?\[0-9\]\{1,5\}[\s\S]*?\[0-9\]\{1,3\}\\\.\[0-9\]\[KM\]/, "The recognizer must accept only complete bounded BDO quantity labels");
 assert.match(recognizer, /SelectStrictConsensus[\s\S]*?PpOcrv5QuantityCandidate\[\] main[\s\S]*?string\? token = main\[0\]\.NormalizedToken;[\s\S]*?main\.All\(candidate => string\.Equals/, "The three unpadded reads must agree before a quantity becomes importable");
-assert.match(recognizer, /SingleGlyphConsensusConfidenceFloor = 0\.90[\s\S]*?if \(!anyValid\)[\s\S]*?rightToken is \{ Length: 1 \}[\s\S]*?rightToken\[0\] is >= '0' and <= '9'[\s\S]*?rightConsensus[\s\S]*?rightMinimum >= SingleGlyphConsensusConfidenceFloor[\s\S]*?"right-3of3"/, "Single-digit rescue must require exactly one ASCII digit from three unanimous right-side views after every normal view rejects");
+assert.match(recognizer, /SingleGlyphConsensusConfidenceFloor = 0\.90[\s\S]*?if \(!anyValidMain\)[\s\S]*?rightToken is \{ Length: 1 \}[\s\S]*?rightToken\[0\] is >= '0' and <= '9'[\s\S]*?rightConsensus[\s\S]*?rightMinimum >= SingleGlyphConsensusConfidenceFloor[\s\S]*?"right-3of3"/, "Automatic confirmation must still require exactly one ASCII digit from three unanimous high-confidence right-side views");
 assert.doesNotMatch(service, /Where\(character => char\.IsDigit\(character\)/, "Native OCR must not collapse malformed text such as 174 5K into 1745K");
 assert.doesNotMatch(service + recognizer, /using Tesseract|TesseractEngine|TesseractEnviornment|tessdataPath/i, "The retired Tesseract engine must not remain in production OCR code");
 assert.doesNotMatch(service, /visible quantity label\(s\).*could not be read confidently.*not guessed/i, "Accepted scans must not surface the removed unreadable-quantity warning pill copy");
 const programSource = fs.readFileSync(programPath, "utf8");
-assert.match(programSource, /unsafeTruncatedRescueCandidates[\s\S]*?"665"[\s\S]*?Status == PpOcrv5QuantityReadStatus\.Confirmed/, "Offline smoke must reject a truncated multi-digit right-side rescue such as 5665 becoming 665");
+assert.match(programSource, /unsafeTruncatedRescueCandidates[\s\S]*?"665"[\s\S]*?Status == PpOcrv5QuantityReadStatus\.Confirmed/, "Offline smoke must keep a right-side multi-digit guess review-only rather than automatically confirmed");
+assert.match(programSource,/disputed\.Suggestion\?\.Token != "12103"[\s\S]*?lowConfidenceSuggestion\.Suggestion\?\.Quantity != 2_199[\s\S]*?singleMainSuggestion\.Suggestion\?\.Quantity != 23_796[\s\S]*?roundedSuggestion\.Suggestion\?\.Token != "278\.8K"/,"Offline smoke must pin majority, low-confidence, single-main-view, and rounded review suggestions");
+assert.match(programSource,/unsafeTruncatedRescue\.Suggestion\?\.Quantity != 665[\s\S]*?rightOnlySingleDigit\.Suggestion\?\.Quantity != 3[\s\S]*?singleRightGuess\.Suggestion\?\.Quantity != 3/,"Offline smoke must prefill every strict right-side guess, including majority, single-view, and multi-digit results");
+assert.match(programSource,/blankQuantityDecision = PpOcrv5QuantityRecognizer\.SelectStrictConsensus\([\s\S]*?blankQuantityCandidates[\s\S]*?blankQuantityDecision\.Suggestion is not null/,"Offline smoke must keep wholly blank OCR candidates out of suggestions");
+assert.match(programSource,/const string khanScaleIcon = "icons\/items\/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831\.webp"[\s\S]*?MatchBundledAtlasTileColorForSmoke\(khanScaleIcon\)[\s\S]*?Score < 0\.99[\s\S]*?Score - khanScaleMatches\[1\]\.Score < 0\.08/,"Offline smoke must keep Khan's Scale as a high-confidence, well-separated exact color match");
 assert.ok(fs.existsSync(fixtureRunnerPath), "The executable real-image OCR fixture runner is missing");
 assert.ok(fs.existsSync(fixtureManifestPath), "The real-image OCR fixture manifest is missing");
 const fixtureRunner = fs.readFileSync(fixtureRunnerPath, "utf8");
@@ -777,6 +842,8 @@ const verifySource = fs.readFileSync(verifyPath, "utf8");
 assert.match(programSource, /args\[0\][\s\S]*?--recipe-book-ocr-fixture-test[\s\S]*?RecipeBookOcrFixtureRunner\.Run\(AppContext\.BaseDirectory, args\[1\]\)/, "The app must expose a bounded repository-only OCR fixture-test route");
 assert.match(fixtureRunner, /service\.AnalyzeAsync\(request, cancellationToken\)/, "Real-image fixtures must execute the normal native screenshot analyzer");
 assert.match(fixtureRunner, /slot\.QuantityValue is long quantityValue[\s\S]*?quantityValue != expected\.Value[\s\S]*?unsafe importable/, "Every importable native quantity must exactly match ground truth");
+assert.match(fixtureRunner, /slot\.QuantitySuggestedValue is long suggestedValue[\s\S]*?suggestedValue < 1[\s\S]*?parsedSuggestedTextValue != suggestedValue[\s\S]*?slot\.QuantityApproximate != parsedSuggestedTextApproximate/, "Review-only OCR guesses must be positive, bounded, and internally consistent with their displayed text");
+assert.doesNotMatch(fixtureRunner, /suggestedValue\s*!=\s*expected\.Value/, "Review-only guesses must not be mislabeled as ground-truth-confirmed quantities");
 assert.match(fixtureRunner, /else[\s\S]*?string\.IsNullOrWhiteSpace\(slot\.QuantityText\)[\s\S]*?abstained without[\s\S]*?abstainedLabels\+\+/, "Safe abstentions must preserve raw OCR text for manual review");
 assert.match(fixtureRunner, /if \(slot\.QuantityAssumedOne\)[\s\S]*?visible label[\s\S]*?must never be treated as an assumed quantity of one/, "A visible quantity label must never silently become an assumed-one import");
 assert.match(fixtureRunner, /requiredResolved\.Contains\(\(row, column\)\)[\s\S]*?must resolve the pinned/, "Known recoverable OCR regressions must remain pinned to importable values");
@@ -939,6 +1006,14 @@ assert.ok(clientCatalogIndex.icons.some(entry=>entry.materialEligible===true)&&c
 assert.equal(new Set(clientCatalogIndex.icons.map(entry=>entry.icon)).size,clientCatalogIndex.icons.length,"Full-client catalog icons must be unique");
 const recipePayload = JSON.parse(fs.readFileSync(recipeDataPath, "utf8"));
 const bundledOcrData=core.prepareData(recipePayload),driedClownfishIcon=recipePayload.items["8602"].icon,carrotConfitIcon=recipePayload.items["9321"].icon;
+const khanScale=recipePayload.items["5826"],waterSpiritStoneFragment=recipePayload.items["44306"];
+assert.equal(khanScale.name,"Khan's Scale");
+assert.equal(khanScale.icon,"icons/items/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831.webp");
+assert.equal(waterSpiritStoneFragment.name,"Water Spirit Stone Fragment");
+assert.equal(waterSpiritStoneFragment.icon,"icons/items/987cedde035dbaeaa2bb0b2d7674d7cc1ad6710246b78fe93bdb4b10afc84dae.webp");
+assert.notEqual(khanScale.icon,waterSpiritStoneFragment.icon,"Khan's Scale and Water Spirit Stone Fragment must remain distinct visual identities");
+assert.ok(recipePayload.recipes.some(recipe=>recipe.inputs.some(input=>input.itemId===5826)),"Khan's Scale must remain a usable Recipe Book material");
+assert.equal(index.icons.find(entry=>entry.icon===khanScale.icon)?.materialEligible,true,"The primary atlas must classify Khan's Scale as a usable material");
 const windElixirIcon=recipePayload.items["688"].icon;
 assert.equal(windElixirIcon,recipePayload.items["625"].icon,"The input and finished party elixir control must share exact artwork");
 assert.equal(clientCatalogIndex.icons.find(entry=>entry.icon===windElixirIcon)?.materialEligible,null,"Current-client artwork shared by a usable input and finished product must remain semantically mixed");

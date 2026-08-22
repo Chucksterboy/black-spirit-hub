@@ -412,6 +412,31 @@ internal static class RecipeBookOcrFixtureRunner
 					[fixtureCase.Truth.ColumnOffset + column];
 				if (expected.AssumedOne)
 				{
+					if (slot.QuantitySuggestedValue is long guessedValue)
+					{
+						if (slot.QuantityValue is not null
+							|| slot.QuantityAssumedOne
+							|| guessedValue < 1
+							|| guessedValue > int.MaxValue
+							|| string.IsNullOrWhiteSpace(slot.QuantityText)
+							|| !RecipeBookScreenshotService.TryParseQuantity(
+								slot.QuantityText,
+								out long parsedGuess,
+								out bool parsedGuessApproximate)
+							|| parsedGuess != guessedValue
+							|| parsedGuessApproximate != slot.QuantityApproximate)
+						{
+							throw new InvalidDataException(
+								$"Fixture '{fixtureCase.Id}' r{row + 1}c{column + 1} produced an inconsistent review guess "
+								+ $"for an otherwise unlabeled slot: '{slot.QuantityText}' ({guessedValue}).");
+						}
+
+						// The user-facing policy intentionally shows every strict OCR guess.
+						// A false glyph read on an unlabeled item must remain review-only rather
+						// than being treated as a trusted quantity or a silent assumed-one.
+						continue;
+					}
+
 					if (!slot.QuantityAssumedOne
 						|| slot.QuantityValue != 1
 						|| !string.IsNullOrWhiteSpace(slot.QuantityText)
@@ -433,8 +458,34 @@ internal static class RecipeBookOcrFixtureRunner
 						+ "and must never be treated as an assumed quantity of one.");
 				}
 
+				bool expectedApproximate = expected.Display!.EndsWith("K", StringComparison.OrdinalIgnoreCase)
+					|| expected.Display.EndsWith("M", StringComparison.OrdinalIgnoreCase);
+				if (slot.QuantitySuggestedValue is long suggestedValue)
+				{
+					if (suggestedValue < 1
+						|| suggestedValue > int.MaxValue
+						|| string.IsNullOrWhiteSpace(slot.QuantityText)
+						|| !RecipeBookScreenshotService.TryParseQuantity(
+							slot.QuantityText,
+							out long parsedSuggestedTextValue,
+							out bool parsedSuggestedTextApproximate)
+						|| parsedSuggestedTextValue != suggestedValue
+						|| slot.QuantityApproximate != parsedSuggestedTextApproximate)
+					{
+						throw new InvalidDataException(
+							$"Fixture '{fixtureCase.Id}' r{row + 1}c{column + 1} produced an inconsistent review suggestion: "
+							+ $"received '{slot.QuantityText}' ({suggestedValue}), "
+							+ $"approximate={slot.QuantityApproximate}.");
+					}
+				}
+
 				if (slot.QuantityValue is long quantityValue)
 				{
+					if (slot.QuantitySuggestedValue is not null)
+					{
+						throw new InvalidDataException(
+							$"Fixture '{fixtureCase.Id}' r{row + 1}c{column + 1} must not duplicate a confirmed quantity as a review suggestion.");
+					}
 					if (quantityValue != expected.Value)
 					{
 						throw new InvalidDataException(
@@ -443,8 +494,6 @@ internal static class RecipeBookOcrFixtureRunner
 							+ $"'{slot.QuantityText}' ({quantityValue}).");
 					}
 
-					bool expectedApproximate = expected.Display!.EndsWith("K", StringComparison.OrdinalIgnoreCase)
-						|| expected.Display.EndsWith("M", StringComparison.OrdinalIgnoreCase);
 					if (string.IsNullOrWhiteSpace(slot.QuantityText)
 						|| !RecipeBookScreenshotService.TryParseQuantity(
 							slot.QuantityText,

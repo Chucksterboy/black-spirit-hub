@@ -3661,6 +3661,10 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 		if (PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("455:1K") != "455.1K"
 			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("645,0K") != "645.0K"
 			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("12103") != "12103"
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("0") is not null
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("00000") is not null
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("0.0K") is not null
+			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("0.1K") != "0.1K"
 			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("250603") is not null
 			|| PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("290.0K2") is not null)
 		{
@@ -3708,20 +3712,105 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 			QuantityCandidate("right-gray", "665", 0.94),
 			QuantityCandidate("right-otsu", "665", 0.93)
 		];
+		PpOcrv5QuantityCandidate[] rightOnlySingleDigitCandidates =
+		[
+			QuantityCandidate("primary", string.Empty, 0),
+			QuantityCandidate("raw106", string.Empty, 0),
+			QuantityCandidate("raw100", string.Empty, 0),
+			QuantityCandidate("right-color", "3", 0.72),
+			QuantityCandidate("right-gray", "3", 0.68),
+			QuantityCandidate("right-otsu", "73", 0.81)
+		];
+		PpOcrv5QuantityCandidate[] singleRightGuessCandidates =
+		[
+			QuantityCandidate("primary", string.Empty, 0),
+			QuantityCandidate("raw106", string.Empty, 0),
+			QuantityCandidate("raw100", string.Empty, 0),
+			QuantityCandidate("right-color", "3", 0.61),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		PpOcrv5QuantityCandidate[] lowConfidenceSuggestionCandidates =
+		[
+			QuantityCandidate("primary", "2199", 0.49),
+			QuantityCandidate("raw106", "2199", 0.47),
+			QuantityCandidate("raw100", "2199", 0.44),
+			QuantityCandidate("right-color", string.Empty, 0),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		PpOcrv5QuantityCandidate[] singleMainSuggestionCandidates =
+		[
+			QuantityCandidate("primary", "23796", 0.91),
+			QuantityCandidate("raw106", string.Empty, 0.18),
+			QuantityCandidate("raw100", string.Empty, 0.12),
+			QuantityCandidate("right-color", "796", 0.98),
+			QuantityCandidate("right-gray", "796", 0.97),
+			QuantityCandidate("right-otsu", "796", 0.96)
+		];
+		PpOcrv5QuantityCandidate[] roundedSuggestionCandidates =
+		[
+			QuantityCandidate("primary", "278.8K", 0.89),
+			QuantityCandidate("raw106", "278.8K", 0.86),
+			QuantityCandidate("raw100", "278.3K", 0.99),
+			QuantityCandidate("right-color", string.Empty, 0),
+			QuantityCandidate("right-gray", string.Empty, 0),
+			QuantityCandidate("right-otsu", string.Empty, 0)
+		];
+		PpOcrv5QuantityDecision disputed = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			disputedCandidates);
+		PpOcrv5QuantityDecision lowConfidenceSuggestion = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			lowConfidenceSuggestionCandidates);
+		PpOcrv5QuantityDecision singleMainSuggestion = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			singleMainSuggestionCandidates);
+		PpOcrv5QuantityDecision roundedSuggestion = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			roundedSuggestionCandidates);
+		PpOcrv5QuantityDecision clippedSuggestion = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(5, 11, 58, 58),
+			consensusCandidates);
+		PpOcrv5QuantityDecision belowResolutionSuggestion = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 44, 44),
+			consensusCandidates);
+		PpOcrv5QuantityDecision unsafeTruncatedRescue = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			unsafeTruncatedRescueCandidates);
+		PpOcrv5QuantityDecision rightOnlySingleDigit = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			rightOnlySingleDigitCandidates);
+		PpOcrv5QuantityDecision singleRightGuess = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			new Rectangle(25, 73, 58, 58),
+			singleRightGuessCandidates);
 		if (consensus.Status != PpOcrv5QuantityReadStatus.Confirmed
 			|| consensus.ExactQuantity != 12_103
-			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
-				new Rectangle(25, 73, 58, 58),
-				disputedCandidates).Status == PpOcrv5QuantityReadStatus.Confirmed
+			|| disputed.Status != PpOcrv5QuantityReadStatus.ReviewLowConsensus
+			|| disputed.Suggestion?.Token != "12103"
+			|| disputed.Suggestion.Quantity != 12_103
+			|| disputed.Suggestion.IsRounded
+			|| lowConfidenceSuggestion.Status != PpOcrv5QuantityReadStatus.ReviewLowConfidence
+			|| lowConfidenceSuggestion.Suggestion?.Quantity != 2_199
+			|| singleMainSuggestion.Status != PpOcrv5QuantityReadStatus.ReviewLowConsensus
+			|| singleMainSuggestion.Suggestion?.Quantity != 23_796
+			|| roundedSuggestion.Status != PpOcrv5QuantityReadStatus.ReviewLowConsensus
+			|| roundedSuggestion.Suggestion?.Token != "278.8K"
+			|| roundedSuggestion.Suggestion.Quantity != 278_800
+			|| !roundedSuggestion.Suggestion.IsRounded
+			|| clippedSuggestion.Status != PpOcrv5QuantityReadStatus.ReviewClippedLeft
+			|| clippedSuggestion.Suggestion?.Quantity != 12_103
+			|| belowResolutionSuggestion.Status != PpOcrv5QuantityReadStatus.ReviewBelowResolution
+			|| belowResolutionSuggestion.Suggestion?.Quantity != 12_103
 			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
 				new Rectangle(25, 73, 58, 58),
 				singleGlyphCandidates).ExactQuantity != 9
-			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
-				new Rectangle(25, 73, 58, 58),
-				unsafeTruncatedRescueCandidates).Status == PpOcrv5QuantityReadStatus.Confirmed
-			|| PpOcrv5QuantityRecognizer.SelectStrictConsensus(
-				new Rectangle(5, 11, 58, 58),
-				consensusCandidates).Status != PpOcrv5QuantityReadStatus.ReviewClippedLeft)
+			|| unsafeTruncatedRescue.Status == PpOcrv5QuantityReadStatus.Confirmed
+			|| unsafeTruncatedRescue.Suggestion?.Quantity != 665
+			|| rightOnlySingleDigit.Status != PpOcrv5QuantityReadStatus.ReviewLowConsensus
+			|| rightOnlySingleDigit.Suggestion?.Quantity != 3
+			|| singleRightGuess.Status != PpOcrv5QuantityReadStatus.ReviewLowConsensus
+			|| singleRightGuess.Suggestion?.Quantity != 3)
 		{
 			return 268;
 		}
@@ -3736,18 +3825,17 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 			QuantityCandidate("right-otsu", string.Empty, 0)
 		];
 		Rectangle quantitySmokeSlot = new(11, 11, 58, 58);
+		PpOcrv5QuantityDecision blankQuantityDecision = PpOcrv5QuantityRecognizer.SelectStrictConsensus(
+			quantitySmokeSlot,
+			blankQuantityCandidates);
 		PpOcrv5QuantityRecognition blankQuantityRecognition = new(
 			quantitySmokeSlot,
-			new PpOcrv5QuantityDecision(
-				string.Empty,
-				null,
-				null,
-				false,
-				0,
-				PpOcrv5QuantityReadStatus.Invalid,
-				"No complete quantity token was read, so this quantity must be reviewed.",
-				null),
+			blankQuantityDecision,
 			blankQuantityCandidates);
+		PpOcrv5QuantityRecognition rightOnlySingleDigitRecognition = new(
+			quantitySmokeSlot,
+			rightOnlySingleDigit,
+			rightOnlySingleDigitCandidates);
 		using Bitmap unlabeledQuantitySlot = new(80, 80, PixelFormat.Format32bppArgb);
 		using Bitmap unreadableVisibleQuantitySlot = new(80, 80, PixelFormat.Format32bppArgb);
 		using (Graphics graphics = Graphics.FromImage(unlabeledQuantitySlot))
@@ -3784,12 +3872,24 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 				unreadableVisibleQuantitySlot,
 				quantitySmokeSlot,
 				blankQuantityRecognition);
-		if (!unlabeledQuantity.AssumedOne
+		RecipeBookScreenshotService.QuantityRecognition rightOnlySingleDigitQuantity =
+			RecipeBookScreenshotService.MapQuantityRecognition(
+				unlabeledQuantitySlot,
+				quantitySmokeSlot,
+				rightOnlySingleDigitRecognition);
+		if (blankQuantityDecision.Suggestion is not null
+			|| !unlabeledQuantity.AssumedOne
 			|| unlabeledQuantity.Value != 1
 			|| !string.IsNullOrEmpty(unlabeledQuantity.Text)
 			|| unreadableVisibleQuantity.AssumedOne
 			|| unreadableVisibleQuantity.Value is not null
-			|| unreadableVisibleQuantity.Text != "Unreadable")
+			|| unreadableVisibleQuantity.Text != "Unreadable"
+			|| rightOnlySingleDigitQuantity.Text != "3"
+			|| rightOnlySingleDigitQuantity.Value is not null
+			|| rightOnlySingleDigitQuantity.SuggestedValue != 3
+			|| rightOnlySingleDigitQuantity.Approximate
+			|| rightOnlySingleDigitQuantity.AssumedOne
+			|| !rightOnlySingleDigitQuantity.HasVisibleText)
 		{
 			return 267;
 		}
@@ -4095,6 +4195,18 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 			|| wideGrid.RowTops[0] != 0)
 		{
 			return 263;
+		}
+
+		const string khanScaleIcon = "icons/items/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831.webp";
+		using RecipeBookScreenshotService screenshotService = new(AppContext.BaseDirectory);
+		IReadOnlyList<RecipeBookScreenshotIconCandidate> khanScaleMatches =
+			screenshotService.MatchBundledAtlasTileColorForSmoke(khanScaleIcon);
+		if (khanScaleMatches.Count < 2
+			|| !string.Equals(khanScaleMatches[0].Icon, khanScaleIcon, StringComparison.Ordinal)
+			|| khanScaleMatches[0].Score < 0.99
+			|| khanScaleMatches[0].Score - khanScaleMatches[1].Score < 0.08)
+		{
+			return 283;
 		}
 
 		// Loading the session validates the bundled model, embedded dictionary, and

@@ -447,7 +447,15 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 			correctedSeparator[normalized.Length - 3] = '.';
 			normalized = new string(correctedSeparator);
 		}
-		return StrictQuantityPattern.IsMatch(normalized) ? normalized : null;
+		if (!StrictQuantityPattern.IsMatch(normalized))
+		{
+			return null;
+		}
+
+		// BDO inventory stacks cannot contain zero items. Keeping zero out of the
+		// valid-token domain ensures every accepted OCR guess can also be written
+		// into the positive-integer quantity field.
+		return ExpandConfirmedQuantity(normalized).ExactQuantity > 0 ? normalized : null;
 	}
 
 	internal static PpOcrv5QuantityDecision SelectStrictConsensus(
@@ -466,13 +474,14 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 		PpOcrv5QuantityCandidate[] right = candidates
 			.Where(candidate => candidate.VariantId.StartsWith("right-", StringComparison.Ordinal))
 			.ToArray();
-
 		PpOcrv5QuantityCandidate best = candidates
 			.OrderByDescending(candidate => candidate.NormalizedToken is not null)
 			.ThenByDescending(candidate => !string.IsNullOrWhiteSpace(candidate.Text))
 			.ThenByDescending(candidate => candidate.Confidence)
 			.ThenBy(candidate => candidate.VariantId, StringComparer.Ordinal)
 			.First();
+		PpOcrv5QuantitySuggestion? suggestion = SelectQuantitySuggestion(main)
+			?? SelectQuantitySuggestion(right);
 		double consensusMinimum = main.Min(candidate => candidate.Confidence);
 		string? token = main[0].NormalizedToken;
 		bool exactConsensus = token is not null
@@ -484,7 +493,8 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 				best,
 				consensusMinimum,
 				PpOcrv5QuantityReadStatus.ReviewBelowResolution,
-				"The source slot is below 45 pixels, so this quantity must be reviewed.");
+				"The source slot is below 45 pixels, so this quantity must be reviewed.",
+				suggestion);
 		}
 		if (sourceSlot.X < RoundScaled(slotSize, RequiredLeftContextRatio))
 		{
@@ -492,12 +502,13 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 				best,
 				consensusMinimum,
 				PpOcrv5QuantityReadStatus.ReviewClippedLeft,
-				"The screenshot may clip a leading quantity digit, so this quantity must be reviewed.");
+				"The screenshot may clip a leading quantity digit, so this quantity must be reviewed.",
+				suggestion);
 		}
 		if (!exactConsensus)
 		{
-			bool anyValid = main.Any(candidate => candidate.NormalizedToken is not null);
-			if (!anyValid)
+			bool anyValidMain = main.Any(candidate => candidate.NormalizedToken is not null);
+			if (!anyValidMain)
 			{
 				string? rightToken = right[0].NormalizedToken;
 				bool rightConsensus = rightToken is { Length: 1 }
@@ -522,13 +533,15 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 						"right-3of3");
 				}
 			}
+			bool anyValidGuess = candidates.Any(candidate => candidate.NormalizedToken is not null);
 			return ReviewDecision(
 				best,
 				consensusMinimum,
-				anyValid ? PpOcrv5QuantityReadStatus.ReviewLowConsensus : PpOcrv5QuantityReadStatus.Invalid,
-				anyValid
-					? "The three OCR views did not agree exactly, so this quantity must be reviewed."
-					: "No complete quantity token was read, so this quantity must be reviewed.");
+				anyValidGuess ? PpOcrv5QuantityReadStatus.ReviewLowConsensus : PpOcrv5QuantityReadStatus.Invalid,
+				anyValidGuess
+					? "The OCR views did not agree exactly, so this quantity must be reviewed."
+					: "No complete quantity token was read, so this quantity must be reviewed.",
+				suggestion);
 		}
 		if (consensusMinimum < MainConsensusConfidenceFloor)
 		{
@@ -536,7 +549,8 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 				best,
 				consensusMinimum,
 				PpOcrv5QuantityReadStatus.ReviewLowConfidence,
-				"The OCR views agree, but the read is not clear enough to import automatically.");
+				"The OCR views agree, but the read is not clear enough to import automatically.",
+				suggestion);
 		}
 
 		(int exactQuantity, bool isRounded) = ExpandConfirmedQuantity(token!);
@@ -681,11 +695,50 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 		return (checked(whole * multiplier + tenth * (multiplier / 10)), true);
 	}
 
+	private static PpOcrv5QuantitySuggestion? SelectQuantitySuggestion(
+		IReadOnlyList<PpOcrv5QuantityCandidate> candidates)
+	{
+		PpOcrv5QuantityCandidate[] valid = candidates
+			.Where(candidate => candidate.NormalizedToken is not null)
+			.ToArray();
+		if (valid.Length == 0)
+		{
+			return null;
+		}
+
+		string? majorityToken = valid
+			.GroupBy(candidate => candidate.NormalizedToken!, StringComparer.Ordinal)
+			.Where(group => group.Count() >= 2)
+			.OrderByDescending(group => group.Count())
+			.ThenByDescending(group => group.Max(candidate => candidate.Confidence))
+			.ThenBy(group => group.Key, StringComparer.Ordinal)
+			.Select(group => group.Key)
+			.FirstOrDefault();
+		string token = majorityToken ?? valid
+			.OrderByDescending(candidate => candidate.Confidence)
+			.ThenBy(candidate => candidate.VariantId, StringComparer.Ordinal)
+			.First()
+			.NormalizedToken!;
+		return CreateQuantitySuggestion(token);
+	}
+
+	private static PpOcrv5QuantitySuggestion? CreateQuantitySuggestion(string? token)
+	{
+		if (token is null)
+		{
+			return null;
+		}
+
+		(int quantity, bool rounded) = ExpandConfirmedQuantity(token);
+		return new PpOcrv5QuantitySuggestion(token, quantity, rounded);
+	}
+
 	private static PpOcrv5QuantityDecision ReviewDecision(
 		PpOcrv5QuantityCandidate best,
 		double consensusMinimum,
 		PpOcrv5QuantityReadStatus status,
-		string reviewMessage)
+		string reviewMessage,
+		PpOcrv5QuantitySuggestion? suggestion)
 	{
 		return new PpOcrv5QuantityDecision(
 			best.Text,
@@ -695,7 +748,8 @@ internal sealed class PpOcrv5QuantityRecognizer : IDisposable
 			consensusMinimum,
 			status,
 			reviewMessage,
-			null);
+			null,
+			suggestion);
 	}
 
 	public void Dispose()
@@ -757,7 +811,13 @@ internal sealed record PpOcrv5QuantityDecision(
 	double ConsensusMinConfidence,
 	PpOcrv5QuantityReadStatus Status,
 	string ReviewMessage,
-	string? ConfirmationRule);
+	string? ConfirmationRule,
+	PpOcrv5QuantitySuggestion? Suggestion = null);
+
+internal sealed record PpOcrv5QuantitySuggestion(
+	string Token,
+	int Quantity,
+	bool IsRounded);
 
 internal enum PpOcrv5QuantityReadStatus
 {
