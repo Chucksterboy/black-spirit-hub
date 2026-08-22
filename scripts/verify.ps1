@@ -31,6 +31,8 @@ $recipeBookFilterReportPath = Join-Path $recipeBookRoot "filter-report.json"
 $recipeBookNoticePath = Join-Path $recipeBookRoot "NOTICE.txt"
 $recipeBookOcrAtlasPath = Join-Path $recipeBookRoot "ocr\icon-atlas.png"
 $recipeBookOcrIndexPath = Join-Path $recipeBookRoot "ocr\icon-index.json"
+$recipeBookOcrClientCatalogAtlasPath = Join-Path $recipeBookRoot "ocr\client-catalog-atlas.png"
+$recipeBookOcrClientCatalogIndexPath = Join-Path $recipeBookRoot "ocr\client-catalog-index.json"
 $recipeBookPpOcrModelPath = Join-Path $recipeBookRoot "ocr\ppocrv5\en_PP-OCRv5_mobile_rec.onnx"
 $recipeBookPaddleOcrLicensePath = Join-Path $recipeBookRoot "ocr\LICENSE-PADDLEOCR.txt"
 $recipeBookPpOcrNoticePath = Join-Path $recipeBookRoot "ocr\MODEL-NOTICE-PPOCRV5.txt"
@@ -91,6 +93,8 @@ foreach ($path in @(
 	$recipeBookNoticePath,
 	$recipeBookOcrAtlasPath,
 	$recipeBookOcrIndexPath,
+	$recipeBookOcrClientCatalogAtlasPath,
+	$recipeBookOcrClientCatalogIndexPath,
 	$recipeBookPpOcrModelPath,
 	$recipeBookPaddleOcrLicensePath,
 	$recipeBookPpOcrNoticePath,
@@ -117,6 +121,54 @@ $recipeBookManifest = Get-Content -LiteralPath $recipeBookManifestPath -Raw | Co
 $recipeBookData = Get-Content -LiteralPath $recipeBookDataPath -Raw | ConvertFrom-Json
 if ([int]$recipeBookManifest.schemaVersion -ne 1 -or [int]$recipeBookData.schemaVersion -ne 1) {
 	throw "The Recipe Book schema version is unsupported."
+}
+$recipeBookOcrIndex = Get-Content -LiteralPath $recipeBookOcrIndexPath -Raw | ConvertFrom-Json
+$recipeBookOcrClientCatalogIndex = Get-Content -LiteralPath $recipeBookOcrClientCatalogIndexPath -Raw | ConvertFrom-Json
+foreach ($atlasContract in @(
+	@{ Name = "Recipe Book"; Index = $recipeBookOcrIndex; MaximumIcons = 5000 },
+	@{ Name = "full-client catalog"; Index = $recipeBookOcrClientCatalogIndex; MaximumIcons = 25000 }
+)) {
+	$index = $atlasContract.Index
+	$icons = @($index.icons)
+	if ([int]$index.schemaVersion -ne 2 -or
+		[int]$index.tileSize -ne 20 -or
+		[int]$index.columns -ne 64 -or
+		@($index.background).Count -ne 3 -or
+		[int]$index.background[0] -ne 22 -or
+		[int]$index.background[1] -ne 23 -or
+		[int]$index.background[2] -ne 27 -or
+		$icons.Count -le 0 -or
+		$icons.Count -gt [int]$atlasContract.MaximumIcons) {
+		throw "The $($atlasContract.Name) OCR atlas index schema is invalid."
+	}
+	$uniqueIcons = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+	for ($position = 0; $position -lt $icons.Count; $position++) {
+		$entry = $icons[$position]
+		$icon = [string]$entry.icon
+		$hasMaterialClass = $entry.PSObject.Properties.Name -contains "materialEligible"
+		$validMaterialClass = $null -eq $entry.materialEligible -or $entry.materialEligible -is [bool]
+		if ([int]$entry.index -ne $position -or
+			[string]::IsNullOrWhiteSpace($icon) -or
+			!$icon.StartsWith("icons/items/", [StringComparison]::Ordinal) -or
+			!$icon.EndsWith(".webp", [StringComparison]::Ordinal) -or
+			$icon.IndexOf("..", [StringComparison]::Ordinal) -ge 0 -or
+			!$uniqueIcons.Add($icon) -or
+			!$hasMaterialClass -or
+			!$validMaterialClass) {
+			throw "The $($atlasContract.Name) OCR atlas index contains an invalid entry at $position."
+		}
+	}
+}
+if (!@($recipeBookOcrIndex.icons | Where-Object { $_.materialEligible -eq $true }).Count -or
+	!@($recipeBookOcrIndex.icons | Where-Object { $null -ne $_.materialEligible -and $_.materialEligible -eq $false }).Count -or
+	!@($recipeBookOcrIndex.icons | Where-Object { $null -eq $_.materialEligible }).Count) {
+	throw "The Recipe Book OCR atlas must preserve material, non-material, and mixed artwork classes."
+}
+if (!@($recipeBookOcrClientCatalogIndex.icons | Where-Object { $_.materialEligible -eq $true }).Count -or
+	!@($recipeBookOcrClientCatalogIndex.icons | Where-Object { $null -ne $_.materialEligible -and $_.materialEligible -eq $false }).Count -or
+	!@($recipeBookOcrClientCatalogIndex.icons | Where-Object { $null -eq $_.materialEligible }).Count -or
+	@($recipeBookOcrClientCatalogIndex.icons).Count -le 18000) {
+	throw "The full-client OCR catalog must preserve material, non-material, and mixed artwork classes from the same client build."
 }
 function Assert-RecipeBookManifestEntry {
 	param(
@@ -1710,6 +1762,8 @@ $ocrPackagingContracts = @(
 			'onnxruntime_providers_shared\.dll',
 			'Assets\\RecipeBook\\ocr\\icon-atlas\.png',
 			'Assets\\RecipeBook\\ocr\\icon-index\.json',
+			'Assets\\RecipeBook\\ocr\\client-catalog-atlas\.png',
+			'Assets\\RecipeBook\\ocr\\client-catalog-index\.json',
 			'Assets\\RecipeBook\\ocr\\ppocrv5\\en_PP-OCRv5_mobile_rec\.onnx',
 			'Assets\\RecipeBook\\ocr\\LICENSE-PADDLEOCR\.txt',
 			'Assets\\RecipeBook\\ocr\\MODEL-NOTICE-PPOCRV5\.txt',
@@ -1725,6 +1779,8 @@ $ocrPackagingContracts = @(
 			'onnxruntime_providers_shared\.dll',
 			'Assets\\RecipeBook\\ocr\\icon-atlas\.png',
 			'Assets\\RecipeBook\\ocr\\icon-index\.json',
+			'Assets\\RecipeBook\\ocr\\client-catalog-atlas\.png',
+			'Assets\\RecipeBook\\ocr\\client-catalog-index\.json',
 			'Assets\\RecipeBook\\ocr\\ppocrv5\\en_PP-OCRv5_mobile_rec\.onnx',
 			'Assets\\RecipeBook\\ocr\\LICENSE-PADDLEOCR\.txt',
 			'Assets\\RecipeBook\\ocr\\MODEL-NOTICE-PPOCRV5\.txt',
@@ -1740,6 +1796,8 @@ $ocrPackagingContracts = @(
 			'onnxruntime_providers_shared\.dll',
 			'Assets/RecipeBook/ocr/icon-atlas\.png',
 			'Assets/RecipeBook/ocr/icon-index\.json',
+			'Assets/RecipeBook/ocr/client-catalog-atlas\.png',
+			'Assets/RecipeBook/ocr/client-catalog-index\.json',
 			'Assets/RecipeBook/ocr/ppocrv5/en_PP-OCRv5_mobile_rec\.onnx',
 			'Assets/RecipeBook/ocr/LICENSE-PADDLEOCR\.txt',
 			'Assets/RecipeBook/ocr/MODEL-NOTICE-PPOCRV5\.txt',
@@ -1755,6 +1813,8 @@ $ocrPackagingContracts = @(
 			'"onnxruntime_providers_shared\.dll"',
 			'"ocr", "icon-atlas\.png"',
 			'"ocr", "icon-index\.json"',
+			'"ocr", "client-catalog-atlas\.png"',
+			'"ocr", "client-catalog-index\.json"',
 			'"ocr", "ppocrv5", "en_PP-OCRv5_mobile_rec\.onnx"',
 			'"ocr", "LICENSE-PADDLEOCR\.txt"',
 			'"ocr", "MODEL-NOTICE-PPOCRV5\.txt"',
@@ -1944,6 +2004,8 @@ foreach ($relativePath in @(
 	"onnxruntime_providers_shared.dll",
 	"Assets\RecipeBook\ocr\icon-atlas.png",
 	"Assets\RecipeBook\ocr\icon-index.json",
+	"Assets\RecipeBook\ocr\client-catalog-atlas.png",
+	"Assets\RecipeBook\ocr\client-catalog-index.json",
 	"Assets\RecipeBook\ocr\ppocrv5\en_PP-OCRv5_mobile_rec.onnx",
 	"Assets\RecipeBook\ocr\LICENSE-PADDLEOCR.txt",
 	"Assets\RecipeBook\ocr\MODEL-NOTICE-PPOCRV5.txt",

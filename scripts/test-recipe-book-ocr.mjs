@@ -117,6 +117,10 @@ const fixture = {
     "64":{ name:"Mixed-use Material", grade:0, icon:icon("5") },
     "66":{ name:"Shared-art Ingredient", grade:0, icon:icon("7") },
     "67":{ name:"Finished Shared-art Product", grade:0, icon:icon("7") },
+    "68":{ name:"Cotton Fabric", grade:0, icon:icon("8") },
+    "69":{ name:"Dried Beltfish", grade:0, icon:icon("9") },
+    "70":{ name:"Dried Sturgeon", grade:0, icon:icon("9") },
+    "71":{ name:"Clear Liquid Reagent", grade:0, icon:icon("6") },
     "100":{ name:"Test Output", grade:0, icon:icon("e") }
   },
   recipes:[
@@ -138,6 +142,9 @@ const fixture = {
     { id:"house-mixed", outputId:"100", type:"HOUSE", inputs:[{ itemId:"64", count:1 }] },
     { id:"heat-mixed", outputId:"100", type:"HEAT", inputs:[{ itemId:"64", count:1 }] },
     { id:"shared-art-input", outputId:"100", type:"COOK", inputs:[{ itemId:"66", count:1 }] },
+    { id:"cotton-input", outputId:"100", type:"HOUSE", inputs:[{ itemId:"68", count:1 }] },
+    { id:"dried-beltfish-input", outputId:"100", type:"COOK", inputs:[{ itemId:"69", count:1 }] },
+    { id:"clear-liquid-reagent-input", outputId:"100", type:"ALCHEMY", inputs:[{ itemId:"71", count:1 }] },
     { id:"generic-red-meat", outputId:"100", type:"COOK", inputs:[{ itemId:"7905", count:5 }] },
     { id:"generic-blood", outputId:"100", type:"ALCHEMY", inputs:[{ itemId:"6214", count:2 }] }
   ]
@@ -182,6 +189,18 @@ assert.equal(analysis.slots.length, 8, "Out-of-grid and duplicate slot IDs must 
 assert.equal(analysis.slots.find(slot => slot.id === "duplicate-id").iconCandidates.length, 0, "Remote candidate artwork must be rejected");
 assert.deepEqual([...analysis.warnings], ["Review rounded totals", "4"]);
 assert.equal(Object.hasOwn(analysis, "extra"), false, "Unknown native response fields must not cross the sanitizer");
+const candidateRetentionAnalysis=core.sanitizeResult({
+  ...analysisPayload,
+  imageFingerprint:"c".repeat(64),
+  grid:{columns:1,rows:1,confidence:.9},
+  slots:[{
+    id:"twelve-candidates",row:0,column:0,box:{x:10,y:10,width:60,height:60},
+    iconCandidates:[..."0123456789abcd"].map((character,index)=>({icon:icon(character),score:1-index*.01})),
+    quantityText:"130",quantityValue:130,quantityConfidence:.95
+  }]
+});
+assert.equal(candidateRetentionAnalysis.slots[0].iconCandidates.length,12,"The frontend trust boundary must preserve all twelve native icon candidates so a weak real material can survive unrelated nearest matches");
+assert.deepEqual(clone(candidateRetentionAnalysis.slots[0].iconCandidates.map(candidate=>candidate.icon)),[..."0123456789ab"].map(icon),"The sanitizer must retain the native candidate order up to the reviewed twelve-candidate cap");
 const missingQuantitySlot={ ...analysisPayload.slots[0], id:"missing-quantity" };
 delete missingQuantitySlot.quantityValue;
 const missingQuantityAnalysis=core.sanitizeResult({ ...analysisPayload, slots:[missingQuantitySlot] });
@@ -298,45 +317,47 @@ assert.equal(core.sanitizeResult({ ...analysisPayload, grid:{ columns:10, rows:3
 const irrelevantAnalysis=core.sanitizeResult({
   imageFingerprint:"8".repeat(64),width:330,height:90,grid:{columns:4,rows:1,confidence:.95},
   slots:[
-    {id:"output-only",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99}],quantityText:"10",quantityValue:10,quantityConfidence:.95},
-    {id:"weapon-box",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("1"),score:.99}],quantityText:"6",quantityValue:6,quantityConfidence:.95},
-    {id:"event-coupon",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99}],quantityText:"5",quantityValue:5,quantityConfidence:.95},
+    {id:"output-only",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99,materialEligible:false}],iconMaterialEligible:false,iconMaterialConfidence:.97,iconMaterialMargin:.18,quantityText:"10",quantityValue:10,quantityConfidence:.95},
+    {id:"weapon-box",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("1"),score:.99,materialEligible:false}],iconMaterialEligible:false,iconMaterialConfidence:.96,iconMaterialMargin:.15,quantityText:"6",quantityValue:6,quantityConfidence:.95},
+    {id:"event-coupon",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99,materialEligible:false}],iconMaterialEligible:false,iconMaterialConfidence:.95,iconMaterialMargin:.12,quantityText:"5",quantityValue:5,quantityConfidence:.95},
     {id:"random-nearest-icon",row:0,column:3,box:{x:250,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.40},{icon:icon("d"),score:.39}],quantityText:"1",quantityValue:1,quantityConfidence:.95}
   ],warnings:[]
 });
 const irrelevantRows=core.buildReviewRows(irrelevantAnalysis,data);
-assert.deepEqual(clone(irrelevantRows),[],"Output-only items, non-material inventory items, and weak nearest-icon guesses must not become review rows");
+assert.deepEqual(clone(irrelevantRows.map(row=>row.slotId)),["random-nearest-icon"],"Weak nearest-icon guesses must remain visible for correction instead of hiding legitimate small materials");
+assert.equal(irrelevantRows[0].selectedKey,irrelevantRows[0].options[0].key,"A visible weak match should preselect its most likely usable Recipe Book option");
 const irrelevantPartition=core.partitionReviewRows(irrelevantAnalysis,data);
-assert.equal(irrelevantPartition.ignoredRows.length,4,"Filtered clutter must remain recoverable without entering the main import rows");
-assert.ok(irrelevantPartition.ignoredRows.every(row=>row.selectedKey===""),"A hidden or uncertain slot must never carry a preselected import identity");
+assert.deepEqual(clone(irrelevantPartition.ignoredRows.map(row=>row.slotId)),["output-only","weapon-box","event-coupon"],"Only strong known non-material matches should remain hidden");
+assert.ok(irrelevantPartition.ignoredRows.every(row=>row.selectedKey===""),"A strongly hidden non-material slot must never carry a preselected import identity");
 const irrelevantPlan=core.buildImportPlan(irrelevantRows,data);
-assert.equal(irrelevantPlan.valid,false,"An all-irrelevant screenshot must leave Apply disabled instead of producing a zero-entry import");
-assert.equal(irrelevantPlan.entries.length,0);
-assert.match(irrelevantPlan.errors.join(" "),/Detect at least one material/i,"The zero-import state must explain that no usable material is ready");
+assert.equal(irrelevantPlan.valid,true,"The final Apply action may confirm a preselected weak material after the user reviews the row");
+assert.equal(irrelevantPlan.entries.length,1);
 
 const mixedRelevanceAnalysis=core.sanitizeResult({
   imageFingerprint:"9".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
   slots:[
     {id:"genuine-low-confidence-material",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("d"),score:.70},{icon:icon("a"),score:.45}],quantityText:"87255",quantityValue:87255,quantityConfidence:.95},
-    {id:"irrelevant-coupon",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99}],quantityText:"1",quantityValue:1,quantityConfidence:.95},
+    {id:"irrelevant-coupon",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("2"),score:.99,materialEligible:false}],iconMaterialEligible:false,iconMaterialConfidence:.96,iconMaterialMargin:.14,quantityText:"1",quantityValue:1,quantityConfidence:.95},
     {id:"ambiguous-noise",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.46},{icon:icon("d"),score:.455}],quantityText:"34",quantityValue:34,quantityConfidence:.95}
   ],warnings:[]
 });
 const mixedRelevanceRows=core.buildReviewRows(mixedRelevanceAnalysis,data);
-assert.deepEqual(clone(mixedRelevanceRows.map(row=>row.slotId)),["genuine-low-confidence-material"],"Filtering must retain a credible material for review while omitting irrelevant and visually ambiguous slots");
+assert.deepEqual(clone(mixedRelevanceRows.map(row=>row.slotId)),["genuine-low-confidence-material","ambiguous-noise"],"Weak ambiguous matches must remain visible while strong known clutter stays hidden");
 assert.equal(mixedRelevanceRows[0].selectedKey,"40:0","The retained credible material may preselect its own top candidate");
 assert.equal(mixedRelevanceRows[0].reviewRequired,true,"A retained low-confidence material must remain visibly review-derived");
-assert.equal(core.buildImportPlan(mixedRelevanceRows,data).valid,true,"Ignored inventory clutter must not block Apply for the usable material rows");
-assert.ok(!mixedRelevanceRows.some(row=>["irrelevant-coupon","ambiguous-noise"].includes(row.slotId)),"An irrelevant slot must never receive a random first-option selection");
+assert.equal(mixedRelevanceRows[1].selectedKey,mixedRelevanceRows[1].options[0].key,"An ambiguous weak row should preselect the highest-ranked usable option for review");
+assert.equal(core.buildImportPlan([mixedRelevanceRows[0]],data).valid,true,"Hidden inventory clutter must not block Apply for a complete usable material row");
+assert.equal(core.buildImportPlan(mixedRelevanceRows,data).valid,true,"The final Apply action may confirm a visible preselected ambiguous row");
+assert.ok(!mixedRelevanceRows.some(row=>row.slotId==="irrelevant-coupon"),"A strong irrelevant slot must not enter the normal review list");
 const mixedRelevancePartition=core.partitionReviewRows(mixedRelevanceAnalysis,data);
-assert.deepEqual(clone(mixedRelevancePartition.ignoredRows.map(row=>row.slotId).sort()),["ambiguous-noise","irrelevant-coupon"],"Weak and known-negative slots must be hidden but recoverable");
+assert.deepEqual(clone(mixedRelevancePartition.ignoredRows.map(row=>row.slotId)),["irrelevant-coupon"],"Only the strong known-negative slot should be hidden and recoverable");
 
 const positiveNegativeAtlasAnalysis=core.sanitizeResult({
   imageFingerprint:"0".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
   slots:[
-    {id:"known-output-negative",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99},{icon:icon("4"),score:.88}],quantityText:"2",quantityValue:2,quantityConfidence:.95},
-    {id:"house-recipe-input",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("3"),score:.70},{icon:icon("5"),score:.40}],quantityText:"117400",quantityValue:117400,quantityConfidence:.95},
-    {id:"mixed-recipe-input",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("5"),score:.91}],quantityText:"104",quantityValue:104,quantityConfidence:.95}
+    {id:"known-output-negative",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("e"),score:.99,materialEligible:false},{icon:icon("4"),score:.88,materialEligible:true}],iconMaterialEligible:false,iconMaterialConfidence:.98,iconMaterialMargin:.11,quantityText:"2",quantityValue:2,quantityConfidence:.95},
+    {id:"house-recipe-input",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("3"),score:.70,materialEligible:true},{icon:icon("5"),score:.40,materialEligible:true}],iconMaterialEligible:true,iconMaterialConfidence:.91,iconMaterialMargin:.12,quantityText:"117400",quantityValue:117400,quantityConfidence:.95},
+    {id:"mixed-recipe-input",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("5"),score:.91,materialEligible:true}],iconMaterialEligible:true,iconMaterialConfidence:.94,iconMaterialMargin:.16,quantityText:"104",quantityValue:104,quantityConfidence:.95}
   ],warnings:[]
 });
 const positiveNegativeAtlasRows=core.buildReviewRows(positiveNegativeAtlasAnalysis,data);
@@ -350,15 +371,43 @@ const relevanceSafetyAnalysis=core.sanitizeResult({
   imageFingerprint:"7".repeat(64),width:250,height:90,grid:{columns:3,rows:1,confidence:.95},
   slots:[
     {id:"positive-negative-near-tie",row:0,column:0,box:{x:10,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.82},{icon:icon("e"),score:.815}],quantityText:"100",quantityValue:100,quantityConfidence:.95},
-    {id:"mixed-artwork",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("7"),score:.96},{icon:icon("a"),score:.70}],quantityText:"20",quantityValue:20,quantityConfidence:.95},
+    {id:"mixed-artwork",row:0,column:1,box:{x:90,y:10,width:60,height:60},iconCandidates:[{icon:icon("7"),score:.96,materialEligible:null},{icon:icon("a"),score:.70,materialEligible:true}],iconMaterialEligible:null,iconMaterialConfidence:.96,iconMaterialMargin:0,quantityText:"20",quantityValue:20,quantityConfidence:.95},
     {id:"recoverable-real-low-score",row:0,column:2,box:{x:170,y:10,width:60,height:60},iconCandidates:[{icon:icon("a"),score:.64},{icon:icon("e"),score:.60}],quantityText:"30",quantityValue:30,quantityConfidence:.95}
   ],warnings:[]
 });
 const relevanceSafetyPartition=core.partitionReviewRows(relevanceSafetyAnalysis,data);
-assert.deepEqual(clone(relevanceSafetyPartition.rows),[],"Near-tie, mixed-artwork, and weak matches must not auto-enter the import list");
-assert.deepEqual(clone(relevanceSafetyPartition.ignoredRows.map(row=>row.slotId)),["positive-negative-near-tie","mixed-artwork","recoverable-real-low-score"],"Every conservative abstention must remain recoverable through hidden-slot review");
-assert.ok(relevanceSafetyPartition.ignoredRows.every(row=>row.selectedKey===""),"Restorable uncertainty must start blank so Apply cannot silently import a guessed material");
-assert.match(relevanceSafetyPartition.ignoredRows.find(row=>row.slotId==="mixed-artwork").reasons[0],/shared by usable and finished/i,"Exact artwork reused by a finished product must be explained as visually ambiguous");
+assert.deepEqual(clone(relevanceSafetyPartition.rows.map(row=>row.slotId)),["positive-negative-near-tie","mixed-artwork","recoverable-real-low-score"],"Near-tie, mixed-artwork, and weak matches must remain visible for correction");
+assert.deepEqual(clone(relevanceSafetyPartition.ignoredRows),[],"Uncertain matches must not be silently relegated to the hidden queue");
+assert.ok(relevanceSafetyPartition.rows.every(row=>row.selectedKey===row.options[0]?.key),"Visible uncertainty should preselect the highest-ranked usable option for review");
+assert.match(relevanceSafetyPartition.rows.find(row=>row.slotId==="mixed-artwork").reasons[0],/shared by usable and finished/i,"Exact artwork reused by a finished product must be explained as visually ambiguous");
+assert.equal(relevanceSafetyPartition.rows.find(row=>row.slotId==="mixed-artwork").reviewRequired,true,"Mixed artwork must never become exact solely from a high icon score");
+
+const suppliedStorageRegression=core.sanitizeResult({
+  imageFingerprint:"4".repeat(64),width:508,height:596,grid:{columns:4,rows:1,confidence:1},
+  slots:[
+    {id:"cotton-130",row:0,column:0,box:{x:92,y:525,width:45,height:45},iconCandidates:[{icon:icon("8"),score:.9775,materialEligible:true},{icon:icon("1"),score:.5228,materialEligible:false}],iconMaterialEligible:true,iconMaterialConfidence:.97,iconMaterialMargin:.09,quantityText:"130",quantityValue:130,quantityConfidence:.951},
+    {id:"dried-fish-3138",row:0,column:1,box:{x:143,y:117,width:45,height:45},iconCandidates:[{icon:icon("9"),score:.89,materialEligible:true}],iconMaterialEligible:null,iconMaterialConfidence:.95,iconMaterialMargin:.004,quantityText:"3138",quantityValue:3138,quantityConfidence:.99},
+    {id:"clear-reagent-544",row:0,column:2,box:{x:296,y:219,width:45,height:45},iconCandidates:[{icon:icon("6"),score:.96,materialEligible:true}],iconMaterialEligible:true,iconMaterialConfidence:.96,iconMaterialMargin:.14,quantityText:"544",quantityValue:544,quantityConfidence:.99},
+    {id:"strong-output-junk",row:0,column:3,box:{x:347,y:219,width:45,height:45},iconCandidates:[{icon:icon("e"),score:.99,materialEligible:false},{icon:icon("8"),score:.88,materialEligible:true}],iconMaterialEligible:false,iconMaterialConfidence:.99,iconMaterialMargin:.11,quantityText:"1",quantityValue:1,quantityConfidence:.99}
+  ],warnings:[]
+});
+const suppliedStoragePartition=core.partitionReviewRows(suppliedStorageRegression,data);
+assert.deepEqual(clone(suppliedStoragePartition.rows.map(row=>row.slotId)),["cotton-130","dried-fish-3138","clear-reagent-544"],"The supplied small storage materials must stay visible while a strong finished-product match is filtered");
+assert.deepEqual(clone(suppliedStoragePartition.ignoredRows.map(row=>row.slotId)),["strong-output-junk"]);
+const hiddenStorageJunk=suppliedStoragePartition.ignoredRows[0];
+assert.equal(hiddenStorageJunk.selectedKey,"","A confirmed non-material must stay unselected while it remains hidden");
+assert.ok(hiddenStorageJunk.options.some(option=>option.key==="68:0"),"Hidden rows must retain a likely usable alternative for explicit user recovery");
+const cottonRow=suppliedStoragePartition.rows[0],fishRow=suppliedStoragePartition.rows[1],reagentRow=suppliedStoragePartition.rows[2];
+assert.equal(cottonRow.quantity,130,"Cotton Fabric's confirmed 130 quantity must survive relevance review");
+assert.equal(cottonRow.selectedKey,"68:0","A weak Cotton Fabric candidate should preselect the highest-ranked usable material");
+assert.ok(cottonRow.options.some(option=>option.key==="68:0"),"Cotton Fabric must remain available among likely recipe-input choices");
+assert.equal(fishRow.quantity,3138,"The supplied dried-fish quantity must survive shared-art review");
+assert.equal(fishRow.selectedKey,"69:0","Shared dried-fish artwork should preselect the first likely usable item while remaining review-derived");
+assert.ok(fishRow.options.some(option=>option.key==="69:0"),"A real dried-fish recipe input must remain selectable despite shared finished-product artwork");
+assert.equal(reagentRow.selectedKey,"71:0","A strong unique recipe-input match should retain the prior automatic selection behavior");
+const suppliedStoragePlan=core.buildImportPlan(suppliedStoragePartition.rows,data);
+assert.equal(suppliedStoragePlan.valid,true,"The supplied preselected materials must be ready for the user's final Apply confirmation");
+assert.deepEqual(clone(suppliedStoragePlan.entries),[{key:"68:0",quantity:130},{key:"69:0",quantity:3138},{key:"71:0",quantity:544}]);
 
 const qualityAnalysis=core.sanitizeResult({
   imageFingerprint:"6".repeat(64),width:260,height:90,grid:{columns:3,rows:1,confidence:.97},
@@ -550,12 +599,12 @@ assert.match(reviewRowClickSource,/querySelectorAll\("\[data-ocr-row-remove\]"\)
 const selectMaterialSource=sourceBetween(source,'function recipeBookOcrSelectMaterial(article,row,key,source="candidate"){','function recipeBookOcrClearMaterialSelection(article,row){');
 assert.match(selectMaterialSource,/remove\.setAttribute\("aria-label",`Remove \$\{displayName/,"Changing a material must keep the row × accessible name synchronized");
 const screenshotQueueSource=sourceBetween(source,'async function recipeBookOcrQueueFiles(inputFiles,source="browse"){','async function recipeBookOcrPasteFromClipboard(){');
-assert.match(screenshotQueueSource,/const partition=recipeBookOcrPartitionReviewRows\(analysis,recipeBookState\.data\),reviewRows=partition\.rows,ignoredRows=partition\.ignoredRows/,"The scan queue must partition usable rows from recoverable irrelevant or uncertain slots");
-assert.match(screenshotQueueSource,/state\.rows\.push\(\.\.\.reviewRows\);state\.ignoredRows\.push\(\.\.\.ignoredRows\)/,"Only clear inputs may enter Apply while hidden slots remain recoverable");
-assert.match(screenshotQueueSource,/if\(!reviewRows\.length\)[^;]*no detected slots confidently matched an item used as an input by a Recipe Book recipe or craft/i,"An all-irrelevant screenshot must show a clear zero-usable-material scanner message");
-assert.match(screenshotQueueSource,/state\.rows\.length\} usable recipe input/,"The scan summary must count usable review rows rather than every occupied storage cell");
+assert.match(screenshotQueueSource,/const partition=recipeBookOcrPartitionReviewRows\(analysis,recipeBookState\.data\),reviewRows=partition\.rows,ignoredRows=partition\.ignoredRows/,"The scan queue must partition reviewable rows from strong confirmed non-material matches");
+assert.match(screenshotQueueSource,/state\.rows\.push\(\.\.\.reviewRows\);state\.ignoredRows\.push\(\.\.\.ignoredRows\)/,"Reviewable uncertainty must enter the editable list while strong non-material matches remain recoverable");
+assert.match(screenshotQueueSource,/if\(!reviewRows\.length\)[^;]*every detected slot strongly matched a known non-material item/i,"An all-non-material screenshot must explain why its slots were hidden");
+assert.match(screenshotQueueSource,/state\.rows\.length\} material slot[\s\S]*?to review/,"The scan summary must count every visible material-review row without calling uncertain matches confirmed inputs");
 const hiddenReviewSource=sourceBetween(source,"function recipeBookOcrReviewIgnoredRows(){","function recipeBookOcrClearMaterialSelection(article,row){");
-assert.match(hiddenReviewSource,/selectedKey:""[\s\S]*?reviewRequired:true/,"Reviewing hidden slots must restore them blank and non-importable until the user chooses a usable input");
+assert.match(hiddenReviewSource,/selectedKey:row\.options\[0\]\?\.key\|\|""[\s\S]*?reviewRequired:true/,"Explicitly reviewing a hidden slot must preselect its most likely usable material while keeping the row visibly review-required");
 assert.match(hiddenReviewSource,/state\.rows\.push\(\.\.\.restored\);state\.ignoredRows=\[\]/,"Reviewing hidden slots must atomically move them into the editable list");
 assert.match(source,/screenshotReviewIgnored\?\.addEventListener\("click",recipeBookOcrReviewIgnoredRows\)/,"The recovery control must expose conservative OCR abstentions without auto-importing them");
 assert.match(css, /\.recipeBookScreenshotDialog\[hidden\]\{display:none!important\}/);
@@ -597,7 +646,7 @@ assert.match(source, /function recipeBookOcrCanonicalMimeType\(value\)[\s\S]*?im
 assert.match(source, /item\.types\.map\(type=>\(\{type,mimeType:recipeBookOcrCanonicalMimeType\(type\)\}\)\)\.find\(entry=>entry\.mimeType\)/, "The explicit Clipboard API must skip unsupported image formats and use a supported alternative when offered");
 assert.match(source, /function recipeBookOcrFileName\(file,mimeType\)[\s\S]*?RECIPE_BOOK_OCR_MIME_EXTENSIONS\[mimeType\]/, "Nameless and mismatched-extension clipboard files must be normalized to the declared raster type");
 assert.match(source, /hasRows=state\.rows\.length>0,hasIgnored=state\.ignoredRows\.length>0,hasWarnings=state\.warnings\.length>0,showWarnings=!hasRows&&\(hasWarnings\|\|state\.images\.length>0\)/, "The review alert must remain visible when filtering or row removal leaves an accepted screenshot with zero usable rows");
-assert.match(source,/displayWarnings=hasWarnings\?state\.warnings:\[hasIgnored\?"No confident Recipe Book inputs were found\.[^"]*":"No usable Recipe Book materials remain in this scan\.[^"]*"\]/,"Zero-row feedback must distinguish recoverable hidden slots from a truly empty import");
+assert.match(source,/displayWarnings=hasWarnings\?state\.warnings:\[hasIgnored\?"Only strong non-material matches were hidden\.[^"]*":"No usable Recipe Book materials remain in this scan\.[^"]*"\]/,"Zero-row feedback must distinguish strong hidden non-materials from a truly empty import");
 assert.match(source,/screenshotReviewIgnored\.hidden=!hasIgnored[\s\S]*?Review \$\{state\.ignoredRows\.length\} hidden slot/,"The recovery control must show the exact number of hidden slots");
 assert.match(source, /screenshotReview\.hidden=!hasRows&&!showWarnings/, "A zero-row scanner alert must keep the review region visible");
 assert.match(source, /screenshotWarnings\.hidden=!showWarnings[\s\S]*?setAttribute\("role","alert"\)/, "Accepted-row warning pills must stay hidden while a zero-row scanner message remains an alert");
@@ -654,12 +703,19 @@ assert.match(source, /for\(const control of \[recipeBookEl\.screenshotBrowse,rec
 assert.match(source, /screenshotApply\.disabled=state\.busy\|\|!plan\.valid\|\|!addConfirmed/, "Apply must stay disabled while analysis is busy or review is incomplete");
 assert.match(source, /rawBorderGrade=raw\.borderGrade,borderGrade=typeof rawBorderGrade==="number"&&Number\.isInteger\(rawBorderGrade\)&&rawBorderGrade>=0&&rawBorderGrade<=2\?rawBorderGrade:null/, "Only numeric integer BDO border grades 0 through 2 may cross the frontend trust boundary");
 assert.match(source, /rawBorderGradeConfidence=raw\.borderGradeConfidence,borderGradeConfidence=typeof rawBorderGradeConfidence==="number"&&Number\.isFinite\(rawBorderGradeConfidence\)&&rawBorderGradeConfidence>=0&&rawBorderGradeConfidence<=1\?rawBorderGradeConfidence:0/, "Border-grade confidence must remain a finite numeric probability without coercion");
+assert.match(source, /materialEligible=typeof rawCandidate\.materialEligible==="boolean"\?rawCandidate\.materialEligible:null/, "Candidate material classes must cross the frontend boundary only as native booleans");
+assert.match(source, /iconMaterialEligible=typeof raw\.iconMaterialEligible==="boolean"\?raw\.iconMaterialEligible:null/, "The full-catalog slot decision must reject string and numeric coercion");
+assert.match(source, /iconMaterialConfidence=Number\.isFinite\(rawIconMaterialConfidence\)&&rawIconMaterialConfidence>=0&&rawIconMaterialConfidence<=1\?rawIconMaterialConfidence:0/, "Full-catalog confidence must remain a bounded finite probability");
+assert.match(source, /iconMaterialMargin=Number\.isFinite\(rawIconMaterialMargin\)&&rawIconMaterialMargin>=0&&rawIconMaterialMargin<=1\?rawIconMaterialMargin:0/, "Full-catalog class margin must remain bounded telemetry");
 assert.match(source, /function recipeBookOcrQualityFamilyResources[\s\S]*?item\?\.grade!==0[\s\S]*?`High-quality \$\{baseName\}`[\s\S]*?grade===1[\s\S]*?`Special \$\{baseName\}`[\s\S]*?grade===2/, "Border evidence may resolve only verified base, High-quality, and Special name families from the top icon");
 assert.match(source, /RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE=\.70/, "Frontend quality resolution must share the native fixture gate's calibrated confidence floor");
 assert.match(source, /qualityFamily=recipeBookOcrQualityFamilyResources\(topResources,data\)[\s\S]*?slot\.borderGradeConfidence>=RECIPE_BOOK_OCR_BORDER_GRADE_CONFIDENCE[\s\S]*?borderGradeMatches\.length===1/, "Only high-confidence evidence with one same-family grade match may resolve a quality identity");
 assert.match(source, /for\(const iconMatch of slot\.iconCandidates\)[\s\S]*?optionMap\.set\(resource\.key[\s\S]*?Number\(right\.key===resolvedKey\)-Number\(left\.key===resolvedKey\)/, "Quality resolution must rank its exact identity while preserving all icon correction options");
-assert.match(source, /defaultOption=relevance!=="eligible"\|\|borderGradeConflict\|\|unresolvedSharedMeatOrBloodIcon\?null:borderGradeResolved\?optionMap\.get\(resolvedKey\)/, "Hidden relevance, conflicting quality evidence, and unresolved shared meat or blood icons must remain blank");
-assert.match(source, /iconExact=Boolean\(relevance==="eligible"&&matchedIcon&&matchedIcon\.score>=\.82&&gap>=\.08&&materialExactResources\.length===1/, "A unique border-resolved identity may become exact only after relevance, strong score, and separation all agree");
+assert.match(source, /defaultOption=relevance==="negative"\|\|borderGradeConflict\|\|unresolvedSharedMeatOrBloodIcon\?null:borderGradeResolved\?optionMap\.get\(resolvedKey\)/, "Reviewable uncertainty should preselect its top usable option while strong negatives, conflicts, and shared meat or blood remain blank");
+assert.match(source, /nativeNegative=slot\.iconMaterialEligible===false[\s\S]*?relevance=nativeNegative\?"negative"/, "Only the native full-client catalog verifier may hide a slot as non-material");
+assert.doesNotMatch(source, /confirmedNegative=Boolean\(bestNegative/, "A nearest Recipe Book output must not replace full-client non-material verification");
+assert.match(source, /\(relevance==="negative"\?ignoredRows:rows\)\.push\(row\)/, "Every weak, near-tie, or mixed-art slot must remain in the visible review list");
+assert.match(source, /iconExact=Boolean\(relevance==="eligible"&&matchedIcon&&matchedIcon\.score>=RECIPE_BOOK_OCR_EXACT_ICON_MIN_SCORE&&gap>=RECIPE_BOOK_OCR_EXACT_ICON_MARGIN&&materialExactResources\.length===1/, "A unique border-resolved identity may become exact only after relevance, strong score, and separation all agree");
 
 assert.ok(fs.existsSync(servicePath), "The native Screenshot Mats service is missing");
 assert.ok(fs.existsSync(recognizerPath), "The local PP-OCRv5 quantity recognizer is missing");
@@ -678,6 +734,15 @@ assert.match(service, /internal const int MaxWidth = 7680;/);
 assert.match(service, /internal const int MaxHeight = 4320;/);
 assert.match(service, /internal const long MaxPixels = 24_000_000;/);
 assert.match(service, /internal const int ExpectedColumns = 9;/);
+assert.match(service, /private const int MaximumReturnedCandidates = 12;/, "The native icon shortlist must preserve enough candidates for small, dim storage icons");
+assert.match(service, /FullCatalogClassificationMinimumScore = 0\.82;/, "The full-client verifier must retain its independently benchmarked class-score floor");
+assert.match(service, /FullCatalogClassificationMinimumMargin = 0\.05;/, "The full-client verifier must require a separated material/non-material winner");
+assert.match(service, /FullCatalogExactNegativeMinimumScore = 0\.965;/, "Near-tie negative matches must clear the Mineral Water collision before a usable material can be hidden");
+assert.match(service, /LoadIconAtlas\("client-catalog-index\.json", "client-catalog-atlas\.png", 25000\)/, "The material verifier must load the bounded full-client catalog locally");
+assert.match(service, /primary\.MaterialEligible[\s\S]*?primary\.Score >= 0\.82[\s\S]*?primary\.Score - primaryOpposition >= 0\.08/, "Only a strong positive Recipe Book match may bypass full-catalog classification");
+assert.match(service, /BestMaterialClassScores\(\s*feature,\s*recipeAtlas,\s*photometricCandidates\)[\s\S]*?BestMaterialClassScores\(\s*feature,\s*clientCatalogAtlas\.Value,\s*photometricCandidates\)[\s\S]*?DecideFullCatalogMaterial\(eligibleScore, negativeScore\)/, "Uncertain and negative primary matches must be decided by the same-domain full-client material catalog");
+assert.match(service, /eligibleScore = Math\.Max\(eligibleScore, clientScores\.Eligible\);[\s\S]*?negativeScore = Math\.Max\(negativeScore, clientScores\.Negative\);/, "The full-client verifier must merge both current material and non-material evidence before deciding");
+assert.match(service, /BestPhotometricClassScores\(\s*feature,\s*photometricCandidates\)[\s\S]*?DecideFullCatalogPhotometricNegative\(photometricEligible, photometricNegative\)/, "Structurally unresolved slots must use the independently calibrated photometric negative tie-breaker");
 assert.match(service, /image\/png|"image\/png"/i);
 assert.match(service, /image\/jpeg|"image\/jpeg"/i);
 assert.match(source, /if\(sourceMime==="image\/bmp"\)[\s\S]*?canvas\.toDataURL\("image\/png"\)[\s\S]*?mimeType="image\/png"/, "BMP intake must be converted locally to the native service's strict PNG contract");
@@ -717,13 +782,15 @@ assert.match(fixtureRunner, /if \(slot\.QuantityAssumedOne\)[\s\S]*?visible labe
 assert.match(fixtureRunner, /requiredResolved\.Contains\(\(row, column\)\)[\s\S]*?must resolve the pinned/, "Known recoverable OCR regressions must remain pinned to importable values");
 assert.match(fixtureRunner, /resolvedLabels < fixtureCase\.MinimumResolved/, "Each fixture must enforce its independently calibrated minimum safe resolution count");
 assert.match(fixtureRunner, /slot\.QuantityAssumedOne[\s\S]*?slot\.QuantityValue != 1[\s\S]*?string\.IsNullOrWhiteSpace\(slot\.QuantityText\)/, "The two visibly unlabeled stacks must remain explicit assumed-one results");
-assert.match(fixtureRunner, /private const int SupportedSchemaVersion = 3;/, "The native fixture runner must consume the grade-aware schema");
+assert.match(fixtureRunner, /private const int SupportedSchemaVersion = 4;/, "The native fixture runner must consume the material-class and grade-aware schema");
+assert.match(fixtureRunner, /expectation\.MaterialClass is not \("material" or "nonMaterial" or "uncertain"\)[\s\S]*?!requiredMaterialClasses\.Add\(\(expectation\.Row, expectation\.Column\)\)/, "Fixture material classes must use strict unique in-grid material, non-material, or uncertain expectations");
+assert.match(fixtureRunner, /expectation\.MaterialClass switch[\s\S]*?"material" => true[\s\S]*?"nonMaterial" => false[\s\S]*?"uncertain" => null[\s\S]*?slot\.IconMaterialEligible != expectedMaterialEligible/, "Real-image fixtures must assert the native three-state material decision exactly");
 assert.match(fixtureRunner, /MinimumRequiredBorderGradeConfidence = 0\.70/, "Pinned border-grade fixtures must use the same high-confidence floor as frontend quality resolution");
 assert.match(fixtureRunner, /foreach \(FixtureBorderGradeExpectation expectation in fixtureCase\.RequiredBorderGrades!\)[\s\S]*?slot\.BorderGrade != expectation\.Grade[\s\S]*?slot\.BorderGradeConfidence < MinimumRequiredBorderGradeConfidence[\s\S]*?slot\.BorderGradeConfidence > 1/, "Real-image fixtures must verify both the exact border grade and a bounded high confidence");
 assert.match(fixtureRunner, /expectation\.Grade is < 0 or > 2[\s\S]*?!requiredBorderGrades\.Add\(\(expectation\.Row, expectation\.Column\)\)/, "Fixture border grades must be limited to unique base, high-quality, or special coordinates");
 assert.match(verifySource, /\$dotnet \$appDll --recipe-book-ocr-fixture-test \$recipeBookOcrFixtureManifestPath/, "Verification must execute the real-image OCR suite against the built app");
 const fixtureManifest = JSON.parse(fs.readFileSync(fixtureManifestPath, "utf8"));
-assert.equal(fixtureManifest.schemaVersion, 3);
+assert.equal(fixtureManifest.schemaVersion, 4);
 assert.deepEqual(fixtureManifest.cases.map(testCase => testCase.id), ["full-45", "full-58", "full-68", "partial-58-4x3", "tight-58-2x1"]);
 const storageTruth = fixtureManifest.truthSets["storage-88"];
 assert.equal(storageTruth.rows.length, 10);
@@ -760,6 +827,24 @@ const expectedFullBorderGrades = [
   { row:3, column:2, grade:0 },
   { row:4, column:5, grade:1 }
 ];
+assert.deepEqual(fixtureManifest.cases[0].requiredMaterialClasses,[
+  {row:1,column:1,materialClass:"material"},
+  {row:2,column:1,materialClass:"material"},
+  {row:3,column:6,materialClass:"nonMaterial"},
+  {row:3,column:7,materialClass:"nonMaterial"},
+  {row:3,column:8,materialClass:"nonMaterial"}
+],"The 45px fixture must pin known materials and finished products");
+assert.deepEqual(fixtureManifest.cases[1].requiredMaterialClasses,[
+  {row:1,column:1,materialClass:"material"},
+  {row:2,column:1,materialClass:"material"}
+],"The 58px fixture must pin stable material controls without forcing conservative near-ties");
+assert.deepEqual(fixtureManifest.cases[2].requiredMaterialClasses,[
+  {row:1,column:1,materialClass:"material"},
+  {row:1,column:7,materialClass:"uncertain"},
+  {row:2,column:1,materialClass:"material"},
+  {row:3,column:6,materialClass:"nonMaterial"},
+  {row:3,column:7,materialClass:"nonMaterial"}
+],"The 68px fixture must keep Mineral Water visible as uncertain while hiding verified finished products");
 for (const testCase of fixtureManifest.cases.slice(0, 3)) {
   assert.deepEqual(testCase.requiredBorderGrades, expectedFullBorderGrades, `Fixture ${testCase.id} must pin identical base, high-quality, and special borders across source scales`);
 }
@@ -776,6 +861,15 @@ assert.deepEqual(fixtureManifest.cases[4].requiredBorderGrades, [
 ], "The tight crop must retain base-border evidence even when outer geometry is clipped");
 for (const testCase of fixtureManifest.cases) {
   assert.ok(Number.isInteger(testCase.minimumResolved) && testCase.minimumResolved >= testCase.requiredResolved.length, `Fixture ${testCase.id} must declare a valid minimumResolved safety floor`);
+  assert.ok(Array.isArray(testCase.requiredMaterialClasses), `Fixture ${testCase.id} must declare its material-class assertion list`);
+  const materialCoordinates = new Set();
+  for (const expectation of testCase.requiredMaterialClasses) {
+    assert.ok(Number.isInteger(expectation.row) && expectation.row >= 1 && expectation.row <= testCase.grid.rows, `Fixture ${testCase.id} material-class row must stay inside the detected grid`);
+    assert.ok(Number.isInteger(expectation.column) && expectation.column >= 1 && expectation.column <= testCase.grid.columns, `Fixture ${testCase.id} material-class column must stay inside the detected grid`);
+    assert.ok(["material","nonMaterial","uncertain"].includes(expectation.materialClass), `Fixture ${testCase.id} material class must be strict`);
+    assert.ok(!materialCoordinates.has(`${expectation.row}:${expectation.column}`), `Fixture ${testCase.id} material-class coordinates must be unique`);
+    materialCoordinates.add(`${expectation.row}:${expectation.column}`);
+  }
   assert.ok(Array.isArray(testCase.requiredBorderGrades) && testCase.requiredBorderGrades.length > 0, `Fixture ${testCase.id} must declare pinned border grades`);
   const gradeCoordinates = new Set();
   for (const expectation of testCase.requiredBorderGrades) {
@@ -802,12 +896,14 @@ assert.doesNotMatch(service + recognizer, /HttpClient|WebClient|HttpWebRequest|W
 
 const atlasPath = path.join(ocrAssetRoot, "icon-atlas.png");
 const indexPath = path.join(ocrAssetRoot, "icon-index.json");
+const clientCatalogAtlasPath = path.join(ocrAssetRoot, "client-catalog-atlas.png");
+const clientCatalogIndexPath = path.join(ocrAssetRoot, "client-catalog-index.json");
 const modelPath = path.join(ocrAssetRoot, "ppocrv5", "en_PP-OCRv5_mobile_rec.onnx");
 const paddleLicensePath = path.join(ocrAssetRoot, "LICENSE-PADDLEOCR.txt");
 const modelNoticePath = path.join(ocrAssetRoot, "MODEL-NOTICE-PPOCRV5.txt");
 const onnxRuntimeLicensePath = path.join(ocrAssetRoot, "LICENSE-ONNXRUNTIME.txt");
 const onnxRuntimeNoticesPath = path.join(ocrAssetRoot, "THIRD-PARTY-NOTICES-ONNXRUNTIME.txt");
-for (const requiredPath of [atlasPath, indexPath, modelPath, paddleLicensePath, modelNoticePath, onnxRuntimeLicensePath, onnxRuntimeNoticesPath]) assert.ok(fs.statSync(requiredPath).isFile(), `Missing local OCR asset ${requiredPath}`);
+for (const requiredPath of [atlasPath, indexPath, clientCatalogAtlasPath, clientCatalogIndexPath, modelPath, paddleLicensePath, modelNoticePath, onnxRuntimeLicensePath, onnxRuntimeNoticesPath]) assert.ok(fs.statSync(requiredPath).isFile(), `Missing local OCR asset ${requiredPath}`);
 assert.equal(fs.statSync(modelPath).size, 7_872_351, "The reviewed PP-OCRv5 model size changed unexpectedly");
 assert.equal(crypto.createHash("sha256").update(fs.readFileSync(modelPath)).digest("hex"), "c3461add59bb4323ecba96a492ab75e06dda42467c9e3d0c18db5d1d21924be8", "The reviewed PP-OCRv5 model changed unexpectedly");
 assert.match(fs.readFileSync(paddleLicensePath, "utf8"), /Apache License\s+Version 2\.0, January 2004/);
@@ -824,15 +920,50 @@ for (const retiredPath of [
   path.join(ocrAssetRoot, "ppocrv5", "en_PP-OCRv5_mobile_rec.yml")
 ]) assert.equal(fs.existsSync(retiredPath), false, `Retired OCR payload must not be shipped: ${retiredPath}`);
 const index = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-assert.equal(index.schemaVersion, 1);
+const clientCatalogIndex = JSON.parse(fs.readFileSync(clientCatalogIndexPath, "utf8"));
+assert.equal(index.schemaVersion, 2);
+assert.equal(clientCatalogIndex.schemaVersion, 2);
 assert.equal(index.tileSize, 20);
 assert.equal(index.columns, 64);
 assert.deepEqual(index.background, [22,23,27]);
 assert.deepEqual(index.icons.map(entry => entry.index), Array.from({ length:index.icons.length }, (_, position) => position), "Atlas indexes must be dense and deterministic");
+assert.ok(index.icons.every(entry=>Object.hasOwn(entry,"materialEligible")&&(typeof entry.materialEligible==="boolean"||entry.materialEligible===null)),"Every primary atlas icon must carry a material, non-material, or mixed class");
+assert.ok(index.icons.some(entry=>entry.materialEligible===true)&&index.icons.some(entry=>entry.materialEligible===false)&&index.icons.some(entry=>entry.materialEligible===null),"The primary atlas must preserve materials, finished products, and artwork shared by both");
+assert.equal(clientCatalogIndex.tileSize,index.tileSize);
+assert.equal(clientCatalogIndex.columns,index.columns);
+assert.deepEqual(clientCatalogIndex.background,index.background);
+assert.deepEqual(clientCatalogIndex.icons.map(entry=>entry.index),Array.from({length:clientCatalogIndex.icons.length},(_,position)=>position),"The full-client catalog indexes must be dense and deterministic");
+assert.ok(clientCatalogIndex.icons.length>18_000,"The full-client verifier must cover the broad current BDO catalog rather than a handful of screenshot-specific negatives");
+assert.ok(clientCatalogIndex.icons.every(entry=>Object.hasOwn(entry,"materialEligible")&&(typeof entry.materialEligible==="boolean"||entry.materialEligible===null)),"Every full-client icon must preserve its material class");
+assert.ok(clientCatalogIndex.icons.some(entry=>entry.materialEligible===true)&&clientCatalogIndex.icons.some(entry=>entry.materialEligible===false)&&clientCatalogIndex.icons.some(entry=>entry.materialEligible===null),"The current-client atlas must contain materials, non-materials, and shared artwork from one visual domain");
+assert.equal(new Set(clientCatalogIndex.icons.map(entry=>entry.icon)).size,clientCatalogIndex.icons.length,"Full-client catalog icons must be unique");
 const recipePayload = JSON.parse(fs.readFileSync(recipeDataPath, "utf8"));
+const bundledOcrData=core.prepareData(recipePayload),driedClownfishIcon=recipePayload.items["8602"].icon,carrotConfitIcon=recipePayload.items["9321"].icon;
+const windElixirIcon=recipePayload.items["688"].icon;
+assert.equal(windElixirIcon,recipePayload.items["625"].icon,"The input and finished party elixir control must share exact artwork");
+assert.equal(clientCatalogIndex.icons.find(entry=>entry.icon===windElixirIcon)?.materialEligible,null,"Current-client artwork shared by a usable input and finished product must remain semantically mixed");
+const driedFishEligibilityAnalysis=core.sanitizeResult({
+  imageFingerprint:"1".repeat(64),width:120,height:60,grid:{columns:2,rows:1,confidence:1},
+  slots:[
+    {id:"supplied-dried-fish-89",row:0,column:0,box:{x:2,y:2,width:45,height:45},iconCandidates:[{icon:driedClownfishIcon,score:.8236,materialEligible:true}],iconMaterialEligible:true,iconMaterialConfidence:.94,iconMaterialMargin:.31,quantityText:"89",quantityValue:89,quantityConfidence:.99},
+    {id:"finished-carrot-confit",row:0,column:1,box:{x:52,y:2,width:45,height:45},iconCandidates:[{icon:carrotConfitIcon,score:.8207,materialEligible:false},{icon:driedClownfishIcon,score:.70,materialEligible:true}],iconMaterialEligible:false,iconMaterialConfidence:.95,iconMaterialMargin:.09,quantityText:"178",quantityValue:178,quantityConfidence:.99}
+  ],warnings:[]
+});
+const driedFishEligibilityPartition=core.partitionReviewRows(driedFishEligibilityAnalysis,bundledOcrData);
+assert.deepEqual(clone(driedFishEligibilityPartition.rows.map(row=>row.slotId)),["supplied-dried-fish-89"],"The supplied qty-89 dried-fish icon must enter material review through verified Fish substitution semantics");
+assert.deepEqual(clone(driedFishEligibilityPartition.ignoredRows.map(row=>row.slotId)),["finished-carrot-confit"],"The similarly scored finished Carrot Confit must remain a strong hidden non-input");
+const driedFishEligibilityRow=driedFishEligibilityPartition.rows[0];
+assert.equal(driedFishEligibilityRow.quantity,89,"The supplied dried-fish quantity must remain exact");
+assert.deepEqual(clone(driedFishEligibilityRow.options.map(option=>option.key).sort()),["8602:0","8635:0"],"Shared dried-fish artwork must offer both exact bundled species");
+assert.equal(driedFishEligibilityRow.selectedKey,"8602:0","Fish rows may follow the application's first-likely-option review behavior");
+assert.equal(bundledOcrData.resourceLookup["9321:0"],undefined,"Finished Carrot Confit must not become selectable merely because it is itself cooked");
 const expectedIcons = [...new Set(Object.values(recipePayload.items).map(item=>item?.icon).filter(iconPath=>iconPath&&iconPath!=="icons/item-fallback.svg"))].sort();
 assert.equal(index.icons.length,expectedIcons.length,"The OCR atlas must contain one reference for every unique bundled Recipe Book item icon");
 assert.deepEqual(index.icons.map(entry => entry.icon), expectedIcons, "The OCR atlas must include both recipe-input positives and known non-input negatives in deterministic order");
+assert.equal(index.icons.find(entry=>entry.icon===driedClownfishIcon)?.materialEligible,true,"Verified dried-fish substitutions must be classified as usable materials");
+assert.equal(index.icons.find(entry=>entry.icon===carrotConfitIcon)?.materialEligible,false,"Finished Carrot Confit must be a known non-material reference");
+const primaryIcons=new Set(index.icons.map(entry=>entry.icon));
+assert.ok(clientCatalogIndex.icons.some(entry=>primaryIcons.has(entry.icon)&&entry.materialEligible===true),"The current-client atlas must include material positives in the same visual domain as its negatives");
 assert.ok(!index.icons.some(entry=>entry.icon==="icons/item-fallback.svg"),"The generic manual-search fallback must never participate in visual OCR matching");
 const atlasBytes = fs.readFileSync(atlasPath);
 assert.ok(atlasBytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])), "The OCR atlas must be a PNG");
@@ -840,6 +971,10 @@ assert.equal(atlasBytes.readUInt32BE(16),index.columns*index.tileSize,"Atlas wid
 assert.equal(atlasBytes.readUInt32BE(20),Math.ceil(expectedIcons.length/index.columns)*index.tileSize,"Atlas height must contain every positive and negative reference without an unused row");
 assert.equal(atlasBytes.readUInt32BE(16),1280);
 assert.equal(atlasBytes.readUInt32BE(20),1220);
+const clientCatalogAtlasBytes=fs.readFileSync(clientCatalogAtlasPath);
+assert.ok(clientCatalogAtlasBytes.subarray(0,8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])),"The full-client catalog atlas must be a PNG");
+assert.equal(clientCatalogAtlasBytes.readUInt32BE(16),clientCatalogIndex.columns*clientCatalogIndex.tileSize);
+assert.equal(clientCatalogAtlasBytes.readUInt32BE(20),Math.ceil(clientCatalogIndex.icons.length/clientCatalogIndex.columns)*clientCatalogIndex.tileSize);
 assert.match(project, /<None Update="Assets\\\*\*\\\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" \/>/, "The OCR atlas, index, model, and notices must be copied into build and publish payloads");
 
 const release = fs.readFileSync(releasePath, "utf8");
@@ -848,6 +983,7 @@ const legacyInstaller = fs.readFileSync(legacyInstallerPath, "utf8");
 const program = fs.readFileSync(programPath, "utf8");
 for (const relativePath of [
   "Assets\\RecipeBook\\ocr\\icon-atlas.png", "Assets\\RecipeBook\\ocr\\icon-index.json",
+  "Assets\\RecipeBook\\ocr\\client-catalog-atlas.png", "Assets\\RecipeBook\\ocr\\client-catalog-index.json",
   "Assets\\RecipeBook\\ocr\\ppocrv5\\en_PP-OCRv5_mobile_rec.onnx",
   "Assets\\RecipeBook\\ocr\\LICENSE-PADDLEOCR.txt", "Assets\\RecipeBook\\ocr\\MODEL-NOTICE-PPOCRV5.txt",
   "Assets\\RecipeBook\\ocr\\LICENSE-ONNXRUNTIME.txt", "Assets\\RecipeBook\\ocr\\THIRD-PARTY-NOTICES-ONNXRUNTIME.txt",
@@ -857,7 +993,7 @@ for (const relativePath of [
   assert.ok(nativeInstaller.includes(`"${relativePath}"`), `Native installer validation must explicitly require ${relativePath}`);
   assert.ok(legacyInstaller.includes(`"${relativePath.replaceAll("\\", "/")}"`), `Legacy installer validation must explicitly require ${relativePath}`);
 }
-for (const fileName of ["icon-atlas.png", "icon-index.json", "en_PP-OCRv5_mobile_rec.onnx", "LICENSE-PADDLEOCR.txt", "MODEL-NOTICE-PPOCRV5.txt", "LICENSE-ONNXRUNTIME.txt", "THIRD-PARTY-NOTICES-ONNXRUNTIME.txt", "onnxruntime.dll", "onnxruntime_providers_shared.dll"])
+for (const fileName of ["icon-atlas.png", "icon-index.json", "client-catalog-atlas.png", "client-catalog-index.json", "en_PP-OCRv5_mobile_rec.onnx", "LICENSE-PADDLEOCR.txt", "MODEL-NOTICE-PPOCRV5.txt", "LICENSE-ONNXRUNTIME.txt", "THIRD-PARTY-NOTICES-ONNXRUNTIME.txt", "onnxruntime.dll", "onnxruntime_providers_shared.dll"])
   assert.ok(program.includes(`"${fileName}"`), `Offline smoke must explicitly require ${fileName}`);
 for (const retiredName of ["Tesseract.dll", "tesseract50.dll", "leptonica-1.82.0.dll", "eng.traineddata", "LICENSE-TESSERACT.txt", "LICENSE-LEPTONICA.txt"]) {
   assert.equal(release.includes(`"${retiredName}"`), false, `Release validation must not require retired payload ${retiredName}`);

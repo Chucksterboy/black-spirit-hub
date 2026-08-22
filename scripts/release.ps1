@@ -249,6 +249,8 @@ function Assert-AppPublishFiles {
 		"Assets\RecipeBook\icons\item-fallback.svg",
 		"Assets\RecipeBook\ocr\icon-atlas.png",
 		"Assets\RecipeBook\ocr\icon-index.json",
+		"Assets\RecipeBook\ocr\client-catalog-atlas.png",
+		"Assets\RecipeBook\ocr\client-catalog-index.json",
 		"Assets\RecipeBook\ocr\ppocrv5\en_PP-OCRv5_mobile_rec.onnx",
 		"Assets\RecipeBook\ocr\LICENSE-PADDLEOCR.txt",
 		"Assets\RecipeBook\ocr\MODEL-NOTICE-PPOCRV5.txt",
@@ -445,14 +447,21 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Git commit failed."
 }
 
+# The build and installer integration test can take several minutes. Refresh the
+# remote branch again before publishing so a concurrent main update cannot be
+# overwritten by the final HEAD:main push.
+& $git fetch origin main
+if ($LASTEXITCODE -ne 0) {
+	throw "Could not refresh origin/main before publishing the release."
+}
+& $git merge-base --is-ancestor origin/main HEAD
+if ($LASTEXITCODE -ne 0) {
+	throw "origin/main advanced during the release build. Reconcile it before publishing."
+}
+
 & $git tag -a $versionTag -m "Black Spirit Hub $versionTag"
 if ($LASTEXITCODE -ne 0) {
 	throw "Git tag failed. The tag may already exist."
-}
-
-& $git push origin HEAD:main
-if ($LASTEXITCODE -ne 0) {
-	throw "Git push failed. The release commit and manifest were not published to main."
 }
 
 & $git push origin $versionTag
@@ -476,6 +485,13 @@ if ($Draft) {
 & $gh @releaseArgs
 if ($LASTEXITCODE -ne 0) {
 	throw "GitHub release creation failed."
+}
+
+# Publish the update manifest only after the versioned installer is available.
+# If tag or release creation fails, main continues advertising the prior release.
+& $git push origin HEAD:main
+if ($LASTEXITCODE -ne 0) {
+	throw "Git push failed. The release asset exists, but the release commit and manifest were not published to main."
 }
 
 Write-Host "Release complete: $versionTag"

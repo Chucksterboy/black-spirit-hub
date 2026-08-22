@@ -607,6 +607,8 @@ internal sealed class InstallerForm : Form
 		"Assets/RecipeBook/icons/item-fallback.svg",
 		"Assets/RecipeBook/ocr/icon-atlas.png",
 		"Assets/RecipeBook/ocr/icon-index.json",
+		"Assets/RecipeBook/ocr/client-catalog-atlas.png",
+		"Assets/RecipeBook/ocr/client-catalog-index.json",
 		"Assets/RecipeBook/ocr/ppocrv5/en_PP-OCRv5_mobile_rec.onnx",
 		"Assets/RecipeBook/ocr/LICENSE-PADDLEOCR.txt",
 		"Assets/RecipeBook/ocr/MODEL-NOTICE-PPOCRV5.txt",

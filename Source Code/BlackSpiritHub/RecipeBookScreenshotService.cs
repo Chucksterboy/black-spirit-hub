@@ -7,6 +7,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -31,7 +32,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	internal const long MaxPixels = 24_000_000;
 	internal const int ExpectedColumns = 9;
 
-	private const int MaximumReturnedCandidates = 5;
+	private const int MaximumReturnedCandidates = 12;
 	private const int MaximumReturnedSlots = 192;
 	private const int MinimumDetectedSlotExtent = 12;
 	private const int MaximumDetectedSlotExtent = 512;
@@ -43,6 +44,16 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	private const int HorizontalEdgeThreshold = 22;
 	private const double MinimumOccupiedRatio = 0.025;
 	private const double MinimumCandidateScore = 0.28;
+	private const double StructuralFallbackMaximumCurrentScore = 0.60;
+	private const double StructuralFallbackMinimumLuminanceScore = 0.95;
+	private const double StructuralFallbackMinimumGradientScore = 0.90;
+	private const double FullCatalogClassificationMinimumScore = 0.82;
+	private const double FullCatalogClassificationMinimumMargin = 0.05;
+	private const double FullCatalogExactNegativeMinimumScore = 0.965;
+	private const double FullCatalogExactNegativeMinimumMargin = 0.015;
+	private const double FullCatalogPhotometricCandidateMinimumStructuralScore = 5.0 / 6.0;
+	private const double FullCatalogPhotometricNegativeMinimumScore = 0.90;
+	private const double FullCatalogPhotometricNegativeMinimumMargin = 0.04;
 	private static readonly double[] GridUpscaleFactors = { 8, 6, 4, 3, 2, 1.5 };
 	private static readonly double[] GridDownscaleFactors = { 0.75, 0.5, 0.375, 0.25, 0.125, 0.0625 };
 	private static readonly Regex QuantityPattern = new(
@@ -52,6 +63,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	private readonly string ocrAssetRoot;
 	private readonly SemaphoreSlim analysisGate = new(1, 1);
 	private readonly Lazy<IconAtlas> iconAtlas;
+	private readonly Lazy<IconAtlas> clientCatalogAtlas;
 	private readonly Lazy<PpOcrv5QuantityRecognizer> quantityRecognizer;
 	private bool disposed;
 
@@ -64,7 +76,12 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 
 		string resolvedApplicationDirectory = Path.GetFullPath(applicationBaseDirectory);
 		ocrAssetRoot = Path.Combine(resolvedApplicationDirectory, "Assets", "RecipeBook", "ocr");
-		iconAtlas = new Lazy<IconAtlas>(LoadIconAtlas, LazyThreadSafetyMode.ExecutionAndPublication);
+		iconAtlas = new Lazy<IconAtlas>(
+			() => LoadIconAtlas("icon-index.json", "icon-atlas.png", 5000),
+			LazyThreadSafetyMode.ExecutionAndPublication);
+		clientCatalogAtlas = new Lazy<IconAtlas>(
+			() => LoadIconAtlas("client-catalog-index.json", "client-catalog-atlas.png", 25000),
+			LazyThreadSafetyMode.ExecutionAndPublication);
 		quantityRecognizer = new Lazy<PpOcrv5QuantityRecognizer>(
 			() => new PpOcrv5QuantityRecognizer(resolvedApplicationDirectory),
 			LazyThreadSafetyMode.ExecutionAndPublication);
@@ -181,7 +198,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			int maximumReturnedRows = Math.Max(1, (MaximumReturnedSlots + detectedGrid.Columns - 1) / detectedGrid.Columns);
 			IReadOnlyList<int> cappedRowTops = detectedGrid.RowTops.Take(maximumReturnedRows).ToArray();
 			List<RecipeBookScreenshotSlot> slots = new();
-			List<PendingRecognizedSlot> pendingSlots = new();
+			List<DetectedOccupiedSlot> occupiedSlots = new();
 			List<string> warnings = new();
 			if (detectedGrid.AssumedTightCrop)
 			{
@@ -191,8 +208,6 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			{
 				warnings.Add("Only the first 192 visible storage slots were analyzed. Import another screenshot for the remaining rows.");
 			}
-			int lowConfidenceIcons = 0;
-
 			for (int row = 0; row < cappedRowTops.Count; row++)
 			{
 				int y = cappedRowTops[row];
@@ -220,21 +235,46 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 						continue;
 					}
 
-					List<RecipeBookScreenshotIconCandidate> iconCandidates = MatchIcons(feature, atlas);
-					if (iconCandidates.Count == 0 || iconCandidates[0].Score < MinimumCandidateScore)
-					{
-						iconCandidates.Clear();
-						lowConfidenceIcons++;
-					}
-
-					pendingSlots.Add(new PendingRecognizedSlot(
+					occupiedSlots.Add(new DetectedOccupiedSlot(
 						$"r{row + 1}c{column + 1}",
 						row,
 						column,
 						box,
-						iconCandidates));
+						feature));
 				}
 			}
+
+			int lowConfidenceIcons = 0;
+			PendingRecognizedSlot?[] recognizedSlots = new PendingRecognizedSlot?[occupiedSlots.Count];
+			Parallel.For(
+				0,
+				occupiedSlots.Count,
+				new ParallelOptions { CancellationToken = cancellationToken },
+				index =>
+				{
+					DetectedOccupiedSlot occupied = occupiedSlots[index];
+					List<RecipeBookScreenshotIconCandidate> iconCandidates = MatchIcons(occupied.Feature, atlas);
+					IconMaterialClassification materialClassification = ClassifyIconMaterial(
+						occupied.Feature,
+						atlas,
+						iconCandidates,
+						clientCatalogAtlas);
+					if (iconCandidates.Count == 0 || iconCandidates[0].Score < MinimumCandidateScore)
+					{
+						iconCandidates.Clear();
+						Interlocked.Increment(ref lowConfidenceIcons);
+					}
+					recognizedSlots[index] = new PendingRecognizedSlot(
+						occupied.Id,
+						occupied.Row,
+						occupied.Column,
+						occupied.Box,
+						iconCandidates,
+						materialClassification);
+				});
+			List<PendingRecognizedSlot> pendingSlots = recognizedSlots
+				.Select(slot => slot ?? throw new InvalidDataException("The local icon classifier returned an inconsistent slot count."))
+				.ToList();
 
 			IReadOnlyList<PpOcrv5QuantityRecognition> quantityRecognitions =
 				quantityRecognizer.Value.Recognize(
@@ -264,6 +304,9 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 					pending.Column,
 					new RecipeBookScreenshotBox(pending.Box.X, pending.Box.Y, pending.Box.Width, pending.Box.Height),
 					pending.IconCandidates,
+					pending.MaterialClassification.IsMaterial,
+					pending.MaterialClassification.Confidence,
+					pending.MaterialClassification.Margin,
 					borderGrade.Grade,
 					borderGrade.Confidence,
 					quantity.Text,
@@ -719,10 +762,10 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		return Math.Min(remainder, pitch - remainder);
 	}
 
-	private IconAtlas LoadIconAtlas()
+	private IconAtlas LoadIconAtlas(string indexFileName, string atlasFileName, int maximumIcons)
 	{
-		string indexPath = Path.Combine(ocrAssetRoot, "icon-index.json");
-		string atlasPath = Path.Combine(ocrAssetRoot, "icon-atlas.png");
+		string indexPath = Path.Combine(ocrAssetRoot, indexFileName);
+		string atlasPath = Path.Combine(ocrAssetRoot, atlasFileName);
 		if (!File.Exists(indexPath) || !File.Exists(atlasPath))
 		{
 			throw new InvalidDataException("The local Recipe Book screenshot icon catalog is missing.");
@@ -733,14 +776,14 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		{
 			PropertyNameCaseInsensitive = true
 		}) ?? throw new InvalidDataException("The local Recipe Book screenshot icon index is invalid.");
-		if (index.SchemaVersion != 1
+		if (index.SchemaVersion != 2
 			|| index.TileSize is < 12 or > 48
 			|| index.Columns is < 1 or > 256
 			|| index.Background is null
 			|| index.Background.Length != 3
 			|| index.Icons is null
 			|| index.Icons.Count == 0
-			|| index.Icons.Count > 5000)
+			|| index.Icons.Count > maximumIcons)
 		{
 			throw new InvalidDataException("The local Recipe Book screenshot icon index has unsupported metadata.");
 		}
@@ -754,6 +797,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			throw new InvalidDataException("The local Recipe Book screenshot atlas dimensions do not match its index.");
 		}
 
+		int comparedRows = Math.Min(14, index.TileSize);
 		List<IconTemplate> templates = new(index.Icons.Count);
 		HashSet<string> uniqueIcons = new(StringComparer.Ordinal);
 		HashSet<int> uniqueIndexes = new();
@@ -775,10 +819,16 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 			int tileX = entry.Index % index.Columns * index.TileSize;
 			int tileY = entry.Index / index.Columns * index.TileSize;
 			byte[] pixels = CopyRgbTile(atlasBitmap, new Rectangle(tileX, tileY, index.TileSize, index.TileSize));
-			templates.Add(new IconTemplate(entry.Icon, pixels));
+			StructuralFeatures structural = ExtractStructuralFeatures(pixels, index.TileSize, comparedRows);
+			templates.Add(new IconTemplate(
+				entry.Icon,
+				entry.MaterialEligible,
+				pixels,
+				structural.Luminance,
+				structural.Gradient));
 		}
 
-		return new IconAtlas(index.TileSize, Math.Min(14, index.TileSize), index.Background, templates);
+		return new IconAtlas(index.TileSize, comparedRows, index.Background, templates);
 	}
 
 	private static SlotFeature ExtractSlotFeature(
@@ -839,7 +889,13 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		double variance = samples == 0 ? 0 : Math.Max(0, sumSquares / samples - Math.Pow(sum / samples, 2));
 		double occupiedRatio = samples == 0 ? 0 : (double)foreground / samples;
 		bool occupied = occupiedRatio >= MinimumOccupiedRatio && Math.Sqrt(variance) >= 10;
-		return new SlotFeature(rgb, backgroundLuminance, occupied);
+		StructuralFeatures structural = ExtractStructuralFeatures(rgb, tileSize, comparedRows);
+		return new SlotFeature(
+			rgb,
+			backgroundLuminance,
+			occupied,
+			structural.Luminance,
+			structural.Gradient);
 	}
 
 	internal static BorderGradeRecognition DetectBorderGrade(
@@ -1123,13 +1179,54 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 
 	private static List<RecipeBookScreenshotIconCandidate> MatchIcons(SlotFeature feature, IconAtlas atlas)
 	{
+		List<RecipeBookScreenshotIconCandidate> current = RankIcons(
+			feature,
+			atlas,
+			CompareFeature,
+			MaximumReturnedCandidates);
+		if (current.Count == 0 || current[0].Score >= StructuralFallbackMaximumCurrentScore)
+		{
+			return current;
+		}
+
+		// Bright neutral materials can be rendered much darker by BDO than their
+		// bundled client artwork. The color-sensitive RMSE matcher correctly rejects
+		// that photometric mismatch, but can consequently rank the exact icon below
+		// visually similar dark items. Only in that already-low-confidence state, use
+		// two independent shape comparisons and require them to agree confidently.
+		// This keeps the established matcher authoritative for normal screenshots and
+		// prevents a single structural metric from promoting unrelated catalog art.
+		List<RecipeBookScreenshotIconCandidate> luminance = RankIcons(
+			feature,
+			atlas,
+			CompareZeroMeanLuminance,
+			MaximumReturnedCandidates);
+		List<RecipeBookScreenshotIconCandidate> gradient = RankIcons(
+			feature,
+			atlas,
+			CompareLuminanceGradient,
+			1);
+		return ShouldUseStructuralIconFallback(current[0], luminance.FirstOrDefault(), gradient.FirstOrDefault())
+			? luminance
+			: current;
+	}
+
+	private static List<RecipeBookScreenshotIconCandidate> RankIcons(
+		SlotFeature feature,
+		IconAtlas atlas,
+		Func<SlotFeature, IconTemplate, IconAtlas, double> compare,
+		int maximumCandidates)
+	{
 		PriorityQueue<RecipeBookScreenshotIconCandidate, double> best = new();
 		foreach (IconTemplate template in atlas.Templates)
 		{
-			double score = CompareFeature(feature, template, atlas);
-			RecipeBookScreenshotIconCandidate candidate = new(template.Icon, Math.Round(score, 4));
+			double score = compare(feature, template, atlas);
+			RecipeBookScreenshotIconCandidate candidate = new(
+				template.Icon,
+				Math.Round(score, 4),
+				template.MaterialEligible);
 			best.Enqueue(candidate, score);
-			if (best.Count > MaximumReturnedCandidates)
+			if (best.Count > maximumCandidates)
 			{
 				best.Dequeue();
 			}
@@ -1138,7 +1235,187 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		return best.UnorderedItems
 			.Select(item => item.Element)
 			.OrderByDescending(candidate => candidate.Score)
+			.ThenBy(candidate => candidate.Icon, StringComparer.Ordinal)
 			.ToList();
+	}
+
+	private static IconMaterialClassification ClassifyIconMaterial(
+		SlotFeature feature,
+		IconAtlas recipeAtlas,
+		IReadOnlyList<RecipeBookScreenshotIconCandidate> recipeCandidates,
+		Lazy<IconAtlas> clientCatalogAtlas)
+	{
+		RecipeBookScreenshotIconCandidate? primary = recipeCandidates.FirstOrDefault();
+		double primaryOpposition = primary is null
+			? 0
+			: recipeCandidates.FirstOrDefault(candidate => candidate.MaterialEligible != primary.MaterialEligible)?.Score ?? 0;
+		if (primary is not null
+			&& primary.MaterialEligible == true
+			&& primary.Score >= 0.82
+			&& primary.Score - primaryOpposition >= 0.08)
+		{
+			return new IconMaterialClassification(
+				primary.MaterialEligible,
+				primary.Score,
+				Math.Round(primary.Score - primaryOpposition, 4));
+		}
+
+		List<PhotometricCandidate> photometricCandidates = new();
+		(double eligibleScore, double negativeScore) = BestMaterialClassScores(
+			feature,
+			recipeAtlas,
+			photometricCandidates);
+		var clientScores = BestMaterialClassScores(
+			feature,
+			clientCatalogAtlas.Value,
+			photometricCandidates);
+		eligibleScore = Math.Max(eligibleScore, clientScores.Eligible);
+		negativeScore = Math.Max(negativeScore, clientScores.Negative);
+		double best = Math.Max(eligibleScore, negativeScore);
+		double margin = Math.Abs(eligibleScore - negativeScore);
+		bool? isMaterial = DecideFullCatalogMaterial(eligibleScore, negativeScore);
+		if (isMaterial is null)
+		{
+			(double photometricEligible, double photometricNegative) = BestPhotometricClassScores(
+				feature,
+				photometricCandidates);
+			if (DecideFullCatalogPhotometricNegative(photometricEligible, photometricNegative))
+			{
+				isMaterial = false;
+				best = photometricNegative;
+				margin = photometricNegative - photometricEligible;
+			}
+		}
+		return new IconMaterialClassification(
+			isMaterial,
+			Math.Round(best, 4),
+			Math.Round(margin, 4));
+	}
+
+	internal static bool? DecideFullCatalogMaterial(double eligibleScore, double negativeScore)
+	{
+		if (!double.IsFinite(eligibleScore)
+			|| !double.IsFinite(negativeScore)
+			|| eligibleScore < 0
+			|| eligibleScore > 1
+			|| negativeScore < 0
+			|| negativeScore > 1)
+		{
+			throw new ArgumentOutOfRangeException(nameof(eligibleScore));
+		}
+
+		double best = Math.Max(eligibleScore, negativeScore);
+		double margin = Math.Abs(eligibleScore - negativeScore);
+		if (best >= FullCatalogClassificationMinimumScore
+			&& margin >= FullCatalogClassificationMinimumMargin)
+		{
+			return eligibleScore > negativeScore;
+		}
+		if (negativeScore > eligibleScore
+			&& negativeScore >= FullCatalogExactNegativeMinimumScore
+			&& negativeScore - eligibleScore >= FullCatalogExactNegativeMinimumMargin)
+		{
+			return false;
+		}
+		return null;
+	}
+
+	internal static bool DecideFullCatalogPhotometricNegative(
+		double eligibleScore,
+		double negativeScore)
+	{
+		return double.IsFinite(eligibleScore)
+			&& double.IsFinite(negativeScore)
+			&& eligibleScore is >= 0 and <= 1
+			&& negativeScore is >= 0 and <= 1
+			&& negativeScore >= FullCatalogPhotometricNegativeMinimumScore
+			&& negativeScore - eligibleScore >= FullCatalogPhotometricNegativeMinimumMargin;
+	}
+
+	private static (double Eligible, double Negative) BestMaterialClassScores(
+		SlotFeature feature,
+		IconAtlas atlas,
+		List<PhotometricCandidate> photometricCandidates)
+	{
+		double eligible = 0;
+		double negative = 0;
+		foreach (IconTemplate template in atlas.Templates)
+		{
+			double score = CompareCompositeFeature(feature, template, atlas);
+			if (score >= FullCatalogPhotometricCandidateMinimumStructuralScore)
+			{
+				photometricCandidates.Add(new PhotometricCandidate(template, atlas));
+			}
+			if (template.MaterialEligible == true)
+			{
+				eligible = Math.Max(eligible, score);
+			}
+			else if (template.MaterialEligible == false)
+			{
+				negative = Math.Max(negative, score);
+			}
+			else
+			{
+				eligible = Math.Max(eligible, score);
+				negative = Math.Max(negative, score);
+			}
+		}
+		return (eligible, negative);
+	}
+
+	private static (double Eligible, double Negative) BestPhotometricClassScores(
+		SlotFeature feature,
+		IReadOnlyList<PhotometricCandidate> candidates)
+	{
+		double eligible = 0;
+		double negative = 0;
+		foreach (PhotometricCandidate candidate in candidates)
+		{
+			double score = 0.40 * CompareFeature(feature, candidate.Template, candidate.Atlas)
+				+ 0.35 * CompareZeroMeanLuminance(feature, candidate.Template, candidate.Atlas)
+				+ 0.25 * CompareLuminanceGradient(feature, candidate.Template, candidate.Atlas);
+			if (candidate.Template.MaterialEligible == true)
+			{
+				eligible = Math.Max(eligible, score);
+			}
+			else if (candidate.Template.MaterialEligible == false)
+			{
+				negative = Math.Max(negative, score);
+			}
+			else
+			{
+				eligible = Math.Max(eligible, score);
+				negative = Math.Max(negative, score);
+			}
+		}
+		return (eligible, negative);
+	}
+
+	private static double CompareCompositeFeature(
+		SlotFeature feature,
+		IconTemplate template,
+		IconAtlas atlas)
+	{
+		// The full client catalog is a class verifier, not an identity picker.
+		// Ignore palette/brightness shifts and require shape agreement across both
+		// global luminance structure and local edges. The class-margin calibration
+		// below is intentionally based on this photometric-invariant score.
+		return 0.58 * CompareZeroMeanLuminance(feature, template, atlas)
+			+ 0.42 * CompareLuminanceGradient(feature, template, atlas);
+	}
+
+	internal static bool ShouldUseStructuralIconFallback(
+		RecipeBookScreenshotIconCandidate? current,
+		RecipeBookScreenshotIconCandidate? luminance,
+		RecipeBookScreenshotIconCandidate? gradient)
+	{
+		return current is not null
+			&& luminance is not null
+			&& gradient is not null
+			&& current.Score < StructuralFallbackMaximumCurrentScore
+			&& luminance.Score >= StructuralFallbackMinimumLuminanceScore
+			&& gradient.Score >= StructuralFallbackMinimumGradientScore
+			&& string.Equals(luminance.Icon, gradient.Icon, StringComparison.Ordinal);
 	}
 
 	private static double CompareFeature(SlotFeature feature, IconTemplate template, IconAtlas atlas)
@@ -1180,6 +1457,115 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 
 		double rmse = weightTotal <= 0 ? 255 : Math.Sqrt(squaredError / weightTotal);
 		return Math.Clamp(1.0 - rmse / 150.0, 0, 1);
+	}
+
+	private static double CompareZeroMeanLuminance(
+		SlotFeature feature,
+		IconTemplate template,
+		IconAtlas atlas)
+	{
+		return CompareNormalizedStructuralVectors(feature.Luminance, template.Luminance);
+	}
+
+	private static double CompareLuminanceGradient(
+		SlotFeature feature,
+		IconTemplate template,
+		IconAtlas atlas)
+	{
+		return CompareNormalizedStructuralVectors(feature.Gradient, template.Gradient);
+	}
+
+	private static StructuralFeatures ExtractStructuralFeatures(
+		byte[] rgb,
+		int tileSize,
+		int comparedRows)
+	{
+		int luminanceCount = Math.Max(0, comparedRows - 1) * Math.Max(0, tileSize - 2);
+		double[] luminance = new double[luminanceCount];
+		int luminanceIndex = 0;
+		for (int y = 1; y < comparedRows; y++)
+		{
+			for (int x = 1; x < tileSize - 1; x++)
+			{
+				luminance[luminanceIndex++] = Luminance(rgb, (y * tileSize + x) * 3);
+			}
+		}
+		if (!NormalizeZeroMean(luminance))
+		{
+			luminance = Array.Empty<double>();
+		}
+
+		int gradientCount = Math.Max(0, comparedRows - 3) * Math.Max(0, tileSize - 4) * 2;
+		double[] gradient = new double[gradientCount];
+		int gradientIndex = 0;
+		for (int y = 2; y < comparedRows - 1; y++)
+		{
+			for (int x = 2; x < tileSize - 2; x++)
+			{
+				gradient[gradientIndex++] = Luminance(rgb, (y * tileSize + x + 1) * 3)
+					- Luminance(rgb, (y * tileSize + x - 1) * 3);
+				gradient[gradientIndex++] = Luminance(rgb, ((y + 1) * tileSize + x) * 3)
+					- Luminance(rgb, ((y - 1) * tileSize + x) * 3);
+			}
+		}
+		if (!NormalizeLength(gradient))
+		{
+			gradient = Array.Empty<double>();
+		}
+		return new StructuralFeatures(luminance, gradient);
+	}
+
+	private static bool NormalizeZeroMean(double[] values)
+	{
+		if (values.Length == 0)
+		{
+			return false;
+		}
+		double mean = values.Sum() / values.Length;
+		for (int index = 0; index < values.Length; index++)
+		{
+			values[index] -= mean;
+		}
+		return NormalizeLength(values);
+	}
+
+	private static bool NormalizeLength(double[] values)
+	{
+		double squaredLength = 0;
+		foreach (double value in values)
+		{
+			squaredLength += value * value;
+		}
+		if (squaredLength <= double.Epsilon)
+		{
+			return false;
+		}
+		double inverseLength = 1 / Math.Sqrt(squaredLength);
+		for (int index = 0; index < values.Length; index++)
+		{
+			values[index] *= inverseLength;
+		}
+		return true;
+	}
+
+	private static double CompareNormalizedStructuralVectors(double[] left, double[] right)
+	{
+		if (left.Length == 0 || left.Length != right.Length)
+		{
+			return 0;
+		}
+		double product = 0;
+		int index = 0;
+		int vectorWidth = Vector<double>.Count;
+		for (; index <= left.Length - vectorWidth; index += vectorWidth)
+		{
+			product += Vector.Dot(new Vector<double>(left, index), new Vector<double>(right, index));
+		}
+		for (; index < left.Length; index++)
+		{
+			product += left[index] * right[index];
+		}
+		return Math.Clamp((product + 1) / 2, 0, 1);
 	}
 
 	internal static QuantityRecognition MapQuantityRecognition(
@@ -1597,6 +1983,11 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 		return (color[0] * 30 + color[1] * 59 + color[2] * 11) / 100;
 	}
 
+	private static int Luminance(byte[] rgb, int offset)
+	{
+		return (rgb[offset] * 30 + rgb[offset + 1] * 59 + rgb[offset + 2] * 11) / 100;
+	}
+
 	private static int ReadBigEndianInt32(ReadOnlySpan<byte> value)
 	{
 		return (value[0] << 24) | (value[1] << 16) | (value[2] << 8) | value[3];
@@ -1660,15 +2051,35 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	private sealed record GridLineCandidate(int Y, int Left, int Pitch, int CellWidth, int Matches);
 	private sealed record HorizontalSegment(int Start, int Length);
 	private sealed record EdgeCluster(int Y, int Support);
-	private sealed record SlotFeature(byte[] Rgb, int BackgroundLuminance, bool Occupied);
-	private sealed record IconTemplate(string Icon, byte[] Rgb);
+	private sealed record StructuralFeatures(double[] Luminance, double[] Gradient);
+	private sealed record SlotFeature(
+		byte[] Rgb,
+		int BackgroundLuminance,
+		bool Occupied,
+		double[] Luminance,
+		double[] Gradient);
+	private sealed record IconTemplate(
+		string Icon,
+		bool? MaterialEligible,
+		byte[] Rgb,
+		double[] Luminance,
+		double[] Gradient);
+	private readonly record struct PhotometricCandidate(IconTemplate Template, IconAtlas Atlas);
 	private sealed record IconAtlas(int TileSize, int ComparedRows, int[] Background, IReadOnlyList<IconTemplate> Templates);
+	private readonly record struct IconMaterialClassification(bool? IsMaterial, double Confidence, double Margin);
+	private sealed record DetectedOccupiedSlot(
+		string Id,
+		int Row,
+		int Column,
+		Rectangle Box,
+		SlotFeature Feature);
 	private sealed record PendingRecognizedSlot(
 		string Id,
 		int Row,
 		int Column,
 		Rectangle Box,
-		IReadOnlyList<RecipeBookScreenshotIconCandidate> IconCandidates);
+		IReadOnlyList<RecipeBookScreenshotIconCandidate> IconCandidates,
+		IconMaterialClassification MaterialClassification);
 	internal sealed record QuantityRecognition(
 		string Text,
 		long? Value,
@@ -1715,6 +2126,7 @@ internal sealed class RecipeBookScreenshotService : IDisposable
 	{
 		public string Icon { get; init; } = string.Empty;
 		public int Index { get; init; }
+		public bool? MaterialEligible { get; init; }
 	}
 }
 
@@ -1733,6 +2145,9 @@ internal sealed record RecipeBookScreenshotSlot(
 	int Column,
 	RecipeBookScreenshotBox Box,
 	IReadOnlyList<RecipeBookScreenshotIconCandidate> IconCandidates,
+	bool? IconMaterialEligible,
+	double IconMaterialConfidence,
+	double IconMaterialMargin,
 	int? BorderGrade,
 	double BorderGradeConfidence,
 	string QuantityText,
@@ -1741,4 +2156,4 @@ internal sealed record RecipeBookScreenshotSlot(
 	double QuantityConfidence,
 	bool QuantityAssumedOne);
 internal sealed record RecipeBookScreenshotBox(int X, int Y, int Width, int Height);
-internal sealed record RecipeBookScreenshotIconCandidate(string Icon, double Score);
+internal sealed record RecipeBookScreenshotIconCandidate(string Icon, double Score, bool? MaterialEligible = true);

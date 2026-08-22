@@ -16,7 +16,7 @@ namespace BlackSpiritHub;
 /// </summary>
 internal static class RecipeBookOcrFixtureRunner
 {
-	private const int SupportedSchemaVersion = 3;
+	private const int SupportedSchemaVersion = 4;
 	private const int MaximumManifestBytes = 1_000_000;
 	private const int FailureExitCode = 269;
 	private const double MinimumRequiredBorderGradeConfidence = 0.70;
@@ -104,6 +104,7 @@ internal static class RecipeBookOcrFixtureRunner
 			summaries.Sum(summary => summary.ResolvedLabels),
 			summaries.Sum(summary => summary.AbstainedLabels),
 			summaries.Sum(summary => summary.AssumedOne),
+			summaries.Sum(summary => summary.MaterialClassAssertions),
 			summaries.Sum(summary => summary.BorderGradeAssertions),
 			summaries.Min(summary => summary.MinimumBorderGradeConfidence),
 			summaries);
@@ -178,6 +179,7 @@ internal static class RecipeBookOcrFixtureRunner
 				|| fixtureCase.Grid is null
 				|| fixtureCase.Truth is null
 				|| fixtureCase.RequiredResolved is null
+				|| fixtureCase.RequiredMaterialClasses is null
 				|| fixtureCase.RequiredBorderGrades is null
 				|| fixtureCase.RequiredBorderGrades.Count == 0
 				|| !manifest.TruthSets.TryGetValue(fixtureCase.Truth.Set, out FixtureTruthSet? truthSet))
@@ -260,6 +262,21 @@ internal static class RecipeBookOcrFixtureRunner
 				{
 					throw new InvalidDataException(
 						$"Fixture '{fixtureCase.Id}' contains an invalid or duplicate required-border-grade coordinate.");
+				}
+			}
+
+			HashSet<(int Row, int Column)> requiredMaterialClasses = new();
+			foreach (FixtureMaterialClassExpectation expectation in fixtureCase.RequiredMaterialClasses)
+			{
+				if (expectation.Row <= 0
+					|| expectation.Row > grid.Rows
+					|| expectation.Column <= 0
+					|| expectation.Column > grid.Columns
+					|| expectation.MaterialClass is not ("material" or "nonMaterial" or "uncertain")
+					|| !requiredMaterialClasses.Add((expectation.Row, expectation.Column)))
+				{
+					throw new InvalidDataException(
+						$"Fixture '{fixtureCase.Id}' contains an invalid or duplicate required-material-class coordinate.");
 				}
 			}
 
@@ -346,6 +363,25 @@ internal static class RecipeBookOcrFixtureRunner
 		HashSet<(int Row, int Column)> requiredResolved = fixtureCase.RequiredResolved!
 			.Select(coordinate => (coordinate.Row - 1, coordinate.Column - 1))
 			.ToHashSet();
+		foreach (FixtureMaterialClassExpectation expectation in fixtureCase.RequiredMaterialClasses!)
+		{
+			RecipeBookScreenshotSlot slot = slots[(expectation.Row - 1, expectation.Column - 1)];
+			bool? expectedMaterialEligible = expectation.MaterialClass switch
+			{
+				"material" => true,
+				"nonMaterial" => false,
+				"uncertain" => null,
+				_ => throw new InvalidDataException(
+					$"Fixture '{fixtureCase.Id}' contains an unsupported material class.")
+			};
+			if (slot.IconMaterialEligible != expectedMaterialEligible)
+			{
+				throw new InvalidDataException(
+					$"Fixture '{fixtureCase.Id}' r{expectation.Row}c{expectation.Column} must resolve "
+					+ $"materialClass={expectation.MaterialClass}; received "
+					+ $"{(slot.IconMaterialEligible is bool actual ? actual.ToString().ToLowerInvariant() : "null")}.");
+			}
+		}
 		foreach (FixtureBorderGradeExpectation expectation in fixtureCase.RequiredBorderGrades!)
 		{
 			RecipeBookScreenshotSlot slot = slots[(expectation.Row - 1, expectation.Column - 1)];
@@ -457,6 +493,7 @@ internal static class RecipeBookOcrFixtureRunner
 			resolvedLabels,
 			abstainedLabels,
 			assumedOne,
+			fixtureCase.RequiredMaterialClasses.Count,
 			fixtureCase.RequiredBorderGrades.Count,
 			Math.Round(minimumBorderGradeConfidence, 4));
 	}
@@ -513,6 +550,7 @@ internal static class RecipeBookOcrFixtureRunner
 		public FixtureGrid? Grid { get; init; }
 		public int MinimumResolved { get; init; } = -1;
 		public List<FixtureCoordinate>? RequiredResolved { get; init; }
+		public List<FixtureMaterialClassExpectation>? RequiredMaterialClasses { get; init; }
 		public List<FixtureBorderGradeExpectation>? RequiredBorderGrades { get; init; }
 		public FixtureTruthMap? Truth { get; init; }
 	}
@@ -528,6 +566,13 @@ internal static class RecipeBookOcrFixtureRunner
 		public int Row { get; init; }
 		public int Column { get; init; }
 		public int Grade { get; init; } = -1;
+	}
+
+	private sealed class FixtureMaterialClassExpectation
+	{
+		public int Row { get; init; }
+		public int Column { get; init; }
+		public string MaterialClass { get; init; } = string.Empty;
 	}
 
 	private sealed class FixtureGrid
@@ -556,6 +601,7 @@ internal static class RecipeBookOcrFixtureRunner
 		int ResolvedLabels,
 		int AbstainedLabels,
 		int AssumedOne,
+		int MaterialClassAssertions,
 		int BorderGradeAssertions,
 		double MinimumBorderGradeConfidence);
 
@@ -567,6 +613,7 @@ internal static class RecipeBookOcrFixtureRunner
 		int ResolvedLabelCount,
 		int AbstainedLabelCount,
 		int AssumedOneCount,
+		int MaterialClassAssertionCount,
 		int BorderGradeAssertionCount,
 		double MinimumBorderGradeConfidence,
 		IReadOnlyList<FixtureCaseSummary> Cases);

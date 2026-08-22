@@ -243,6 +243,51 @@ assert.equal(houseRequirement.rawOwned,10000);
 assert.equal(core.recipeBookRecipeCraftCount(houseRecipe,wolfOnly,substitutionData),0,"A substitute must not satisfy an exact HOUSE recipe outside the reviewed recipe-type scope");
 assert.equal(core.recipeBookRecipeCraftCount(houseRecipe,mixedMeat,substitutionData),2000);
 
+const fishFixture={
+  schemaVersion:1,
+  source:{kind:"fish substitution fixture"},
+  counts:{recipes:5,items:8},
+  items:{
+    "8201":{name:"Mudskipper",description:"An ingredient used for Cooking.\n- Common Fish\n- Usage: Fried Fish, Steamed Fish, Fish Soup, etc.",grade:1,icon:`icons/items/${"1".repeat(64)}.webp`},
+    "8302":{name:"Clownfish",description:"An ingredient used for Cooking.\n- Common Fish\n- Usage: Fried Fish, Steamed Fish, Fish Soup, etc.",grade:1,icon:`icons/items/${"2".repeat(64)}.webp`},
+    "8335":{name:"Mackerel Pike",description:"An ingredient used for Cooking.\n- Common Fish\n- Usage: Fried Fish, Steamed Fish, Fish Soup, etc.",grade:1,icon:`icons/items/${"3".repeat(64)}.webp`},
+    "8501":{name:"Dried Mudskipper",description:"You will need twice as much of it for cooking compared to the non-dried version.",grade:0,icon:`icons/items/${"4".repeat(64)}.webp`},
+    "8602":{name:"Dried Clownfish",description:"You will need twice as much of it for cooking compared to the non-dried version.",grade:0,icon:`icons/items/${"5".repeat(64)}.webp`},
+    "8635":{name:"Dried Mackerel Pike",description:"A dried mackerel pike obtained through Drying.",grade:0,icon:`icons/items/${"5".repeat(64)}.webp`},
+    "990001":{name:"Test Fish Meal",description:"A test cooking output.",grade:0,icon:`icons/items/${"6".repeat(64)}.webp`},
+    "990002":{name:"Test Fish Pack",description:"A test workshop output.",grade:0,icon:`icons/items/${"7".repeat(64)}.webp`}
+  },
+  recipes:[
+    {id:"dry-mudskipper",outputId:"8501",type:"DRY",inputs:[{itemId:"8201",count:1}]},
+    {id:"dry-clownfish",outputId:"8602",type:"DRY",inputs:[{itemId:"8302",count:1}]},
+    {id:"dry-mackerel-pike",outputId:"8635",type:"DRY",inputs:[{itemId:"8335",count:1}]},
+    {id:"cook-generic-fish",outputId:"990001",type:"COOK",inputs:[{itemId:"8201",count:1}]},
+    {id:"house-exact-dried-fish",outputId:"990002",type:"HOUSE",inputs:[{itemId:"8501",count:10}]}
+  ]
+};
+const fishData=core.recipeBookPrepareData(fishFixture),fishGroup=fishData.substitutionGroupLookup.fish,fishRecipe=fishData.recipes.find(recipe=>recipe.id==="cook-generic-fish");
+assert.ok(fishGroup,"A verified DRY mapping from generic Cooking fish must derive the Fish Group");
+assert.equal(fishGroup.representativeKey,"8201:0");
+assert.deepEqual(Array.from(fishGroup.recipeTypes),["COOK"],"Fish substitution must apply only to generic Cooking recipes");
+assert.equal(fishGroup.sharedIcon,true,"Fish artwork may identify multiple exact dried species");
+assert.deepEqual(Array.from(fishGroup.members,member=>[member.key,member.factor,member.tier]),[
+  ["8201:0",2,"fresh-common"],["8302:0",2,"fresh-common"],["8335:0",2,"fresh-common"],
+  ["8501:0",1,"dried"],["8602:0",1,"dried"],["8635:0",1,"dried"]
+],"Derived fish members must use two integer recipe units per fresh fish and one per dried fish");
+assert.equal(core.recipeBookRecipeCraftCount(fishRecipe,{"8302:0":1},fishData),1,"One fresh generic fish must satisfy one fish requirement");
+assert.equal(core.recipeBookRecipeCraftCount(fishRecipe,{"8602:0":1},fishData),0,"One dried fish must not satisfy one fresh-fish requirement");
+assert.equal(core.recipeBookRecipeCraftCount(fishRecipe,{"8602:0":2},fishData),1,"Two dried fish must substitute for one fresh fish");
+const fishInventory=Array.from(core.recipeBookResourceInventoryRows(fishData,{"8302:0":1,"8602:0":2})).find(row=>row.groupId==="fish");
+assert.equal(fishInventory.rawTotal,3,"Fish inventory must preserve physical item totals");
+assert.equal(fishInventory.equivalentTotal,4,"One fresh plus two dried fish must contribute four scaled recipe units");
+const driedCookingUsage=fishData.recipesUsingKey["8602:0"].find(entry=>entry.recipe.id==="cook-generic-fish");
+assert.equal(driedCookingUsage?.count,2,"Synthesized item usage must include the representative's scale before converting to a dried member count");
+const exactDryRecipe=fishData.recipes.find(recipe=>recipe.id==="dry-clownfish"),exactHouseFishRecipe=fishData.recipes.find(recipe=>recipe.id==="house-exact-dried-fish");
+assert.equal(core.recipeBookRecipeCraftCount(exactDryRecipe,{"8602:0":99},fishData),0,"A dried sibling must never satisfy an exact fresh-fish Drying input");
+assert.equal(core.recipeBookRecipeCraftCount(exactDryRecipe,{"8302:0":1},fishData),1,"The exact fresh species must still satisfy its Drying recipe");
+assert.equal(core.recipeBookRecipeCraftCount(exactHouseFishRecipe,{"8602:0":10},fishData),0,"Dried siblings must not pool in exact Fish Workshop recipes");
+assert.equal(core.recipeBookRecipeCraftCount(exactHouseFishRecipe,{"8501:0":10},fishData),1,"The exact dried species must still satisfy its Fish Workshop recipe");
+
 const singleResourceRow=Array.from(core.recipeBookResourceInventoryRows(prepared,{"3:0":2}))[0];
 assert.equal(singleResourceRow.kind,"single","Materials without a reviewed substitution group must retain a normal inventory row");
 assert.equal(singleResourceRow.id,"3:0");
@@ -300,7 +345,18 @@ if(fs.existsSync(bundledDataPath)){
   assert.deepEqual(filterReport.counts.exclusions,payload.counts.exclusions,"filter report exclusion totals must match the runtime dataset");
   assert.equal(bundled.recipes.length,9854,"the reviewed client snapshot recipe count changed unexpectedly");
   assert.equal(Object.keys(bundled.items).length,7125,"the reviewed client snapshot plus 25 curated group-only material identities changed unexpectedly");
-  assert.equal(bundled.resourceItems.length,4147,"the reviewed snapshot plus curated substitution-member identities changed unexpectedly");
+  assert.equal(bundled.resourceItems.length,4199,"the reviewed snapshot plus curated and derived substitution-member identities changed unexpectedly");
+  const bundledFishGroup=bundled.substitutionGroupLookup.fish,bundledFreshFish=bundledFishGroup?.members.filter(member=>member.tier.startsWith("fresh-"))||[],bundledDriedFish=bundledFishGroup?.members.filter(member=>member.tier==="dried")||[];
+  assert.ok(bundledFishGroup,"The installed-client snapshot must derive a generic Fish Group from its exact Drying mappings");
+  assert.equal(bundledFishGroup.members.length,359,"The reviewed snapshot must expose all 180 fresh Fish identities and 179 unique dried outputs");
+  assert.equal(bundledFreshFish.length,180,"Every exact fresh Fish input in the reviewed DRY mappings must remain selectable");
+  assert.equal(bundledDriedFish.length,179,"Duplicate DRY outputs such as Dried Mullet must produce one exact resource identity");
+  assert.ok(bundledFreshFish.every(member=>member.factor===2&&member.sourceWorth===2),"Fresh Fish of every client rarity must contribute one full two-unit cooking substitution");
+  assert.ok(bundledDriedFish.every(member=>member.factor===1&&member.sourceWorth===1),"Every verified dried Fish must contribute one half-fish cooking unit");
+  assert.equal(bundled.substitutionMemberByKey["8602:0"]?.groupId,"fish","Dried Clownfish from the supplied qty-89 icon must be a usable Fish Group member");
+  assert.equal(bundled.substitutionMemberByKey["8635:0"]?.groupId,"fish","Dried Mackerel Pike from the supplied qty-89 icon must be a usable Fish Group member");
+  assert.equal(bundled.substitutionMemberByKey["9321:0"],undefined,"Finished Carrot Confit must not enter the Fish Group or recipe-input catalog");
+  assert.ok(bundled.recipesUsingKey["8602:0"].filter(entry=>entry.substitutionGroupId==="fish").every(entry=>entry.count===2),"Bundled Dried Clownfish usage must consistently show two dried fish per canonical fresh-fish input");
   assert.equal(core.recipeBookResourceCandidates(bundled,"Eltro Sea Crystal",12).length,70,"all exact same-name ingredient identities must remain selectable");
   assert.equal(core.recipeBookResourceCandidates(bundled,"756586",12)[0]?.itemId,"756586","ingredient item IDs must be searchable when client names are ambiguous");
   const potatoStew=bundled.recipes.find(recipe=>recipe.id==="recipe-9341-e1888a1a50c199ab"),potatoRequirement=core.recipeBookRecipeRequirements(potatoStew,{"7001:0":999},bundled).find(requirement=>requirement.candidateKey==="7003:0");

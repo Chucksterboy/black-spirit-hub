@@ -331,6 +331,8 @@ internal static class Program
 				Path.Combine(recipeBookRoot, "NOTICE.txt"),
 				Path.Combine(recipeBookRoot, "ocr", "icon-atlas.png"),
 				Path.Combine(recipeBookRoot, "ocr", "icon-index.json"),
+				Path.Combine(recipeBookRoot, "ocr", "client-catalog-atlas.png"),
+				Path.Combine(recipeBookRoot, "ocr", "client-catalog-index.json"),
 				Path.Combine(recipeBookRoot, "ocr", "ppocrv5", "en_PP-OCRv5_mobile_rec.onnx"),
 				Path.Combine(recipeBookRoot, "ocr", "LICENSE-ONNXRUNTIME.txt"),
 				Path.Combine(recipeBookRoot, "ocr", "LICENSE-PADDLEOCR.txt"),
@@ -3604,6 +3606,56 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 			{
 				return 265;
 			}
+		}
+		RecipeBookScreenshotIconCandidate weakCurrent = new("icons/items/current.webp", 0.5999);
+		RecipeBookScreenshotIconCandidate structuralLuminance = new("icons/items/cotton.webp", 0.95);
+		RecipeBookScreenshotIconCandidate structuralGradient = new("icons/items/cotton.webp", 0.90);
+		if (!RecipeBookScreenshotService.ShouldUseStructuralIconFallback(
+				weakCurrent,
+				structuralLuminance,
+				structuralGradient)
+			|| RecipeBookScreenshotService.ShouldUseStructuralIconFallback(
+				weakCurrent with { Score = 0.60 },
+				structuralLuminance,
+				structuralGradient)
+			|| RecipeBookScreenshotService.ShouldUseStructuralIconFallback(
+				weakCurrent,
+				structuralLuminance with { Score = 0.9499 },
+				structuralGradient)
+			|| RecipeBookScreenshotService.ShouldUseStructuralIconFallback(
+				weakCurrent,
+				structuralLuminance,
+				structuralGradient with { Score = 0.8999 })
+			|| RecipeBookScreenshotService.ShouldUseStructuralIconFallback(
+				weakCurrent,
+				structuralLuminance,
+				structuralGradient with { Icon = "icons/items/silk.webp" }))
+		{
+			return 280;
+		}
+		if (RecipeBookScreenshotService.DecideFullCatalogMaterial(0.92, 0.80) != true
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.76, 0.84) != false
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.9525, 0.9693) != false
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.9547, 0.9563) is not null
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.9144, 0.9616) is not null
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.9714, 0.9432) is not null
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.9485, 0.9447) is not null
+			|| RecipeBookScreenshotService.DecideFullCatalogMaterial(0.81, 0.70) is not null)
+		{
+			return 281;
+		}
+		if (!RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.7939, 0.9128)
+			|| !RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.8757, 0.9228)
+			|| !RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.86, 0.90)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.8601, 0.90)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.9072, 0.8789)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.7667, 0.7348)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.8896, 0.8859)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.86, 0.8999)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(double.NaN, 0.99)
+			|| RecipeBookScreenshotService.DecideFullCatalogPhotometricNegative(0.10, 1.01))
+		{
+			return 282;
 		}
 
 		if (PpOcrv5QuantityRecognizer.NormalizeStrictQuantityToken("455:1K") != "455.1K"

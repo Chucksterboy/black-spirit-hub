@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "truthSets": {
     "storage-88": {
       "visibleLabelCount": 88,
@@ -143,6 +143,13 @@
         { "row": 6, "column": 1 },
         { "row": 6, "column": 3 }
       ],
+      "requiredMaterialClasses": [
+        { "row": 1, "column": 1, "materialClass": "material" },
+        { "row": 2, "column": 1, "materialClass": "material" },
+        { "row": 3, "column": 6, "materialClass": "nonMaterial" },
+        { "row": 3, "column": 7, "materialClass": "nonMaterial" },
+        { "row": 3, "column": 8, "materialClass": "nonMaterial" }
+      ],
       "requiredBorderGrades": [
         { "row": 1, "column": 1, "grade": 2 },
         { "row": 1, "column": 2, "grade": 2 },
@@ -181,6 +188,10 @@
         { "row": 5, "column": 4 },
         { "row": 5, "column": 6 },
         { "row": 6, "column": 1 }
+      ],
+      "requiredMaterialClasses": [
+        { "row": 1, "column": 1, "materialClass": "material" },
+        { "row": 2, "column": 1, "materialClass": "material" }
       ],
       "requiredBorderGrades": [
         { "row": 1, "column": 1, "grade": 2 },
@@ -222,6 +233,13 @@
         { "row": 6, "column": 1 },
         { "row": 6, "column": 3 }
       ],
+      "requiredMaterialClasses": [
+        { "row": 1, "column": 1, "materialClass": "material" },
+        { "row": 1, "column": 7, "materialClass": "uncertain" },
+        { "row": 2, "column": 1, "materialClass": "material" },
+        { "row": 3, "column": 6, "materialClass": "nonMaterial" },
+        { "row": 3, "column": 7, "materialClass": "nonMaterial" }
+      ],
       "requiredBorderGrades": [
         { "row": 1, "column": 1, "grade": 2 },
         { "row": 1, "column": 2, "grade": 2 },
@@ -256,6 +274,7 @@
       },
       "minimumResolved": 11,
       "requiredResolved": [],
+      "requiredMaterialClasses": [],
       "requiredBorderGrades": [
         { "row": 1, "column": 1, "grade": 2 },
         { "row": 1, "column": 2, "grade": 2 },
@@ -284,6 +303,7 @@
       },
       "minimumResolved": 1,
       "requiredResolved": [],
+      "requiredMaterialClasses": [],
       "requiredBorderGrades": [
         { "row": 1, "column": 1, "grade": 0 },
         { "row": 1, "column": 2, "grade": 0 }
