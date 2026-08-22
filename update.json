@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.50",
+    "version":  "v0.9.51",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.50/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "7C7ECE4693A9BBD6B62E8E02E39D73B9ECFCF96EFB124BA092AB3D636656E45B",
-    "notes":  "Forces boss-alert text-to-speech to use an installed English Windows voice, preferring US English, and prevents fallback to a localized system voice."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.51/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "692869C9FE947C069148CF92FD28157150F4CDDD57B03881EE538E336AC5DDBF",
+    "notes":  "Rebuilds Recipe Book screenshot imports around a full current-client material classifier, filtering event items, boxes, coupons, equipment, decorations, and finished products while restoring dim Cotton Fabric and dried-fish recognition, keeping uncertain materials reviewable and preselected, and adding real-image regression coverage."
 }
