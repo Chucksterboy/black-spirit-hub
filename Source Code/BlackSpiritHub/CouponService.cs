@@ -17,47 +17,11 @@ internal sealed class CouponService : IDisposable
 	private const string SourceUrl = "https://api.bdoalerts.net/api/coupons";
 	private const string OfficialSourceUrl = "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=5676";
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
-	private static readonly string[] RegionPropertyNames =
-	[
-		"region",
-		"regions",
-		"server_region",
-		"server_regions"
-	];
 	private static readonly string[] PlatformPropertyNames =
 	[
 		"platform",
 		"platforms"
 	];
-	private static readonly HashSet<string> NaEuRegionTokens = new(StringComparer.Ordinal)
-	{
-		"NA",
-		"EU",
-		"NAEU",
-		"EUNA",
-		"NORTHAMERICA",
-		"EUROPE",
-		"GLOBAL",
-		"WORLDWIDE",
-		"ALL",
-		"PCNA",
-		"PCEU"
-	};
-	// Bootstrap snapshot from the official NA/EU coupon page. The live official
-	// page and the persisted validation cache extend this set automatically.
-	// Keeping a last-known-good snapshot lets a clean install remain functional
-	// during Pearl Abyss website maintenance without accepting other regions.
-	private static readonly HashSet<string> LastKnownVerifiedNaEuCouponCodes =
-		new(StringComparer.OrdinalIgnoreCase)
-		{
-			"2026NAEUSHOWDOWN",
-			"BECOMINGBRIGHTER",
-			"BEYONDTHEJOURNEY",
-			"FOURYEARSONETEAM",
-			"LIGHTUPFOURYEARS",
-			"TYALLADVENTURERS",
-			"WESHINEASONETEAM"
-		};
 	private static readonly HashSet<string> PcPlatformTokens = new(StringComparer.Ordinal)
 	{
 		"PC",
@@ -67,19 +31,18 @@ internal sealed class CouponService : IDisposable
 		"CROSSPLATFORM",
 		"MULTIPLATFORM"
 	};
-	private static readonly HashSet<string> KnownPlatformTokens = new(StringComparer.Ordinal)
+	private static readonly HashSet<string> ConsolePlatformTokens = new(StringComparer.Ordinal)
 	{
-		"PC",
-		"BOTH",
-		"ALL",
-		"ANY",
-		"CROSSPLATFORM",
-		"MULTIPLATFORM",
 		"CONSOLE",
 		"CONSOLENA",
 		"CONSOLEEU",
 		"XBOX",
+		"XBOXONE",
+		"XBOXSERIES",
+		"XBOXSERIESX",
+		"XBOXSERIESXS",
 		"PLAYSTATION",
+		"PS",
 		"PS4",
 		"PS5"
 	};
@@ -142,7 +105,7 @@ internal sealed class CouponService : IDisposable
 		CouponCache? cache = await ReadJsonAsync<CouponCache>(paths.CouponsCachePath, cancellationToken);
 		if (cache != null)
 		{
-			List<CouponEntry> cachedCoupons = ValidatedCachedCoupons(cache);
+			List<CouponEntry> cachedCoupons = NormalizedCachedCoupons(cache);
 			List<CouponEntry> resolvedCoupons = await itemIconResolver.ResolveAsync(
 				cachedCoupons,
 				cancellationToken,
@@ -213,15 +176,6 @@ internal sealed class CouponService : IDisposable
 			CouponCache? existingCache = await ReadJsonAsync<CouponCache>(
 				paths.CouponsCachePath,
 				cancellationToken);
-			HashSet<string> validatedNaEuCouponKeys = new(
-				TrustedBootstrapNaEuCouponCodes(),
-				StringComparer.OrdinalIgnoreCase);
-			validatedNaEuCouponKeys.UnionWith(
-				existingCache?.NaEuCouponCodes?
-					.Select(CanonicalCouponCode)
-					.Where(key => key.Length > 0)
-				?? []);
-			validatedNaEuCouponKeys.UnionWith(CouponKeys(officialCoupons));
 
 			using HttpRequestMessage bdoAlertsRequest = new(HttpMethod.Get, SourceUrl);
 			if (!BdoAlertsApiCredentials.TryApply(
@@ -233,9 +187,7 @@ internal sealed class CouponService : IDisposable
 				{
 					List<CouponEntry> merged = MergeCouponSources(
 						officialCoupons,
-						FilterCouponsByKeys(
-							existingCache?.Coupons ?? [],
-							validatedNaEuCouponKeys));
+						NormalizedCachedCoupons(existingCache));
 					merged = await itemIconResolver.ResolveAsync(
 						merged,
 						cancellationToken);
@@ -246,8 +198,7 @@ internal sealed class CouponService : IDisposable
 						DateTimeOffset.UtcNow,
 						"Official BDO",
 						merged,
-						failure,
-						CouponKeys(merged).OrderBy(key => key).ToList());
+						failure);
 					await WriteJsonAsync(
 						paths.CouponsCachePath,
 						officialCache,
@@ -299,9 +250,7 @@ internal sealed class CouponService : IDisposable
 				{
 					List<CouponEntry> merged = MergeCouponSources(
 						officialCoupons,
-						FilterCouponsByKeys(
-							existingCache?.Coupons ?? [],
-							validatedNaEuCouponKeys));
+						NormalizedCachedCoupons(existingCache));
 					merged = await itemIconResolver.ResolveAsync(
 						merged,
 						cancellationToken);
@@ -310,8 +259,7 @@ internal sealed class CouponService : IDisposable
 						DateTimeOffset.UtcNow,
 						"Official BDO",
 						merged,
-						failure,
-						CouponKeys(merged).OrderBy(key => key).ToList());
+						failure);
 					await WriteJsonAsync(paths.CouponsCachePath, officialCache, cancellationToken);
 					cacheUpdated = true;
 					LogSummary(merged, officialIcons, "Official BDO");
@@ -326,23 +274,29 @@ internal sealed class CouponService : IDisposable
 					new CouponRefreshDebug(SourceUrl, statusCode, 0, 0, false, false, failure));
 			}
 			logger.Info($"Coupons raw response length: {html.Length} characters.");
-			List<CouponEntry> bdoAlertsCoupons = ParseBdoAlertsResponse(
-				html,
-				validatedNaEuCouponKeys);
+			List<CouponEntry> bdoAlertsCoupons = ParseBdoAlertsResponse(html);
 			logger.Info(
-				$"BDO Alerts coupons accepted for NA/EU PC: {bdoAlertsCoupons.Count}.");
+				$"BDO Alerts non-console coupons accepted: {bdoAlertsCoupons.Count}.");
 			List<CouponEntry> coupons = MergeCouponSources(
 				officialCoupons,
 				bdoAlertsCoupons);
-			logger.Info($"Coupons parsed: {coupons.Count}.");
-			logger.Info($"Coupons parsing succeeded: {(coupons.Count > 0 ? "yes" : "no")}.");
+			int currentCouponCount = coupons.Count;
+			logger.Info($"Coupons parsed from the current snapshot: {currentCouponCount}.");
+			logger.Info($"Coupons parsing succeeded: {(currentCouponCount > 0 ? "yes" : "no")}.");
 			if (coupons.Count == 0)
 			{
 				throw new InvalidDataException(
-					officialCoupons.Count == 0
-						? "NA/EU coupon eligibility could not be verified because the official NA/EU source was unavailable."
-						: "No NA/EU PC coupon entries could be read from the live sources.");
+					"No non-console coupon entries could be read from the live sources.");
 			}
+			bool snapshotComplete = IsCompleteBdoAlertsSnapshot(html);
+			coupons = MergeCouponHistory(
+				coupons,
+				existingCache?.Coupons ?? [],
+				attemptTime,
+				snapshotComplete);
+			logger.Info(
+				$"Coupons history retained: {coupons.Count - currentCouponCount}; " +
+				$"snapshot complete: {(snapshotComplete ? "yes" : "no")}.");
 
 			coupons = await itemIconResolver.ResolveAsync(
 				coupons,
@@ -352,8 +306,7 @@ internal sealed class CouponService : IDisposable
 				DateTimeOffset.UtcNow,
 				"BDO Alerts",
 				coupons,
-				null,
-				CouponKeys(coupons).OrderBy(key => key).ToList());
+				null);
 			await WriteJsonAsync(paths.CouponsCachePath, cache, cancellationToken);
 			cacheUpdated = true;
 			logger.Info("Coupons cache updated: yes.");
@@ -382,7 +335,7 @@ internal sealed class CouponService : IDisposable
 		CouponCache? cache = await ReadJsonAsync<CouponCache>(
 			paths.CouponsCachePath,
 			cancellationToken);
-		return cache is null ? [] : ValidatedCachedCoupons(cache);
+		return NormalizedCachedCoupons(cache);
 	}
 
 	private async Task<object> BuildDashboardAsync(string status, string? error, CancellationToken cancellationToken,
@@ -396,7 +349,7 @@ internal sealed class CouponService : IDisposable
 		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((DateTimeOffset.UtcNow - cache.LastRefreshed).TotalMinutes));
 		// Coupon entries from structured feeds and the local cache are authoritative.
 		// Never suppress them based on words or patterns contained in the coupon code.
-		List<CouponEntry> normalizedCoupons = ValidatedCachedCoupons(cache);
+		List<CouponEntry> normalizedCoupons = NormalizedCachedCoupons(cache);
 		var coupons = normalizedCoupons.Select(c => new
 		{
 			c.Code,
@@ -425,7 +378,7 @@ internal sealed class CouponService : IDisposable
 			isStale,
 			cacheAgeMinutes,
 			refreshDebug,
-			regionScope = "NA / EU",
+			regionScope = "CONSOLE EXCLUDED",
 			settings,
 			coupons,
 			availableCount = coupons.Count(x => !x.IsExpired),
@@ -444,30 +397,9 @@ internal sealed class CouponService : IDisposable
 				DateTimeOffset.UtcNow,
 				"Cached",
 				seedCoupons,
-				"Seed cache created from the last publicly verified NA/EU coupon listing.",
-				CouponKeys(seedCoupons).OrderBy(key => key).ToList());
+				"Seed cache created from the last publicly verified coupon listing.");
 			await WriteJsonAsync(paths.CouponsCachePath, seed, cancellationToken);
 			logger.Info($"Coupon seed cache created with {seed.Coupons.Count} entries.");
-		}
-		else if (existing.NaEuCouponCodes is not { Count: > 0 })
-		{
-			HashSet<string> trustedKeys = TrustedBootstrapNaEuCouponCodes();
-			List<CouponEntry> migratedCoupons = FilterCouponsByKeys(
-				existing.Coupons,
-				trustedKeys);
-			CouponCache migrated = existing with
-			{
-				Coupons = migratedCoupons,
-				NaEuCouponCodes = CouponKeys(migratedCoupons)
-					.OrderBy(key => key)
-					.ToList()
-			};
-			await WriteJsonAsync(
-				paths.CouponsCachePath,
-				migrated,
-				cancellationToken);
-			logger.Info(
-				$"Legacy coupon cache migrated with {migratedCoupons.Count} verified NA/EU entries.");
 		}
 		if (await ReadJsonAsync<CouponSettings>(paths.CouponSettingsPath, cancellationToken) is null)
 			await WriteJsonAsync(paths.CouponSettingsPath, new CouponSettings(true, true, "", "all"), cancellationToken);
@@ -498,15 +430,6 @@ internal sealed class CouponService : IDisposable
 			[new("Resplendent Oasis Box", 1, "https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp")], "Garmoth")
 	];
 
-	private static HashSet<string> TrustedBootstrapNaEuCouponCodes()
-	{
-		HashSet<string> trusted = new(
-			LastKnownVerifiedNaEuCouponCodes,
-			StringComparer.OrdinalIgnoreCase);
-		trusted.UnionWith(CouponKeys(SeedCoupons()));
-		return trusted;
-	}
-
 	internal static string CanonicalCouponCode(string value)
 	{
 		return new string(
@@ -526,34 +449,11 @@ internal sealed class CouponService : IDisposable
 				.ToArray());
 	}
 
-	private static HashSet<string> CouponKeys(IEnumerable<CouponEntry> coupons)
+	private static List<CouponEntry> NormalizedCachedCoupons(CouponCache? cache)
 	{
-		return coupons
-			.Select(coupon => CanonicalCouponCode(coupon.Code))
-			.Where(key => key.Length > 0)
-			.ToHashSet(StringComparer.OrdinalIgnoreCase);
-	}
-
-	private static List<CouponEntry> FilterCouponsByKeys(
-		IEnumerable<CouponEntry> coupons,
-		IReadOnlySet<string> acceptedKeys)
-	{
-		return DeduplicateCouponEntries(
-			coupons.Where(coupon =>
-				acceptedKeys.Contains(CanonicalCouponCode(coupon.Code))));
-	}
-
-	private static List<CouponEntry> ValidatedCachedCoupons(CouponCache cache)
-	{
-		if (cache.NaEuCouponCodes is not { Count: > 0 })
-			return [];
-
-		return FilterCouponsByKeys(
-			cache.Coupons,
-			cache.NaEuCouponCodes
-				.Select(CanonicalCouponCode)
-				.Where(key => key.Length > 0)
-				.ToHashSet(StringComparer.OrdinalIgnoreCase));
+		return cache is null
+			? []
+			: DeduplicateCouponEntries(cache.Coupons);
 	}
 
 	private static bool TryReadAudienceValues(
@@ -597,85 +497,43 @@ internal sealed class CouponService : IDisposable
 				.ToArray());
 	}
 
-	private static bool CouponSupportsPc(JsonElement coupon)
+	private static bool CouponIsExplicitlyConsoleOnly(JsonElement coupon)
 	{
-		bool platformPresent = TryReadAudienceValues(
+		List<string> audienceValues = [];
+		TryReadAudienceValues(
 			coupon,
 			PlatformPropertyNames,
 			out List<string> platforms);
-		if (!platformPresent
-			&& coupon.TryGetProperty("description", out JsonElement description)
+		audienceValues.AddRange(platforms);
+
+		if (coupon.TryGetProperty("description", out JsonElement description)
 			&& description.ValueKind == JsonValueKind.String)
 		{
-			string descriptionToken = NormalizeAudienceToken(
-				description.GetString() ?? string.Empty);
-			if (KnownPlatformTokens.Contains(descriptionToken))
-			{
-				platformPresent = true;
-				platforms.Add(descriptionToken);
-			}
-			else if (descriptionToken.Contains("PC", StringComparison.Ordinal)
-				|| descriptionToken.Contains("COMPUTER", StringComparison.Ordinal))
-			{
-				platformPresent = true;
-				platforms.Add("PC");
-			}
-			else if (descriptionToken.Contains("CONSOLE", StringComparison.Ordinal)
-				|| descriptionToken.Contains("XBOX", StringComparison.Ordinal)
-				|| descriptionToken.Contains("PLAYSTATION", StringComparison.Ordinal)
-				|| descriptionToken.Contains("PS4", StringComparison.Ordinal)
-				|| descriptionToken.Contains("PS5", StringComparison.Ordinal))
-			{
-				platformPresent = true;
-				platforms.Add("CONSOLE");
-			}
+			audienceValues.Add(description.GetString() ?? string.Empty);
 		}
-		if (!platformPresent)
-			return true;
 
-		return platforms
+		// BDO Alerts does not always provide audience metadata. Unknown or
+		// missing metadata is accepted. A mixed audience is accepted too; only
+		// explicit console-only evidence is excluded.
+		string[] normalized = audienceValues
 			.Select(NormalizeAudienceToken)
-			.Any(PcPlatformTokens.Contains);
+			.Where(value => value.Length > 0)
+			.ToArray();
+		bool supportsPc = normalized.Any(value =>
+				PcPlatformTokens.Contains(value)
+				|| value.Contains("PC", StringComparison.Ordinal)
+				|| value.Contains("COMPUTER", StringComparison.Ordinal));
+		bool supportsConsole = normalized.Any(value =>
+			ConsolePlatformTokens.Contains(value)
+			|| value.Contains("CONSOLE", StringComparison.Ordinal)
+			|| value.Contains("XBOX", StringComparison.Ordinal)
+			|| value.Contains("PLAYSTATION", StringComparison.Ordinal)
+			|| value.Contains("PS4", StringComparison.Ordinal)
+			|| value.Contains("PS5", StringComparison.Ordinal));
+		return supportsConsole && !supportsPc;
 	}
 
-	internal static bool CouponAppliesToNaEu(
-		JsonElement coupon,
-		string canonicalCode,
-		IReadOnlySet<string>? validatedNaEuCouponKeys = null)
-	{
-		if (!CouponSupportsPc(coupon))
-			return false;
-
-		if (validatedNaEuCouponKeys?.Contains(canonicalCode) == true)
-			return true;
-
-		bool regionPresent = TryReadAudienceValues(
-			coupon,
-			RegionPropertyNames,
-			out List<string> regions);
-		if (regionPresent)
-		{
-			if (!regions
-					.Select(NormalizeAudienceToken)
-					.Any(NaEuRegionTokens.Contains))
-			{
-				return false;
-			}
-		}
-		else if (validatedNaEuCouponKeys is not null)
-		{
-			// The current BDO Alerts coupon response has platform metadata but
-			// no region field. In production, the official NA/EU coupon page is
-			// therefore the authoritative region allowlist.
-			return false;
-		}
-
-		return true;
-	}
-
-	internal static List<CouponEntry> ParseBdoAlertsResponse(
-		string json,
-		IReadOnlySet<string>? validatedNaEuCouponKeys = null)
+	internal static List<CouponEntry> ParseBdoAlertsResponse(string json)
 	{
 		Dictionary<string, CouponEntry> result = new(StringComparer.OrdinalIgnoreCase);
 		using JsonDocument document = JsonDocument.Parse(json);
@@ -687,11 +545,7 @@ internal sealed class CouponService : IDisposable
 			string code = coupon.TryGetProperty("code", out JsonElement codeValue)
 				? DisplayCouponCode(codeValue.GetString() ?? "") : "";
 			string canonicalCode = CanonicalCouponCode(code);
-			if (canonicalCode.Length == 0
-				|| !CouponAppliesToNaEu(
-					coupon,
-					canonicalCode,
-					validatedNaEuCouponKeys))
+			if (canonicalCode.Length == 0 || CouponIsExplicitlyConsoleOnly(coupon))
 			{
 				continue;
 			}
@@ -846,6 +700,106 @@ internal sealed class CouponService : IDisposable
 			}
 		}
 		return DeduplicateCouponEntries(merged.Values);
+	}
+
+	internal static bool IsCompleteBdoAlertsSnapshot(string json)
+	{
+		try
+		{
+			using JsonDocument document = JsonDocument.Parse(json);
+			if (!document.RootElement.TryGetProperty(
+					"total_coupons",
+					out JsonElement totalValue)
+				|| !totalValue.TryGetInt32(out int expectedCount)
+				|| expectedCount < 0
+				|| !document.RootElement.TryGetProperty(
+					"coupons",
+					out JsonElement coupons)
+				|| coupons.ValueKind != JsonValueKind.Array
+				|| coupons.GetArrayLength() != expectedCount)
+			{
+				return false;
+			}
+
+			foreach (JsonElement coupon in coupons.EnumerateArray())
+			{
+				if (coupon.ValueKind != JsonValueKind.Object
+					|| !coupon.TryGetProperty("code", out JsonElement code)
+					|| code.ValueKind != JsonValueKind.String
+					|| CanonicalCouponCode(code.GetString() ?? string.Empty).Length == 0)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+		catch (JsonException)
+		{
+			return false;
+		}
+	}
+
+	internal static List<CouponEntry> MergeCouponHistory(
+		IEnumerable<CouponEntry> currentCoupons,
+		IEnumerable<CouponEntry> previousCoupons,
+		DateTimeOffset observedAt,
+		bool snapshotComplete)
+	{
+		Dictionary<string, CouponEntry> previousByCode =
+			DeduplicateCouponEntries(previousCoupons)
+				.ToDictionary(
+					coupon => CanonicalCouponCode(coupon.Code),
+					StringComparer.OrdinalIgnoreCase);
+		Dictionary<string, CouponEntry> merged = new(StringComparer.OrdinalIgnoreCase);
+		foreach (CouponEntry current in DeduplicateCouponEntries(currentCoupons))
+		{
+			string key = CanonicalCouponCode(current.Code);
+			CouponEntry mergedCurrent = current;
+			if (previousByCode.TryGetValue(key, out CouponEntry? previous))
+			{
+				mergedCurrent = current with
+				{
+					AddedUtc = current.AddedUtc ?? previous.AddedUtc,
+					AddedText = current.AddedUtc.HasValue
+						? current.AddedText
+						: previous.AddedText,
+					Rewards = HasConcreteCouponRewards(current.Rewards)
+						? current.Rewards
+						: previous.Rewards,
+					Source = CombineCouponSources(previous.Source, current.Source)
+				};
+			}
+			merged[key] = mergedCurrent;
+		}
+
+		foreach ((string key, CouponEntry previous) in previousByCode)
+		{
+			if (merged.ContainsKey(key))
+				continue;
+			merged[key] = !snapshotComplete || previous.IsExpired
+				? previous
+				: previous with
+				{
+					ExpiryUtc = previous.ExpiryUtc is { } knownExpiry
+						&& knownExpiry <= observedAt
+							? knownExpiry
+							: null,
+					ExpiryText = "No longer listed",
+					IsExpired = true
+				};
+		}
+		return merged.Values.ToList();
+	}
+
+	private static bool HasConcreteCouponRewards(IEnumerable<CouponReward> rewards)
+	{
+		return rewards.Any(reward =>
+			!reward.ItemName.Equals(
+				"Reward details available on BDO Alerts",
+				StringComparison.OrdinalIgnoreCase)
+			&& !reward.ItemName.Equals(
+				"Official BDO coupon reward",
+				StringComparison.OrdinalIgnoreCase));
 	}
 
 	private static DateTimeOffset? ReadDate(JsonElement element, string property)
@@ -1206,7 +1160,6 @@ internal sealed record CouponCache(
 	DateTimeOffset LastRefreshed,
 	string Source,
 	List<CouponEntry> Coupons,
-	string? LastError,
-	List<string>? NaEuCouponCodes = null);
+	string? LastError);
 internal sealed record CouponRefreshDebug(string SourceUrl, int? HttpStatus, int RawResponseLength, int CouponsParsed, bool ParsingSucceeded, bool CacheUpdated, string? FailureReason);
 

@@ -82,13 +82,6 @@ internal static class Program
 				})
 				.Where(code => code.Length > 0)
 				.ToArray();
-			HashSet<string> validatedCacheCodes = refreshedCache.RootElement
-				.GetProperty("naEuCouponCodes")
-				.EnumerateArray()
-				.Select(code => CouponService.CanonicalCouponCode(
-					code.GetString() ?? ""))
-				.Where(code => code.Length > 0)
-				.ToHashSet(StringComparer.OrdinalIgnoreCase);
 			JsonElement liveDebug = refresh.GetProperty("refreshDebug");
 			JsonElement liveHttpStatus = liveDebug.TryGetProperty(
 				"httpStatus",
@@ -112,12 +105,12 @@ internal static class Program
 					.Contains(
 						"api.bdoalerts.net/api/coupons",
 						StringComparison.OrdinalIgnoreCase)
-				&& refresh.GetProperty("regionScope").GetString() == "NA / EU"
+				&& refresh.GetProperty("regionScope").GetString() == "CONSOLE EXCLUDED"
 				&& refresh.GetProperty("coupons").GetArrayLength() == cachedCouponCount
 				&& refreshedCodes.Length == refreshedCodes
 					.Distinct(StringComparer.OrdinalIgnoreCase)
 					.Count()
-				&& refreshedCodes.All(validatedCacheCodes.Contains)
+				&& !refreshedCache.RootElement.TryGetProperty("naEuCouponCodes", out _)
 				&& cachedCouponCount >= 1 ? 0 : 41;
 			try { Directory.Delete(root, true); } catch { }
 			Environment.Exit(result);
@@ -1834,8 +1827,18 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				    { "code": "KRONLY", "region": "KR", "platform": "PC", "is_expired": false },
 				    { "code": "CONSOLENA", "region": "NA", "platform": "Console", "is_expired": false },
 				    { "code": "UNKNOWNREGION", "region": "Moon", "platform": "PC", "is_expired": false },
+				    { "code": "FUTURENOREGION42", "is_expired": false },
+				    { "code": "STEAMFUTURE2027", "platform": "Steam", "is_expired": false },
+				    { "code": "UNKNOWNPLATFORM", "region": "SA", "platform": "Mobile", "is_expired": false },
+				    { "code": "MIXEDPLATFORM", "regions": ["KR"], "platforms": ["Console", "PC"], "is_expired": false },
+				    { "code": "MIXEDFIELDS", "platform": "Console", "description": "PC", "is_expired": false },
+				    { "code": "CONSOLEARRAY", "platforms": ["Console"], "is_expired": false },
+				    { "code": "EMPTYPLATFORMCONSOLE", "platform": "", "description": "Console", "is_expired": false },
+				    { "code": "XBOXONLY", "platform": "Xbox", "is_expired": false },
+				    { "code": "PLAYSTATIONONLY", "platform": "PlayStation", "is_expired": false },
 				    { "code": "DESCRIPTIONCONSOLE", "region": "EU", "description": "Console", "is_expired": false },
-				    { "code": "DESCRIPTIONCONSOLEPHRASE", "region": "NA", "description": "Console only", "is_expired": false }
+				    { "code": "DESCRIPTIONCONSOLEPHRASE", "region": "NA", "description": "Console only", "is_expired": false },
+				    { "code": "DESCRIPTIONPS5", "description": "PS5 only", "is_expired": false }
 				  ]
 				}
 				""";
@@ -1855,7 +1858,14 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				"EUONLY",
 				"GLOBALPC",
 				"MIXEDREGION",
-				"LEGACYPC"
+				"LEGACYPC",
+				"KRONLY",
+				"UNKNOWNREGION",
+				"FUTURENOREGION42",
+				"STEAMFUTURE2027",
+				"UNKNOWNPLATFORM",
+				"MIXEDPLATFORM",
+				"MIXEDFIELDS"
 			];
 			string[] expectedCanonicalCouponCodes = expectedCouponCodes
 				.Select(CouponService.CanonicalCouponCode)
@@ -1872,30 +1882,115 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 			{
 				return 95;
 			}
-			HashSet<string> validatedNaEuCouponKeys =
-			[
-				CouponService.CanonicalCouponCode("TYALLADVENTURERS"),
-				CouponService.CanonicalCouponCode("BLACKDESERT2026")
-			];
-			HashSet<string> expectedStrictNaEuCodes = new(
+			HashSet<string> explicitConsoleCodes = new(
 				[
-					"TYALLADVENTURERS",
-					"BLACKDESERT2026",
-					"EUONLY",
-					"GLOBALPC",
-					"MIXEDREGION"
+					"CONSOLENA",
+					"CONSOLEARRAY",
+					"EMPTYPLATFORMCONSOLE",
+					"XBOXONLY",
+					"PLAYSTATIONONLY",
+					"DESCRIPTIONCONSOLE",
+					"DESCRIPTIONCONSOLEPHRASE",
+					"DESCRIPTIONPS5"
 				],
 				StringComparer.OrdinalIgnoreCase);
-			HashSet<string> strictNaEuCodes = CouponService
-				.ParseBdoAlertsResponse(
-					couponFeedJson,
-					validatedNaEuCouponKeys)
+			HashSet<string> parsedCouponKeys = parsedCoupons
 				.Select(coupon =>
 					CouponService.CanonicalCouponCode(coupon.Code))
 				.ToHashSet(StringComparer.OrdinalIgnoreCase);
-			if (!strictNaEuCodes.SetEquals(expectedStrictNaEuCodes))
+			if (parsedCouponKeys.Overlaps(explicitConsoleCodes))
 			{
 				return 94;
+			}
+
+			const string currentBdoAlertsPlatformFeedJson = """
+				{
+				  "coupons": [
+				    { "code": "EDANIADAY2WITHUS", "description": "PC", "is_expired": false },
+				    { "code": "EDANIADAY3LETSGO", "description": "PC", "is_expired": false },
+				    { "code": "KITTYKAYBDAY", "description": "PC", "is_expired": false },
+				    { "code": "LUMINCZANEEBINGO", "description": "PC", "is_expired": false },
+				    { "code": "THEDESERTTHNXYOU", "description": "Both", "is_expired": false },
+				    { "code": "VREYUWUCREATORBD", "description": "Console", "is_expired": false }
+				  ]
+				}
+				""";
+			HashSet<string> expectedPlatformFeedCodes = new(
+				[
+					"EDANIADAY2WITHUS",
+					"EDANIADAY3LETSGO",
+					"KITTYKAYBDAY",
+					"LUMINCZANEEBINGO",
+					"THEDESERTTHNXYOU"
+				],
+				StringComparer.OrdinalIgnoreCase);
+			HashSet<string> parsedPlatformFeedCodes = CouponService
+				.ParseBdoAlertsResponse(currentBdoAlertsPlatformFeedJson)
+				.Select(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code))
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			if (!parsedPlatformFeedCodes.SetEquals(expectedPlatformFeedCodes)
+				|| parsedPlatformFeedCodes.Contains("VREYUWUCREATORBD"))
+			{
+				return 147;
+			}
+			const string completeCouponSnapshotJson = """
+				{
+				  "total_coupons": 2,
+				  "coupons": [
+				    { "code": "HISTORYB", "description": "PC", "is_expired": false },
+				    { "code": "HISTORYC", "description": "PC", "is_expired": false }
+				  ]
+				}
+				""";
+			CouponEntry historyTemplate = parsedCoupons[0];
+			CouponEntry historyA = historyTemplate with
+			{
+				Code = "HISTORYA",
+				IsExpired = false,
+				ExpiryText = "No expiry listed"
+			};
+			CouponEntry historyB = historyTemplate with
+			{
+				Code = "HISTORYB",
+				IsExpired = false,
+				ExpiryText = "No expiry listed"
+			};
+			CouponEntry historyC = historyTemplate with
+			{
+				Code = "HISTORYC",
+				IsExpired = false,
+				ExpiryText = "No expiry listed"
+			};
+			DateTimeOffset historyObservedAt = DateTimeOffset.UtcNow;
+			List<CouponEntry> completeHistory = CouponService.MergeCouponHistory(
+				[historyB, historyC],
+				[historyA, historyB],
+				historyObservedAt,
+				CouponService.IsCompleteBdoAlertsSnapshot(completeCouponSnapshotJson));
+			List<CouponEntry> incompleteHistory = CouponService.MergeCouponHistory(
+				[historyB, historyC],
+				[historyA, historyB],
+				historyObservedAt,
+				CouponService.IsCompleteBdoAlertsSnapshot(
+					completeCouponSnapshotJson.Replace(
+						"\"total_coupons\": 2",
+						"\"total_coupons\": 3",
+						StringComparison.Ordinal)));
+			CouponEntry endedHistoryA = completeHistory.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "HISTORYA");
+			CouponEntry retainedHistoryA = incompleteHistory.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "HISTORYA");
+			if (completeHistory.Count != 3
+				|| !endedHistoryA.IsExpired
+				|| endedHistoryA.ExpiryText != "No longer listed"
+				|| incompleteHistory.Count != 3
+				|| retainedHistoryA.IsExpired
+				|| !CouponService.IsCompleteBdoAlertsSnapshot(completeCouponSnapshotJson)
+				|| CouponService.IsCompleteBdoAlertsSnapshot(
+					"""{"total_coupons":1,"coupons":[{}]}"""))
+			{
+				return 148;
 			}
 
 			const string structuredCouponFeedJson = """
@@ -1918,9 +2013,7 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				}
 				""";
 			List<CouponReward> structuredRewards = CouponService
-				.ParseBdoAlertsResponse(
-					structuredCouponFeedJson,
-					validatedNaEuCouponKeys)
+				.ParseBdoAlertsResponse(structuredCouponFeedJson)
 				.Single()
 				.Rewards;
 			if (structuredRewards.Count != 3
@@ -2012,15 +2105,18 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 			CouponEntry trustedLegacyCoupon = parsedCoupons.Single(coupon =>
 				CouponService.CanonicalCouponCode(coupon.Code)
 					== "TYALLADVENTURERS");
-			CouponEntry foreignLegacyCoupon = trustedLegacyCoupon with
+			CouponEntry secondLegacyCoupon = trustedLegacyCoupon with
 			{
 				Code = "KR-ONLY-LEGACY"
 			};
-			CouponCache legacyCache = new(
-				DateTimeOffset.UtcNow,
-				"Legacy cache regression",
-				[trustedLegacyCoupon, foreignLegacyCoupon],
-				null);
+			var legacyCache = new
+			{
+				LastRefreshed = DateTimeOffset.UtcNow,
+				Source = "Legacy cache regression",
+				Coupons = new[] { trustedLegacyCoupon, secondLegacyCoupon },
+				LastError = (string?)null,
+				NaEuCouponCodes = new[] { "TYALLADVENTURERS" }
+			};
 			await File.WriteAllTextAsync(
 				statePaths.CouponsCachePath,
 				JsonSerializer.Serialize(legacyCache, couponJsonOptions),
@@ -2040,25 +2136,12 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 					.Select(coupon => CouponService.CanonicalCouponCode(
 						coupon.GetProperty("code").GetString() ?? ""))
 					.ToArray();
-				using JsonDocument migratedCache = JsonDocument.Parse(
-					await File.ReadAllTextAsync(
-						statePaths.CouponsCachePath,
-						CancellationToken.None));
 				using JsonDocument repairedIconCache = JsonDocument.Parse(
 					await File.ReadAllTextAsync(
 						statePaths.CouponItemIconsPath,
 						CancellationToken.None));
-				string[] migratedVerifiedCodes = migratedCache.RootElement
-					.GetProperty("naEuCouponCodes")
-					.EnumerateArray()
-					.Select(code => CouponService.CanonicalCouponCode(
-						code.GetString() ?? ""))
-					.ToArray();
 				if (!migratedCodes.SequenceEqual(
-						["TYALLADVENTURERS"],
-						StringComparer.OrdinalIgnoreCase)
-					|| !migratedVerifiedCodes.SequenceEqual(
-						["TYALLADVENTURERS"],
+						["TYALLADVENTURERS", "KRONLYLEGACY"],
 						StringComparer.OrdinalIgnoreCase)
 					|| repairedIconCache.RootElement
 						.GetProperty("items")
@@ -2072,8 +2155,7 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 				DateTimeOffset.UtcNow,
 				"Structured feed regression",
 				parsedCoupons,
-				null,
-				expectedCanonicalCouponCodes.ToList());
+				null);
 			await File.WriteAllTextAsync(
 				statePaths.CouponsCachePath,
 				JsonSerializer.Serialize(passThroughCache, couponJsonOptions),
@@ -2093,7 +2175,7 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 					|| couponDashboard.GetProperty("totalCount").GetInt32() != expectedCouponCodes.Length
 					|| couponDashboard.GetProperty("availableCount").GetInt32() != expectedCouponCodes.Length - 1
 					|| couponDashboard.GetProperty("expiredCount").GetInt32() != 1
-					|| couponDashboard.GetProperty("regionScope").GetString() != "NA / EU")
+					|| couponDashboard.GetProperty("regionScope").GetString() != "CONSOLE EXCLUDED")
 				{
 					return 64;
 				}

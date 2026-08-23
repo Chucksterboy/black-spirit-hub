@@ -1558,11 +1558,9 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'AllowAutoRedirect = false' -or
 	$couponSource -notmatch 'bdoAlertsHttp\.SendAsync' -or
 	$couponSource -notmatch 'CanonicalCouponCode' -or
-	$couponSource -notmatch 'CouponAppliesToNaEu' -or
-	$couponSource -notmatch 'validatedNaEuCouponKeys' -or
-	$couponSource -notmatch 'NaEuCouponCodes' -or
-	$couponSource -notmatch 'ValidatedCachedCoupons' -or
-	$couponSource -notmatch 'TrustedBootstrapNaEuCouponCodes' -or
+	$couponSource -notmatch 'CouponIsExplicitlyConsoleOnly' -or
+	$couponSource -notmatch 'ConsolePlatformTokens' -or
+	$couponSource -notmatch 'NormalizedCachedCoupons' -or
 	$couponSource -notmatch 'itemIconResolver\.ResolveAsync' -or
 	$couponSource -notmatch 'allowNetwork: false' -or
 	$couponSource -notmatch 'TryValidateIconUri' -or
@@ -1571,7 +1569,9 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'ReadLimitedIconBytesAsync' -or
 	$couponSource -notmatch 'HasExpectedImageSignature' -or
 	$couponSource -notmatch '"/items/new_icon/"' -or
-	$couponSource -notmatch 'regionScope = "NA / EU"' -or
+	$couponSource -notmatch 'regionScope = "CONSOLE EXCLUDED"' -or
+	$couponSource -notmatch 'MergeCouponHistory' -or
+	$couponSource -notmatch 'IsCompleteBdoAlertsSnapshot' -or
 	$couponIconResolverSource -notmatch 'https://bdocodex\.com/ac\.php' -or
 	$couponIconResolverSource -notmatch 'NormalizeForMatch' -or
 	$couponIconResolverSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
@@ -1585,9 +1585,13 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$html -notmatch 'id="couponRegionBadge"' -or
 	$css -notmatch '\.couponRegionBadge' -or
 	$css -notmatch '\.couponRewardList\[hidden\]\{display:none\}' -or
+	$couponSource -match 'CouponAppliesToNaEu' -or
+	$couponSource -match 'validatedNaEuCouponKeys' -or
+	$couponSource -match 'TrustedBootstrapNaEuCouponCodes' -or
+	$couponSource -match 'NaEuCouponCodes' -or
 	$couponSource -match 'DefaultRequestHeaders\.Referrer\s*=\s*new Uri\("https://bdoalerts\.net' -or
 	$couponSource -match 'DefaultRequestHeaders\.TryAddWithoutValidation\("Origin",\s*"https://bdoalerts\.net') {
-	throw "Coupon refresh lost its authenticated access, canonical deduplication, or NA/EU eligibility safeguards."
+	throw "Coupon refresh lost its authenticated access, canonical deduplication, or console-audience filter."
 }
 if ($script -notmatch 'let homeBossScheduleState=' -or
 	$script -notmatch 'normalizeBossScheduleDashboard' -or
