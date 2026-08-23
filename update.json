@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.52",
+    "version":  "v0.9.53",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.52/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "CDA95B11D05AD29AA08205AE104BD53513E0AFF4B59EBBA4BCCAAB5327B6989A",
-    "notes":  "Improves Recipe Book screenshot OCR by prefilling every valid numeric guess for review, correctly matching Khan\u0027s Scale, and keeping confirmed quantities separate from review-only suggestions."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.53/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "797CB33578091A4289A668DFE1272ADA71529BFE2BB0B8D2BA97DD4C3CBCC53A",
+    "notes":  "Shows all current and future BDO Alerts coupons except explicitly console-only entries, and preserves coupons after they leave the live feed."
 }
