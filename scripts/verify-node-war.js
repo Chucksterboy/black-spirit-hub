@@ -190,6 +190,7 @@ if (tests.nodeWarAlertStage(settings, 10 * 60_000, keyBase) !== null
     || !/\.resetTimerCard\[data-reset-id="nodewar"\]\{--reset-accent:var\(--node-war-accent\)\}/.test(appCss)
     || !/\.resetTimerSetting\{[^}]*font-size:10px/.test(appCss)
     || !/\.resetTimerSetting>\.nodeWarSettingLabel\{[^}]*color:var\(--node-war-label-color\)[^}]*font-size:11px[^}]*text-transform:none/.test(appCss)
+    || !/body\[data-style="caravan"\] \.resetTimerSetting>\.nodeWarSettingLabel\{--node-war-label-color:color-mix\(in srgb,var\(--node-war-accent\) 74%,#fff\);[^}]*background:rgba\(5,7,10,\.9\)/.test(appCss)
     || !/\.resetTimerSetting \.(?:resetTimerSelect|settingSelect)|\.resetTimerSetting \.resetTimerSelect/.test(appCss)
     || !/checkNodeWarNotifications\(resetSettings,now\)/.test(appScript)) {
     throw new Error("Node War card, dropdown styling, or background scheduler wiring is missing.");

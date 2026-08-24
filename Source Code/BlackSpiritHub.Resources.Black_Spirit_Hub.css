@@ -4254,8 +4254,8 @@ body[data-style="caravan"] .resetTimerCard{
   --reset-detail:color-mix(in srgb,var(--reset-accent) 24%,#24313f);
 }
 body[data-mode="light"] .resetTimersShell,
-body[data-style="paper"] .resetTimersShell,
-body[data-style="caravan"] .resetTimersShell{--node-war-label-color:color-mix(in srgb,var(--node-war-accent) 38%,#111827)}
+body[data-style="paper"] .resetTimersShell{--node-war-label-color:color-mix(in srgb,var(--node-war-accent) 38%,#111827)}
+body[data-style="caravan"] .resetTimerSetting>.nodeWarSettingLabel{--node-war-label-color:color-mix(in srgb,var(--node-war-accent) 74%,#fff);padding:2px 5px;border:1px solid color-mix(in srgb,var(--node-war-accent) 38%,transparent);border-radius:4px;background:rgba(5,7,10,.9)}
 
 /* Recipe Book readability and planning palette. */
 #recipeBookView{
