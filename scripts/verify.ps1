@@ -52,6 +52,7 @@ $legacyInstallerProgramPath = Join-Path $sourceRoot "InstallerSource\BlackSpirit
 $nativeInstallerSourcePath = Join-Path $sourceRoot "InstallerSource\InnoSetup\BlackSpiritHub.iss"
 $bossScheduleJsTestPath = Join-Path $repoRoot "scripts\verify-boss-schedule.js"
 $bossAlertsJsTestPath = Join-Path $repoRoot "scripts\verify-boss-alerts.js"
+$nodeWarJsTestPath = Join-Path $repoRoot "scripts\verify-node-war.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 $grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
@@ -1345,14 +1346,14 @@ if ($invalidGavinyaCodexAssets) {
 }
 
 $homeTimerIconCount = [regex]::Matches($html, 'class="homeTimerIcon"[^>]*>\s*<svg\b').Count
-$resetTimerIconCount = [regex]::Matches($script, '(?m)^\s{2}(?:daily|imperial|bsa|agris|barter|trading):''<svg\b').Count
-if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 6 -or $script -match 'icon:\s*"\?"') {
+$resetTimerIconCount = [regex]::Matches($script, '(?m)^\s{2}(?:daily|nodewar|imperial|bsa|agris|barter|trading):''<svg\b').Count
+if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 7 -or $script -match 'icon:\s*"\?"') {
 	throw "Dashboard timer badges are missing, malformed, or using placeholder glyphs."
 }
 if ($html.Length -gt 100000) { throw "The HTML shell exceeded the 100 KB performance budget." }
-# The local OCR review flow and reviewed BDO substitution metadata intentionally share
-# this dependency-free script; retain a narrow measured ceiling with modest headroom.
-if ($script.Length -gt 580000) { throw "The main UI script exceeded the OCR relevance-aware 580 KB performance budget." }
+# The local OCR review flow, reviewed BDO substitution metadata, and background timer
+# scheduler intentionally share this dependency-free script; retain measured headroom.
+if ($script.Length -gt 586000) { throw "The main UI script exceeded the OCR and timer-aware 586 KB performance budget." }
 if ($css -notmatch 'body\[data-motion="reduced"\]' -or $script -notmatch 'visibilitychange') {
 	throw "Reduced-motion or visibility lifecycle handling is missing."
 }
@@ -1603,8 +1604,9 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$script -notmatch 'function couponSourceAttribution\(c\)' -or
 	$script -notmatch 'https://garmoth\.com/coupons/' -or
 	$script -notmatch 'data-coupon-rewards-toggle' -or
-	$html -notmatch 'id="couponRegionBadge"' -or
-	$css -notmatch '\.couponRegionBadge' -or
+	$html -notmatch 'id="couponsView"\s+class="appView"\s+aria-label="Coupons"' -or
+	$html -match 'class="couponHero"|id="coupon(?:AvailableCount|TotalCount|LastCheck|SourceBadge|RegionBadge|SyncText|LastUpdated)"' -or
+	$script -match 'coupon(?:AvailableCount|TotalCount|LastCheck|SourceBadge|RegionBadge|SyncText|LastUpdated)' -or
 	$css -notmatch '\.couponCodeExpiry\{' -or
 	$css -notmatch '\.couponRewardList\[hidden\]\{display:none\}' -or
 	$couponSource -match 'CouponAppliesToNaEu' -or
@@ -1631,6 +1633,9 @@ if (!(Test-Path -LiteralPath $bossScheduleJsTestPath -PathType Leaf)) {
 }
 if (!(Test-Path -LiteralPath $bossAlertsJsTestPath -PathType Leaf)) {
 	throw "The executable boss alert JavaScript regression test is missing."
+}
+if (!(Test-Path -LiteralPath $nodeWarJsTestPath -PathType Leaf)) {
+	throw "The executable Node War timer JavaScript regression test is missing."
 }
 if (!(Test-Path -LiteralPath $couponJsTestPath -PathType Leaf)) {
 	throw "The executable coupon JavaScript regression test is missing."
@@ -1682,6 +1687,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $bossAlertsJsTestPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "Boss alert JavaScript regression tests failed."
+	}
+	& $nodeCommand.Source $nodeWarJsTestPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Node War timer JavaScript regression tests failed."
 	}
 	& $nodeCommand.Source $couponJsTestPath
 	if ($LASTEXITCODE -ne 0) {

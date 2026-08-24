@@ -3246,6 +3246,10 @@ body[data-style] .navFrame .navButton.betaNavButton{flex:0 1 205px!important;max
 .resetLocalToggle input{width:auto;accent-color:var(--a1);cursor:pointer}
 .resetLocalToggle span{white-space:nowrap}
 .resetLocalToggle:has(input:checked){color:var(--text);border-color:color-mix(in srgb,var(--a1) 54%,white);box-shadow:0 0 16px color-mix(in srgb,var(--a1) 18%,transparent)}
+.resetTimerSetting{min-width:176px;display:grid;grid-template-columns:auto minmax(112px,1fr);align-items:center;gap:8px;color:var(--muted);font-size:10px;font-weight:950;letter-spacing:.04em;text-transform:uppercase}
+.resetTimerSetting>span{white-space:nowrap}
+.resetTimerSetting .resetTimerSelect{box-sizing:border-box;width:100%;max-width:none;height:36px;padding-left:12px!important;padding-right:38px!important;background-position:right 15px center!important;color:var(--text);text-transform:none}
+.resetTimerSetting .resetTimerSelect:disabled{cursor:not-allowed;opacity:.5}
 .resetTimersGrid{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:14px}
 .resetTimerCard{position:relative;isolation:isolate;min-height:168px;padding:18px;border:1px solid color-mix(in srgb,var(--a1) 48%,var(--border));border-radius:var(--ui-radius);overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,var(--a1) 8%,transparent),transparent 40%),linear-gradient(145deg,color-mix(in srgb,var(--surface) 96%,#000),color-mix(in srgb,var(--bg0) 94%,#000));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a1) 15%,transparent),0 16px 38px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
 .resetTimerCard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--a1) 70%,white);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--a1) 20%,transparent),0 20px 48px rgba(0,0,0,.34),0 0 22px color-mix(in srgb,var(--a1) 16%,transparent)}
@@ -3260,7 +3264,7 @@ body[data-style] .navFrame .navButton.betaNavButton{flex:0 1 205px!important;max
 .resetTimerSub{margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35}
 .resetTimerRule{height:1px;margin-top:18px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--a1) 35%,transparent),transparent)}
 @media(max-width:1050px){.resetTimersGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.resetTimersHeader{align-items:flex-start;flex-direction:column}.resetTimersActions{justify-content:flex-start}}
-@media(max-width:720px){.resetTimersGrid{grid-template-columns:1fr}.resetTimersShell{width:calc(100% - 18px)}}
+@media(max-width:720px){.resetTimersGrid{grid-template-columns:1fr}.resetTimersShell{width:calc(100% - 18px)}.resetTimersActions{width:100%}.resetTimerSetting{width:100%;grid-template-columns:minmax(120px,auto) minmax(0,1fr)}}
 
 .betaToolShell{width:min(1500px,calc(100% - 28px));margin:18px auto 32px;color:var(--text)}
 .betaToolHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}
@@ -3638,6 +3642,8 @@ body[data-style="custom"] .navFrame .navButton[data-app-view="fontChangerView"] 
 body[data-style="custom"] .navFrame .navButton[data-app-view="couponsView"] .navIcon::before{content:""!important;width:24px!important;height:18px!important;background:currentColor!important;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 20'%3E%3Cpath d='M2 4.5A2.5 2.5 0 0 1 4.5 2h19A2.5 2.5 0 0 1 26 4.5v3.2a3.2 3.2 0 0 0 0 4.6v3.2a2.5 2.5 0 0 1-2.5 2.5h-19A2.5 2.5 0 0 1 2 15.5v-3.2a3.2 3.2 0 0 0 0-4.6V4.5Zm7 2v7h2v-7H9Zm4 0v7h6v-2h-4v-1h3V9h-3v-.8h4v-2H13Z' fill='black'/%3E%3C/svg%3E") center/contain no-repeat!important;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 20'%3E%3Cpath d='M2 4.5A2.5 2.5 0 0 1 4.5 2h19A2.5 2.5 0 0 1 26 4.5v3.2a3.2 3.2 0 0 0 0 4.6v3.2a2.5 2.5 0 0 1-2.5 2.5h-19A2.5 2.5 0 0 1 2 15.5v-3.2a3.2 3.2 0 0 0 0-4.6V4.5Zm7 2v7h2v-7H9Zm4 0v7h6v-2h-4v-1h3V9h-3v-.8h4v-2H13Z' fill='black'/%3E%3C/svg%3E") center/contain no-repeat!important;}
 
 /* Coupon expiry and provider attribution */
+#couponsView .couponV2{padding-top:8px}
+#couponsView .couponWorkspace{min-height:calc(100vh - 174px)}
 #couponsView .couponListPane{container-name:coupon-list;container-type:inline-size}
 #couponsView .couponRowV2{grid-template-columns:minmax(365px,1.65fr) 155px minmax(300px,1.4fr) 28px}
 #couponsView .couponRowCode{gap:11px;flex-wrap:nowrap;align-content:center}
@@ -4147,7 +4153,7 @@ body[data-style] .recipeBookScreenshotDialog .recipeBookScreenshotMaterialField 
   background:linear-gradient(135deg,#160b2c,#0b1023 58%,#07212d)!important;
   box-shadow:0 0 0 2px rgba(34,211,238,.15),0 0 22px rgba(168,85,247,.2)!important;
 }
-body[data-style] .appView #bossLeadTime{clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask:none!important}
+body[data-style] .appView :is(#bossLeadTime,.resetTimerSelect){clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask:none!important}
 body[data-style] .appView :is(.playerGuildSearchField,.playerGuildRosterToolbar label,.recipeBookSearchField,.recipeBookResourceSearchField,.recipeBookCraftableSearch)>input,
 body[data-style] .appView :is(.playerGuildSearchField,.playerGuildRosterToolbar label,.recipeBookSearchField,.recipeBookResourceSearchField,.recipeBookCraftableSearch)>input:focus{
   border:0!important;
@@ -4220,6 +4226,7 @@ body[data-style] #portraitView .portraitPathValue{
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--reset-accent) 16%,transparent),0 16px 38px rgba(0,0,0,.28),0 0 24px color-mix(in srgb,var(--reset-accent) 7%,transparent);
 }
 .resetTimerCard[data-reset-id="daily"]{--reset-accent:#22d3ee}
+.resetTimerCard[data-reset-id="nodewar"]{--reset-accent:#ef4444}
 .resetTimerCard[data-reset-id="imperial"]{--reset-accent:#fbbf24}
 .resetTimerCard[data-reset-id="bsa"]{--reset-accent:#f472b6}
 .resetTimerCard[data-reset-id="agris"]{--reset-accent:#4ade80}

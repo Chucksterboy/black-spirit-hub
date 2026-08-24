@@ -9,6 +9,10 @@ const appScript = fs.readFileSync(path.join(
   repoRoot,
   "Source Code",
   "BlackSpiritHub.Resources.Black_Spirit_Hub.js"), "utf8");
+const appHtml = fs.readFileSync(path.join(
+  repoRoot,
+  "Source Code",
+  "BlackSpiritHub.Resources.Black_Spirit_Hub.html"), "utf8");
 const appCss = fs.readFileSync(path.join(
   repoRoot,
   "Source Code",
@@ -34,7 +38,7 @@ const extractedCode = [
   extractFunction("couponEscape", "couponCodeKey"),
   extractFunction("couponCodeKey", "couponRedeemedMap"),
   extractFunction("couponRewardListHtml", "couponExpiryText"),
-  extractFunction("couponSourceAttribution", "couponCacheAgeText"),
+  extractFunction("couponSourceAttribution", "applyCouponDashboard"),
   extractFunction("renderCouponDetail", "initializeCoupons"),
   "globalThis.couponTests={couponEl,couponState,couponRewardListHtml,renderCouponDetail};"
 ].join("\n");
@@ -81,6 +85,14 @@ const expiryRuleBodies = [...appCss.matchAll(/#couponsView \.couponCodeExpiry(?:
   .map(match => match[1]);
 const couponRowGridTemplates = [...appCss.matchAll(/(?:#couponsView )?\.couponRowV2\{[^}]*grid-template-columns:([^;}]+)/g)]
   .map(match => match[1].trim().split(/\s+/));
+if (/class="couponHero"|class="couponIntro"|class="couponMetric"|class="couponLiveCard"/.test(appHtml)
+  || /id="coupon(?:AvailableCount|TotalCount|LastCheck|SourceBadge|RegionBadge|SyncText|LastUpdated)"/.test(appHtml)
+  || /coupon(?:AvailableCount|TotalCount|LastCheck|SourceBadge|RegionBadge|SyncText|LastUpdated)/.test(appScript)
+  || !/id="couponsView" class="appView" aria-label="Coupons"/.test(appHtml)
+  || !/#couponsView \.couponV2\{padding-top:8px\}/.test(appCss)
+  || !/#couponsView \.couponWorkspace\{min-height:calc\(100vh - 174px\)\}/.test(appCss)) {
+  throw new Error("The retired coupon hero and summary cards must stay removed while the coupon workspace fills their space.");
+}
 if (!futureExpiryBadge.includes(`EXPIRES ${exactExpiryDate} · IN 3 DAYS`)
   || !/class="couponCodeExpiry unknown">EXPIRY NOT LISTED<\/span>/.test(unknownExpiryBadge)
   || !/timeZone:"UTC"/.test(appScript)

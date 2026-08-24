@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.53-coupon-row-cleanup-20260824">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.53-timers-coupon-simplification-20260824">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -37,7 +37,7 @@
     <span class="navRowBreak" aria-hidden="true"></span>
     <button class="navButton betaNavButton" data-app-view="playerGuildView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Player &amp; Guild Search</span></button>
     <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Grind Zones</span></button>
-    <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Reset Timers</span></button>
+    <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Timers</span></button>
     <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Events</span></button>
     <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Brackets</span></button>
     <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"></span><span class="navLabel">Mastery Brackets</span></button>
@@ -95,15 +95,17 @@
   <section class="resetTimersShell">
     <header class="resetTimersHeader">
       <div>
-        <h1>Reset Timers</h1>
-        <p>Server reset countdowns for daily content, Imperial, BSA, Agris, Barter, and Trading.</p>
+        <h1>Timers</h1>
+        <p>Server countdowns for daily content, Node War, Imperial, BSA, Agris, Barter, and Trading.</p>
       </div>
       <div class="resetTimersActions">
-        <label class="resetLocalToggle" title="Show the listed reset time in your local PC time instead of CET"><input id="resetLocalTime" type="checkbox"><span>Local time</span></label>
+        <label class="resetLocalToggle" title="Show timer times in your local PC time instead of CET/CEST"><input id="resetLocalTime" type="checkbox"><span>Local time</span></label>
+        <label class="resetTimerSetting"><span>Nodewar Notification</span><select id="nodeWarNotificationMode" class="settingSelect resetTimerSelect" aria-label="Node War notification mode"><option value="off" selected>Off</option><option value="tts">TTS</option><option value="alarm">Alarm</option></select></label>
+        <label class="resetTimerSetting"><span>First alert</span><select id="nodeWarLeadTime" class="settingSelect resetTimerSelect" aria-label="First Node War alert time" disabled><option value="0">Nodewar Starting</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></label>
         <div class="homeStatus"><i></i><span id="resetTimersStatus">Timers loading...</span></div>
       </div>
     </header>
-    <div id="resetTimersGrid" class="resetTimersGrid" aria-label="Black Desert reset timers"></div>
+    <div id="resetTimersGrid" class="resetTimersGrid" aria-label="Black Desert timers"></div>
   </section>
 </div>
 <div id="calculatorView" class="appView">
@@ -530,15 +532,8 @@
   </div>
 </section>
 
-<section id="couponsView" class="appView">
+<section id="couponsView" class="appView" aria-label="Coupons">
   <div class="couponV2">
-    <header class="couponHero">
-      <div class="couponIntro"><div class="couponSeal">&#9670;</div><div><h1>Coupons</h1><p>Redeem codes to claim in-game rewards.</p><p>New coupons are added automatically when available.</p></div></div>
-      <div class="couponMetric"><span>Available</span><strong id="couponAvailableCount" class="positive">0</strong><small>Coupons Ready</small></div>
-      <div class="couponMetric"><span>Total Coupons</span><strong id="couponTotalCount">0</strong><small>All Time</small></div>
-      <div class="couponMetric"><span>Last Check</span><strong id="couponLastCheck">&mdash;</strong><small>Today</small></div>
-      <div class="couponLiveCard"><div class="couponLiveTop"><span id="couponSourceBadge">CACHED DATA</span><span id="couponRegionBadge" class="couponRegionBadge">CONSOLE EXCLUDED</span></div><div class="couponLiveSync"><span id="couponSyncText">Stored locally</span><i class="couponPulse"></i></div><small id="couponLastUpdated">Last Attempt: &mdash;</small></div>
-    </header>
     <section class="couponWorkspace">
       <div class="couponFilters" hidden aria-hidden="true">
         <input id="couponSearch" type="search" value="" placeholder="Search code or reward..." aria-label="Search coupons" autocomplete="off" />
@@ -1220,7 +1215,7 @@
 <script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.53"></script>
 <script src="Assets/GrindTracker/grind-guides.js?v=v0.9.53"></script>
 <script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.53"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.53-coupon-row-cleanup-20260824"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.53-timers-coupon-simplification-20260824"></script>
 
 </body>
 </html>

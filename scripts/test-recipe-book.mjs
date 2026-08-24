@@ -547,9 +547,9 @@ assert.doesNotMatch(plannerSource,/recipeBookRenderCraftables/,"slider input mus
 assert.match(css,/input\[type="range"\]::\-webkit-slider-runnable-track\{[^}]*--craft-progress/ ,"craft planner slider must render a smooth progress track");
 assert.match(css,/input\[type="range"\]::\-webkit-slider-thumb\{[^}]*width:20px;height:20px/ ,"craft planner slider must provide a clear draggable thumb");
 
-const resetPalette={daily:"#22d3ee",imperial:"#fbbf24",bsa:"#f472b6",agris:"#4ade80",barter:"#fb923c",trading:"#a78bfa"};
+const resetPalette={daily:"#22d3ee",nodewar:"#ef4444",imperial:"#fbbf24",bsa:"#f472b6",agris:"#4ade80",barter:"#fb923c",trading:"#a78bfa"};
 for(const [resetId,color] of Object.entries(resetPalette))assert.match(css,new RegExp(`\\.resetTimerCard\\[data-reset-id="${resetId}"\\]\\{--reset-accent:${color}\\}`),`${resetId} reset timer must have its own vibrant color`);
-assert.equal(new Set(Object.values(resetPalette)).size,6,"all reset timer accents must be distinct");
+assert.equal(new Set(Object.values(resetPalette)).size,7,"all timer accents must be distinct");
 assert.match(css,/\.resetTimerValue\{color:var\(--reset-value\)/ ,"reset countdown digits must consume the semantic card color");
 assert.match(css,/body\[data-mode="light"\] \.resetTimerCard[\s\S]*?--reset-value:/ ,"reset timer colors must retain contrast in light mode");
 

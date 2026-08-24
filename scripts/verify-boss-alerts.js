@@ -454,8 +454,8 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
   }
 
   const stagedDeliveryKeys = appScript.match(/const key=`\$\{keyBase\}\|\$\{stage\}`/g) ?? [];
-  if (stagedDeliveryKeys.length !== 2) {
-    throw new Error("World and guild boss alerts must persist separate keys for every milestone.");
+  if (stagedDeliveryKeys.length !== 3) {
+    throw new Error("World boss, guild boss, and Node War alerts must persist separate keys for every milestone.");
   }
 
   if (/s\.notified=\{\}/.test(appScript)
