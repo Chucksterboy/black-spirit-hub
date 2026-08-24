@@ -38,7 +38,6 @@ const extractedCode = [
   extractFunction("couponEscape", "couponCodeKey"),
   extractFunction("couponCodeKey", "couponRedeemedMap"),
   extractFunction("couponRewardListHtml", "couponExpiryText"),
-  extractFunction("couponSourceAttribution", "applyCouponDashboard"),
   extractFunction("renderCouponDetail", "initializeCoupons"),
   "globalThis.couponTests={couponEl,couponState,couponRewardListHtml,renderCouponDetail};"
 ].join("\n");
@@ -56,7 +55,7 @@ class FixedDate extends NativeDate {
 const expiryBadgeCode = [
   extractFunction("couponEscape", "couponCodeKey"),
   extractFunction("couponExpiryText", "couponExpiryBadge"),
-  extractFunction("couponExpiryBadge", "couponSourceAttribution"),
+  extractFunction("couponExpiryBadge", "applyCouponDashboard"),
   "globalThis.expiryBadgeTests={couponExpiryBadge};"
 ].join("\n");
 const expiryBadgeContext = {Date:FixedDate};
@@ -171,9 +170,7 @@ if (!/aria-expanded="false"/.test(html)
   || !/id="couponRewardList-TESTCOUPON" hidden/.test(html)
   || !/8 items/.test(html)
   || !/Choose Your Transcendent Hammer Box/.test(html)
-  || !/class="couponDetailSource"><span>SOURCES<\/span>/.test(html)
-  || !/<strong>BDO Alerts<\/strong>/.test(html)
-  || !/data-open-url="https:\/\/garmoth\.com\/coupons\/">Garmoth &nearr;<\/button>/.test(html)) {
+  || /couponDetailSource|>SOURCES?<|Garmoth &nearr;|<strong>BDO Alerts<\/strong>/.test(html)) {
   throw new Error("Collapsed coupon reward disclosure is malformed.");
 }
 
@@ -192,24 +189,16 @@ if (!/aria-expanded="true"/.test(html)
   throw new Error("Expanded coupon reward list does not preserve every reward safely.");
 }
 
-tests.renderCouponDetail({...coupon,source:"BDO Alerts"});
-html = tests.couponEl.detail.innerHTML;
-if (!/<span>SOURCE<\/span><strong>BDO Alerts<\/strong>/.test(html)
-  || /garmoth\.com\/coupons/.test(html)) {
-  throw new Error("Coupon source attribution must be data-driven and link only Garmoth observations.");
-}
-
 const rewardDisclosureRule = appCss.match(/\.couponRewardDisclosure\{([^}]*)\}/)?.[1] || "";
 const rewardChevronRule = appCss.match(/\.couponRewardDisclosureChevron\{([^}]*)\}/)?.[1] || "";
 const rewardChevronGlyphRule = appCss.match(/\.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
 const expandedRewardChevronRule = appCss.match(/\.couponRewardDisclosure\[aria-expanded="true"\] \.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
 if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"":key/.test(appScript)
   || !/data-coupon-rewards-toggle/.test(appScript)
-  || !/function couponSourceAttribution\(c\)/.test(appScript)
-  || !/https:\/\/garmoth\.com\/coupons\//.test(appScript)
+  || /function couponSourceAttribution\(c\)|couponDetailSource/.test(appScript)
   || !/\.couponRewardList\{[\s\S]*?max-height:280px;[\s\S]*?overflow-y:auto;/.test(appCss)
   || !/\.couponRewardList\[hidden\]\{display:none\}/.test(appCss)
-  || !/\.couponDetailSource\{/.test(appCss)
+  || /\.couponDetailSource(?:\s|\{|\.|>)/.test(appCss)
   || !/\.couponRewardDisclosure:focus-visible/.test(appCss)
   || !/grid-template-columns:minmax\(0,1fr\) auto 32px/.test(rewardDisclosureRule)
   || !/width:30px/.test(rewardChevronRule)

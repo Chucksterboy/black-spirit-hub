@@ -1601,8 +1601,8 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$script -notmatch 'function couponRewardListHtml\(rewards\)' -or
 	$script -notmatch 'function couponExpiryBadge\(c\)' -or
 	$script -notmatch '\$\{couponExpiryBadge\(c\)\}' -or
-	$script -notmatch 'function couponSourceAttribution\(c\)' -or
-	$script -notmatch 'https://garmoth\.com/coupons/' -or
+	$script -match 'function couponSourceAttribution\(c\)|couponDetailSource' -or
+	$css -match '\.couponDetailSource(?:\s|\{|\.|>)' -or
 	$script -notmatch 'data-coupon-rewards-toggle' -or
 	$html -notmatch 'id="couponsView"\s+class="appView"\s+aria-label="Coupons"' -or
 	$html -match 'class="couponHero"|id="coupon(?:AvailableCount|TotalCount|LastCheck|SourceBadge|RegionBadge|SyncText|LastUpdated)"' -or
