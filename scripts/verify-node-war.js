@@ -46,7 +46,7 @@ const extracted = [
   "function bridgeCall(command,payload){bridgeCalls.push(command);bridgePayloads.push({command,payload});return failedCommands.has(command)?Promise.reject(new Error(command+' failed')):Promise.resolve({ok:true})}",
   "const NotificationService={ShowInfo(){},ShowError(){},ShowWarning(){}};",
   "const nodeWarAlertInFlight=new Set();",
-  requireMatch(/function serverTimeZoneLabel\(date=new Date\(\)\)\{\n[\s\S]*?\n\}/, "CET/CEST label helper"),
+  requireMatch(/function serverTimeZoneLabel\(date=new Date\(\)\)\{\r?\n[\s\S]*?\r?\n\}/, "CET/CEST label helper"),
   extractFunction("zonedParts", "zonedOffsetMs"),
   extractFunction("zonedOffsetMs", "zonedTimeToDate"),
   extractFunction("zonedTimeToDate", "serverWeekMondayUtc"),
