@@ -93,8 +93,8 @@ internal static class Program
 				out JsonElement camelCaseSourceUrl)
 					? camelCaseSourceUrl
 					: liveDebug.GetProperty("SourceUrl");
-			int result = dashboard.GetProperty("coupons").GetArrayLength() >= 3
-				&& dashboard.GetProperty("availableCount").GetInt32() >= 1
+			int result = dashboard.GetProperty("coupons").GetArrayLength() == 0
+				&& dashboard.GetProperty("availableCount").GetInt32() == 0
 				&& File.Exists(testPaths.CouponsCachePath)
 				&& File.Exists(testPaths.CouponSettingsPath)
 				&& refresh.TryGetProperty("lastAttempt", out _)
@@ -1934,6 +1934,171 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 			{
 				return 147;
 			}
+
+			DateTimeOffset garmothObservedAt = new(2026, 8, 24, 12, 0, 0, TimeSpan.Zero);
+			string garmothNuxtFixture = BuildGarmothNuxtCouponPayload(
+				4,
+				index => index switch
+				{
+					0 => " futu-reco-upon-2028 ",
+					1 => "PAST-COUPON-0001",
+					2 => "NO-EXPIRY-COUPON",
+					_ => "KR-FUTURE-COUPON"
+				},
+				nullableExpiryIndex: 2,
+				includeNonCouponQueryMirror: true);
+			GarmothCouponSnapshot garmothSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				garmothNuxtFixture,
+				garmothObservedAt);
+			CouponEntry futureGarmothCoupon = garmothSnapshot.Coupons.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "FUTURECOUPON2028");
+			CouponEntry noExpiryGarmothCoupon = garmothSnapshot.Coupons.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "NOEXPIRYCOUPON");
+			if (garmothSnapshot.SourceEntryCount != 4
+				|| garmothSnapshot.IsComplete
+				|| garmothSnapshot.RejectedEntryCount != 0
+				|| garmothSnapshot.Coupons.Count != 3
+				|| garmothSnapshot.InactiveCoupons.Count != 1
+				|| futureGarmothCoupon.Code != "FUTU-RECO-UPON-2028"
+				|| futureGarmothCoupon.Source != GarmothCouponProvider.SourceName
+				|| futureGarmothCoupon.IsExpired
+				|| futureGarmothCoupon.AddedUtc != new DateTimeOffset(2026, 8, 23, 11, 49, 8, TimeSpan.Zero)
+				|| futureGarmothCoupon.ExpiryUtc != new DateTimeOffset(2026, 9, 10, 23, 59, 0, TimeSpan.Zero)
+				|| futureGarmothCoupon.Rewards.Count != 1
+				|| futureGarmothCoupon.Rewards[0].ItemName != "High-quality Food Box"
+				|| futureGarmothCoupon.Rewards[0].Quantity != 5
+				|| futureGarmothCoupon.Rewards[0].IconUrl !=
+					"https://assets.garmoth.com/img/new_icon/09_cash/00021002.webp"
+				|| futureGarmothCoupon.Rewards[0].IconFileName != "garmoth-757423.webp"
+				|| futureGarmothCoupon.Rewards[0].IconSource != GarmothCouponProvider.SourceName
+				|| futureGarmothCoupon.Rewards[0].IconSourceUrl != GarmothCouponProvider.PageUrl
+				|| noExpiryGarmothCoupon.ExpiryUtc is not null
+				|| noExpiryGarmothCoupon.IsExpired
+				|| !garmothSnapshot.Coupons.Any(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code) == "KRFUTURECOUPON")
+				|| garmothSnapshot.Coupons.Any(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code) == "PASTCOUPON0001"))
+			{
+				return 273;
+			}
+			GarmothCouponSnapshot consolePrefixSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				BuildGarmothNuxtCouponPayload(
+					3,
+					index => index switch
+					{
+						0 => "(Console) XBOX-ONLY-COUPON",
+						1 => "FUTURE-CONSOLE-WORD",
+						_ => "ANOTHER-FUTURE-CODE"
+					},
+					expiredIndex: -1),
+				garmothObservedAt);
+			HashSet<string> consolePrefixCodes = consolePrefixSnapshot.Coupons
+				.Select(coupon => CouponService.CanonicalCouponCode(coupon.Code))
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			if (consolePrefixSnapshot.SourceEntryCount != 3
+				|| consolePrefixSnapshot.RejectedEntryCount != 0
+				|| !consolePrefixCodes.SetEquals(
+					["FUTURECONSOLEWORD", "ANOTHERFUTURECODE"]))
+			{
+				return 278;
+			}
+
+			GarmothCouponSnapshot hundredCouponSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				BuildGarmothNuxtCouponPayload(100),
+				garmothObservedAt);
+			if (hundredCouponSnapshot.Coupons.Count != 99
+				|| hundredCouponSnapshot.SourceEntryCount != 100
+				|| hundredCouponSnapshot.IsComplete
+				|| !hundredCouponSnapshot.Coupons.Any(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code) == "FUTURECOUPON0099"))
+			{
+				return 274;
+			}
+
+			bool rejectedTooManyGarmothCoupons = false;
+			bool rejectedOversizedGarmothPayload = false;
+			try
+			{
+				GarmothCouponProvider.ParseNuxtPayload(
+					BuildGarmothNuxtCouponPayload(GarmothCouponProvider.MaximumCoupons + 1),
+					garmothObservedAt);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedTooManyGarmothCoupons = true;
+			}
+			try
+			{
+				GarmothCouponProvider.ParseNuxtPayload(
+					"[" + new string('0', GarmothCouponProvider.MaximumPayloadCharacters) + "]",
+					garmothObservedAt);
+			}
+			catch (InvalidDataException)
+			{
+				rejectedOversizedGarmothPayload = true;
+			}
+			GarmothCouponSnapshot duplicateGarmothSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				BuildGarmothNuxtCouponPayload(
+					2,
+					_ => "DUPLICATE-COUPON",
+					expiredIndex: -1),
+				garmothObservedAt);
+			GarmothCouponSnapshot wrongRewardOwnerSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				BuildGarmothNuxtCouponPayload(
+					2,
+					wrongFirstRewardCouponId: true,
+					expiredIndex: -1),
+				garmothObservedAt);
+			GarmothCouponSnapshot outOfRangeSnapshot = GarmothCouponProvider.ParseNuxtPayload(
+				BuildGarmothNuxtCouponPayload(
+					2,
+					outOfRangeFirstCouponReference: true,
+					expiredIndex: -1),
+				garmothObservedAt);
+			GarmothCouponSnapshot expiredFirstActiveSecondSnapshot =
+				GarmothCouponProvider.ParseNuxtPayload(
+					BuildGarmothNuxtCouponPayload(
+						2,
+						_ => "EXPIRED-FIRST-ACTIVE-SECOND",
+						expiredIndex: 0),
+					garmothObservedAt);
+			CouponEntry expiredFirstActiveSecondCoupon =
+				expiredFirstActiveSecondSnapshot.Coupons.Single();
+			GarmothCouponSnapshot exactExpiryBoundarySnapshot =
+				GarmothCouponProvider.ParseNuxtPayload(
+					BuildGarmothNuxtCouponPayload(
+						1,
+						_ => "EXACT-UTC-EXPIRY-BOUNDARY",
+						expiredIndex: -1,
+						firstExpiryUtc: garmothObservedAt),
+					garmothObservedAt);
+			if (!rejectedTooManyGarmothCoupons
+				|| !rejectedOversizedGarmothPayload
+				|| duplicateGarmothSnapshot.Coupons.Count != 1
+				|| duplicateGarmothSnapshot.RejectedEntryCount != 1
+				|| wrongRewardOwnerSnapshot.Coupons.Count != 2
+				|| wrongRewardOwnerSnapshot.RejectedEntryCount != 0
+				|| wrongRewardOwnerSnapshot.Coupons[0].Rewards.Count != 1
+				|| wrongRewardOwnerSnapshot.Coupons[0].Rewards[0].ItemName
+					!= "Reward details available on Garmoth"
+				|| outOfRangeSnapshot.Coupons.Count != 1
+				|| outOfRangeSnapshot.RejectedEntryCount != 1
+				|| expiredFirstActiveSecondSnapshot.Coupons.Count != 1
+				|| expiredFirstActiveSecondSnapshot.InactiveCoupons.Count != 0
+				|| expiredFirstActiveSecondSnapshot.RejectedEntryCount != 0
+				|| expiredFirstActiveSecondCoupon.IsExpired
+				|| expiredFirstActiveSecondCoupon.ExpiryUtc
+					!= new DateTimeOffset(2026, 9, 10, 23, 59, 0, TimeSpan.Zero)
+				|| expiredFirstActiveSecondCoupon.Rewards.Single().ItemName
+					!= "Future Reward 1"
+				|| exactExpiryBoundarySnapshot.Coupons.Count != 0
+				|| exactExpiryBoundarySnapshot.InactiveCoupons.Count != 1
+				|| exactExpiryBoundarySnapshot.InactiveCoupons[0].ExpiryUtc
+					!= garmothObservedAt
+				|| exactExpiryBoundarySnapshot.RejectedEntryCount != 0)
+			{
+				return 275;
+			}
 			const string completeCouponSnapshotJson = """
 				{
 				  "total_coupons": 2,
@@ -1991,6 +2156,109 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 					"""{"total_coupons":1,"coupons":[{}]}"""))
 			{
 				return 148;
+			}
+
+			DateTimeOffset providerStart = historyObservedAt.AddMinutes(-5);
+			CouponEntry garmothOnlyCoupon = historyTemplate with
+			{
+				Code = "GARMOTH-ONLY-ACTIVE",
+				ExpiryUtc = historyObservedAt.AddDays(7),
+				ExpiryText = "Available",
+				IsExpired = false,
+				Source = GarmothCouponProvider.SourceName
+			};
+			CouponEntry unrelatedGarmothCoupon = garmothOnlyCoupon with
+			{
+				Code = "UNRELATED-GARMOTH-ACTIVE",
+				ExpiryUtc = historyObservedAt.AddDays(9)
+			};
+			CouponEntry oldBdoOnlyCoupon = historyTemplate with
+			{
+				Code = "OLD-BDO-ONLY",
+				ExpiryUtc = null,
+				ExpiryText = "No expiry listed",
+				IsExpired = false,
+				Source = "BDO Alerts"
+			};
+			CouponEntry newBdoOnlyCoupon = oldBdoOnlyCoupon with
+			{
+				Code = "NEW-BDO-ONLY"
+			};
+			CouponProviderCache garmothProvider = CouponService.UpdateProviderCache(
+				null,
+				[garmothOnlyCoupon, unrelatedGarmothCoupon],
+				providerStart,
+				snapshotComplete: false,
+				warning: null,
+				nextAllowedUtc: historyObservedAt.AddHours(2));
+			CouponProviderCache priorBdoProvider = CouponService.UpdateProviderCache(
+				null,
+				[oldBdoOnlyCoupon],
+				providerStart,
+				snapshotComplete: true,
+				warning: null);
+			CouponProviderCache currentBdoProvider = CouponService.UpdateProviderCache(
+				priorBdoProvider,
+				[newBdoOnlyCoupon],
+				historyObservedAt,
+				snapshotComplete: true,
+				warning: null);
+			CouponProviderCache failedGarmothProvider = garmothProvider with
+			{
+				LastAttemptUtc = historyObservedAt,
+				NextAllowedUtc = historyObservedAt.AddMinutes(15),
+				ConsecutiveFailures = 1,
+				LastError = "simulated provider outage"
+			};
+			CouponProviderCache explicitlyExpiredGarmothProvider =
+				CouponService.ApplyProviderInactiveObservations(
+					garmothProvider,
+					[
+						new GarmothInactiveCoupon(
+							"GARMOTHONLYACTIVE",
+							historyObservedAt.AddMinutes(-1)),
+						new GarmothInactiveCoupon(
+							"NEVEROBSERVEDBYGARMOTH",
+							historyObservedAt.AddMinutes(-2))
+					],
+					historyObservedAt)
+				?? throw new InvalidOperationException(
+					"The Garmoth provider checkpoint unexpectedly disappeared.");
+			List<CouponEntry> isolatedProviderMerge = CouponService.MergeProviderCoupons(
+				[currentBdoProvider, failedGarmothProvider],
+				historyObservedAt);
+			CouponEntry retainedGarmothOnlyCoupon = isolatedProviderMerge.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "GARMOTHONLYACTIVE");
+			CouponEntry endedBdoOnlyCoupon = isolatedProviderMerge.Single(coupon =>
+				CouponService.CanonicalCouponCode(coupon.Code) == "OLDBDOONLY");
+			if (isolatedProviderMerge.Count != 4
+				|| retainedGarmothOnlyCoupon.IsExpired
+				|| retainedGarmothOnlyCoupon.Source != GarmothCouponProvider.SourceName
+				|| !endedBdoOnlyCoupon.IsExpired
+				|| endedBdoOnlyCoupon.ExpiryText != "No longer listed"
+				|| !isolatedProviderMerge.Any(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code) == "NEWBDOONLY"
+					&& !coupon.IsExpired))
+			{
+				return 277;
+			}
+			CouponEntry explicitlyExpiredGarmothCoupon =
+				explicitlyExpiredGarmothProvider.Coupons.Single(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code)
+					== "GARMOTHONLYACTIVE");
+			CouponEntry untouchedGarmothCoupon =
+				explicitlyExpiredGarmothProvider.Coupons.Single(coupon =>
+					CouponService.CanonicalCouponCode(coupon.Code)
+					== "UNRELATEDGARMOTHACTIVE");
+			if (explicitlyExpiredGarmothProvider.Coupons.Count != 2
+				|| !explicitlyExpiredGarmothCoupon.IsExpired
+				|| explicitlyExpiredGarmothCoupon.ExpiryUtc
+					!= historyObservedAt.AddMinutes(-1)
+				|| untouchedGarmothCoupon.IsExpired
+				|| untouchedGarmothCoupon.ExpiryUtc
+					!= unrelatedGarmothCoupon.ExpiryUtc)
+			{
+				return 279;
 			}
 
 			const string structuredCouponFeedJson = """
@@ -2236,6 +2504,60 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 					!= "Reward details available on BDO Alerts")
 			{
 				return 96;
+			}
+
+			CouponEntry activeProviderObservation = historyTemplate with
+			{
+				Code = "PROVIDER-STATE-TEST",
+				ExpiryUtc = garmothObservedAt.AddDays(7),
+				ExpiryText = "Available",
+				IsExpired = false,
+				Source = "BDO Alerts"
+			};
+			CouponEntry expiredProviderObservation = activeProviderObservation with
+			{
+				ExpiryUtc = garmothObservedAt.AddDays(-1),
+				ExpiryText = "Expired",
+				IsExpired = true,
+				Rewards =
+				[
+					new CouponReward("Garmoth reward detail", 7, "", "")
+				],
+				Source = GarmothCouponProvider.SourceName
+			};
+			CouponEntry mergedProviderObservation = CouponService.MergeCouponSources(
+				[activeProviderObservation],
+				[expiredProviderObservation]).Single();
+			CouponEntry activeWithoutExpiry = activeProviderObservation with
+			{
+				ExpiryUtc = null,
+				ExpiryText = "No expiry listed",
+				Rewards =
+				[
+					new CouponReward("Richer BDO reward one", 1, "", ""),
+					new CouponReward("Richer BDO reward two", 1, "", "")
+				]
+			};
+			CouponEntry activeGarmothExpiry = activeProviderObservation with
+			{
+				ExpiryUtc = garmothObservedAt.AddDays(17),
+				ExpiryText = "17 days",
+				Source = GarmothCouponProvider.SourceName
+			};
+			CouponEntry mergedActiveExpiry = CouponService.MergeCouponSources(
+				[activeWithoutExpiry],
+				[activeGarmothExpiry]).Single();
+			HashSet<string> mergedProviderSources = mergedProviderObservation.Source
+				.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			if (mergedProviderObservation.IsExpired
+				|| mergedProviderObservation.ExpiryUtc != activeProviderObservation.ExpiryUtc
+				|| !mergedProviderSources.SetEquals(["BDO Alerts", GarmothCouponProvider.SourceName])
+				|| mergedActiveExpiry.ExpiryUtc != activeGarmothExpiry.ExpiryUtc
+				|| mergedActiveExpiry.ExpiryText != activeGarmothExpiry.ExpiryText
+				|| mergedActiveExpiry.Rewards.Count != 2)
+			{
+				return 276;
 			}
 
 			const string bossScheduleFixture = """
@@ -2692,6 +3014,92 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 			{
 			}
 		}
+	}
+
+	private static string BuildGarmothNuxtCouponPayload(
+		int couponCount,
+		Func<int, string>? codeFactory = null,
+		bool wrongFirstRewardCouponId = false,
+		bool outOfRangeFirstCouponReference = false,
+		int expiredIndex = 1,
+		int nullableExpiryIndex = -1,
+		bool includeNonCouponQueryMirror = false,
+		DateTimeOffset? firstExpiryUtc = null)
+	{
+		List<object?> flattened =
+		[
+			new object[] { "ShallowReactive", 1 },
+			new Dictionary<string, int> { ["data"] = 2 },
+			new object[] { "ShallowReactive", 3 },
+			new Dictionary<string, int> { ["general.getCoupons-fixtureHash"] = 4 },
+			new List<int>()
+		];
+		List<int> couponReferences = (List<int>)flattened[4]!;
+
+		int AddValue(object? value)
+		{
+			int reference = flattened.Count;
+			flattened.Add(value);
+			return reference;
+		}
+
+		for (int index = 0; index < couponCount; index++)
+		{
+			Dictionary<string, int> coupon = [];
+			int couponReference = AddValue(coupon);
+			couponReferences.Add(couponReference);
+			long couponId = 10_000L + index;
+			coupon["id"] = AddValue(couponId);
+			coupon["code"] = AddValue(
+				(codeFactory?.Invoke(index) ?? $"FUTURE-COUPON-{index:D4}"));
+			// Garmoth's live payload stores the region array as JSON text inside
+			// the flattened value table. The app deliberately does not hard-code
+			// a geographic allow-list: every non-console coupon remains eligible.
+			coupon["regions"] = AddValue(index % 2 == 0
+				? "[\"eu\",\"na\"]"
+				: "[\"kr\"]");
+			coupon["created_at"] = AddValue(
+				new DateTimeOffset(2026, 8, 23, 11, 49, 8, TimeSpan.Zero)
+					.AddMinutes(index)
+					.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture));
+			coupon["expire_at"] = index == nullableExpiryIndex
+				? AddValue(null)
+				: AddValue(
+					(index == 0 && firstExpiryUtc.HasValue
+						? firstExpiryUtc.Value
+						: index == expiredIndex
+						? new DateTimeOffset(2024, 3, 8, 23, 59, 59, TimeSpan.Zero)
+						: new DateTimeOffset(2026, 9, 10, 23, 59, 0, TimeSpan.Zero))
+					.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture));
+
+			List<int> itemReferences = [];
+			coupon["items"] = AddValue(itemReferences);
+			Dictionary<string, int> item = [];
+			itemReferences.Add(AddValue(item));
+			item["coupon_id"] = AddValue(
+				wrongFirstRewardCouponId && index == 0 ? couponId + 1 : couponId);
+			item["main_key"] = AddValue(index == 0 ? 757_423L : 1_740_000L + index);
+			item["amount"] = AddValue(index == 0 ? 5 : 100 + index);
+			item["name"] = AddValue(index == 0 ? "High-quality Food Box" : $"Future Reward {index}");
+			item["grade"] = AddValue(index == 0 ? 2 : 3);
+			item["img"] = AddValue(index == 0
+				? "new_icon/09_cash/00021002.webp"
+				: $"new_icon/03_etc/{index:D8}.webp");
+		}
+
+		if (outOfRangeFirstCouponReference && couponReferences.Count > 0)
+		{
+			couponReferences[0] = flattened.Count + 10;
+		}
+		if (includeNonCouponQueryMirror)
+		{
+			int metadataReference = AddValue(null);
+			flattened.Add(new Dictionary<string, int>
+			{
+				["general.getCoupons-fixtureHash"] = metadataReference
+			});
+		}
+		return JsonSerializer.Serialize(flattened);
 	}
 
 	private static async Task<int> RunMarketStorageMaintenanceSmokeTestAsync()

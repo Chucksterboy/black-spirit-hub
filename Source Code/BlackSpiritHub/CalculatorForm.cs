@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "coupon-audience-20260823";
+	private const string UiRevision = "garmoth-coupons-expiry-20260824";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -100,6 +100,8 @@ internal sealed class CalculatorForm : Form
 	private WebView2 webView;
 
 	private WebView2? eventsBrowserView;
+	private WebView2? garmothBrowserView;
+	private readonly SemaphoreSlim garmothBrowserGate = new(1, 1);
 
 	private readonly StartupSplashWindow startupSplash;
 
@@ -188,7 +190,10 @@ internal sealed class CalculatorForm : Form
 		this.logger = logger;
 		portraitReplacerService = new PortraitReplacerService(paths);
 		fontChangerService = new FontChangerService(paths);
-		couponService = new CouponService(paths, logger);
+		couponService = new CouponService(
+			paths,
+			logger,
+			ReadGarmothCouponsPayloadWithBrowserAsync);
 		eventService = new EventService(paths, logger);
 		bossScheduleService = new BossScheduleService(paths, logger);
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
@@ -1041,6 +1046,7 @@ internal sealed class CalculatorForm : Form
 		try { backgroundNotificationTimer?.Dispose(); } catch { }
 		try { StopAlarmSound(); } catch { }
 		DisposeEventsBrowser();
+		DisposeGarmothBrowser();
 		DetachMainWebViewEvents(webView);
 		try { webView.Dispose(); } catch { }
 		try { lifetimeCancellation.Dispose(); } catch { }
@@ -1616,7 +1622,7 @@ internal sealed class CalculatorForm : Form
 		return command switch
 		{
 			"downloadAndInstallUpdate" => TimeSpan.FromMinutes(10),
-			"refreshEvents" or "initializeEvents" => TimeSpan.FromSeconds(105),
+			"refreshEvents" or "initializeEvents" or "refreshCoupons" => TimeSpan.FromSeconds(105),
 			"refreshBossSchedule" => TimeSpan.FromSeconds(20),
 			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
 			"searchBdoPlayersGuilds" or "getBdoGuildProfile" => TimeSpan.FromSeconds(33),
@@ -1995,6 +2001,200 @@ internal sealed class CalculatorForm : Form
 		return forceRefresh || !EventDashboardHasEvents(dashboard);
 	}
 
+	private async Task<string> ReadGarmothCouponsPayloadWithBrowserAsync(
+		CancellationToken cancellationToken)
+	{
+		await garmothBrowserGate.WaitAsync(cancellationToken);
+		try
+		{
+			using CancellationTokenSource timeout =
+				CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			timeout.CancelAfter(TimeSpan.FromSeconds(45));
+			WebView2 browser = await EnsureGarmothBrowserAsync(timeout.Token);
+			await NavigateGarmothBrowserAsync(browser, timeout.Token);
+
+			for (int attempt = 0; attempt < 35; attempt++)
+			{
+				timeout.Token.ThrowIfCancellationRequested();
+				string json = await browser.CoreWebView2.ExecuteScriptAsync(
+					"document.getElementById('__NUXT_DATA__')?.textContent || ''");
+				string payload = JsonSerializer.Deserialize<string>(json, JsonOptions) ?? string.Empty;
+				if (payload.Length > GarmothCouponProvider.MaximumPayloadCharacters)
+					throw new InvalidDataException("The Garmoth coupon page payload exceeded its size limit.");
+				if (payload.Contains("general.getCoupons-", StringComparison.Ordinal))
+					return payload;
+				if (attempt < 34)
+					await Task.Delay(1000, timeout.Token);
+			}
+
+			throw new InvalidDataException(
+				"Garmoth did not expose a readable coupon payload in the authorized page.");
+		}
+		finally
+		{
+			DisposeGarmothBrowser();
+			garmothBrowserGate.Release();
+		}
+	}
+
+	private async Task<WebView2> EnsureGarmothBrowserAsync(
+		CancellationToken cancellationToken)
+	{
+		if (garmothBrowserView is { IsDisposed: false, CoreWebView2: not null })
+			return garmothBrowserView;
+
+		DisposeGarmothBrowser();
+		garmothBrowserView = new WebView2
+		{
+			Location = new Point(-32000, -32000),
+			Size = new Size(1, 1),
+			TabStop = false,
+			Visible = true
+		};
+		Controls.Add(garmothBrowserView);
+		garmothBrowserView.SendToBack();
+
+		string userDataFolder = Path.Combine(paths.WebViewDataPath, "garmoth-coupons");
+		CoreWebView2Environment environment =
+			await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+		await garmothBrowserView.EnsureCoreWebView2Async(environment);
+		CoreWebView2 core = garmothBrowserView.CoreWebView2;
+		core.Settings.AreDevToolsEnabled = false;
+		core.Settings.AreDefaultContextMenusEnabled = false;
+		core.Settings.IsStatusBarEnabled = false;
+		core.Settings.IsZoomControlEnabled = false;
+		core.IsMuted = true;
+		core.NewWindowRequested += OnGarmothNewWindowRequested;
+		core.DownloadStarting += OnGarmothDownloadStarting;
+		core.PermissionRequested += OnGarmothPermissionRequested;
+		core.NavigationStarting += OnGarmothNavigationStarting;
+		core.ProcessFailed += OnGarmothBrowserProcessFailed;
+		cancellationToken.ThrowIfCancellationRequested();
+		return garmothBrowserView;
+	}
+
+	private static void OnGarmothNewWindowRequested(
+		object? sender,
+		CoreWebView2NewWindowRequestedEventArgs args)
+	{
+		args.Handled = true;
+	}
+
+	private static void OnGarmothDownloadStarting(
+		object? sender,
+		CoreWebView2DownloadStartingEventArgs args)
+	{
+		args.Cancel = true;
+	}
+
+	private static void OnGarmothPermissionRequested(
+		object? sender,
+		CoreWebView2PermissionRequestedEventArgs args)
+	{
+		args.State = CoreWebView2PermissionState.Deny;
+	}
+
+	private static void OnGarmothNavigationStarting(
+		object? sender,
+		CoreWebView2NavigationStartingEventArgs args)
+	{
+		if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out Uri? uri)
+			|| uri.Scheme != Uri.UriSchemeHttps
+			|| !uri.Host.Equals("garmoth.com", StringComparison.OrdinalIgnoreCase))
+		{
+			args.Cancel = true;
+		}
+	}
+
+	private void OnGarmothBrowserProcessFailed(
+		object? sender,
+		CoreWebView2ProcessFailedEventArgs args)
+	{
+		logger.Warn(
+			$"Garmoth coupon WebView process failed: kind={args.ProcessFailedKind}, "
+			+ $"reason={args.Reason}, exit={args.ExitCode}.");
+		WebView2? failedBrowser = garmothBrowserView;
+		if (failedBrowser is null)
+			return;
+		try
+		{
+			if (sender is not CoreWebView2 failedCore
+				|| !ReferenceEquals(failedCore, failedBrowser.CoreWebView2))
+			{
+				return;
+			}
+			BeginInvoke((Action)(() => DisposeGarmothBrowser(failedBrowser)));
+		}
+		catch (InvalidOperationException)
+		{
+		}
+	}
+
+	private static async Task NavigateGarmothBrowserAsync(
+		WebView2 browser,
+		CancellationToken cancellationToken)
+	{
+		TaskCompletionSource navigation =
+			new(TaskCreationOptions.RunContinuationsAsynchronously);
+		void Handler(object? _, CoreWebView2NavigationCompletedEventArgs args)
+		{
+			if (args.IsSuccess)
+				navigation.TrySetResult();
+			else
+				navigation.TrySetException(new InvalidDataException(
+					"The authorized Garmoth coupon page did not finish loading."));
+		}
+
+		browser.CoreWebView2.NavigationCompleted += Handler;
+		using CancellationTokenRegistration registration =
+			cancellationToken.Register(() => navigation.TrySetCanceled(cancellationToken));
+		try
+		{
+			browser.CoreWebView2.Navigate(GarmothCouponProvider.PageUrl);
+			await navigation.Task;
+			if (browser.Source is not Uri source
+				|| source.Scheme != Uri.UriSchemeHttps
+				|| !source.Host.Equals("garmoth.com", StringComparison.OrdinalIgnoreCase)
+				|| !source.AbsolutePath.TrimEnd('/').Equals(
+					"/coupons",
+					StringComparison.OrdinalIgnoreCase))
+			{
+				throw new InvalidDataException(
+					"The Garmoth coupon browser did not remain on the authorized page.");
+			}
+		}
+		finally
+		{
+			browser.CoreWebView2.NavigationCompleted -= Handler;
+		}
+	}
+
+	private void DisposeGarmothBrowser(WebView2? expectedBrowser = null)
+	{
+		WebView2? browser = garmothBrowserView;
+		if (expectedBrowser is not null && !ReferenceEquals(browser, expectedBrowser))
+			return;
+		garmothBrowserView = null;
+		if (browser is null)
+			return;
+		try
+		{
+			if (browser.CoreWebView2 is { } core)
+			{
+				core.NewWindowRequested -= OnGarmothNewWindowRequested;
+				core.DownloadStarting -= OnGarmothDownloadStarting;
+				core.PermissionRequested -= OnGarmothPermissionRequested;
+				core.NavigationStarting -= OnGarmothNavigationStarting;
+				core.ProcessFailed -= OnGarmothBrowserProcessFailed;
+			}
+		}
+		catch
+		{
+		}
+		try { Controls.Remove(browser); } catch { }
+		try { browser.Dispose(); } catch { }
+	}
+
 	private static bool EventDashboardHasStatus(object dashboard, string expectedStatus)
 	{
 		try
@@ -2368,6 +2568,7 @@ internal sealed class CalculatorForm : Form
 			"blackdesert.pearlabyss.com",
 			"www.blackdesertfoundry.com",
 			"bdocodex.com",
+			"garmoth.com",
 			"ko-fi.com",
 			"github.com"
 		];

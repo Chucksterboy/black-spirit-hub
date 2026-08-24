@@ -1451,6 +1451,11 @@ if (!(Test-Path -LiteralPath $grindMarketProviderSourcePath -PathType Leaf)) {
 }
 $grindMarketProviderSource = Get-Content -LiteralPath $grindMarketProviderSourcePath -Raw
 $couponSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CouponService.cs") -Raw
+$garmothCouponProviderSourcePath = Join-Path $sourceRoot "BlackSpiritHub\GarmothCouponProvider.cs"
+if (!(Test-Path -LiteralPath $garmothCouponProviderSourcePath -PathType Leaf)) {
+	throw "The authorized Garmoth coupon provider is missing."
+}
+$garmothCouponProviderSource = Get-Content -LiteralPath $garmothCouponProviderSourcePath -Raw
 $couponIconResolverSourcePath = Join-Path $sourceRoot "BlackSpiritHub\BdoCodexItemIconResolver.cs"
 if (!(Test-Path -LiteralPath $couponIconResolverSourcePath -PathType Leaf)) {
 	throw "The exact coupon item icon resolver is missing."
@@ -1572,6 +1577,18 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponSource -notmatch 'regionScope = "CONSOLE EXCLUDED"' -or
 	$couponSource -notmatch 'MergeCouponHistory' -or
 	$couponSource -notmatch 'IsCompleteBdoAlertsSnapshot' -or
+	$couponSource -notmatch 'GarmothSuccessTtl\s*=\s*TimeSpan\.FromHours\(2\)' -or
+	$couponSource -notmatch 'SemaphoreSlim refreshGate' -or
+	$couponSource -notmatch 'GarmothCouponProvider\.ParseNuxtPayload' -or
+	$couponSource -notmatch 'UpdateProviderCache' -or
+	$couponSource -notmatch 'MergeProviderCoupons' -or
+	$couponSource -notmatch 'Dictionary<string, CouponProviderCache> Providers' -or
+	$garmothCouponProviderSource -notmatch 'https://garmoth\.com/coupons/' -or
+	$garmothCouponProviderSource -notmatch 'general\.getCoupons-' -or
+	$garmothCouponProviderSource -notmatch 'MaximumPayloadCharacters' -or
+	$garmothCouponProviderSource -notmatch 'MaximumCoupons' -or
+	$garmothCouponProviderSource -notmatch 'IsExplicitConsolePrefix' -or
+	$garmothCouponProviderSource -notmatch 'RejectedEntryCount' -or
 	$couponIconResolverSource -notmatch 'https://bdocodex\.com/ac\.php' -or
 	$couponIconResolverSource -notmatch 'NormalizeForMatch' -or
 	$couponIconResolverSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or
@@ -1581,9 +1598,14 @@ if ($couponSource -notmatch 'BdoAlertsApiCredentials\.TryApply' -or
 	$couponIconResolverSource -notmatch 'path\.Contains\("\.\."' -or
 	$script -notmatch 'function couponCodeKey\(code\)' -or
 	$script -notmatch 'function couponRewardListHtml\(rewards\)' -or
+	$script -notmatch 'function couponExpiryBadge\(c\)' -or
+	$script -notmatch '\$\{couponExpiryBadge\(c\)\}' -or
+	$script -notmatch 'function couponSourceAttribution\(c\)' -or
+	$script -notmatch 'https://garmoth\.com/coupons/' -or
 	$script -notmatch 'data-coupon-rewards-toggle' -or
 	$html -notmatch 'id="couponRegionBadge"' -or
 	$css -notmatch '\.couponRegionBadge' -or
+	$css -notmatch '\.couponCodeExpiry\{' -or
 	$css -notmatch '\.couponRewardList\[hidden\]\{display:none\}' -or
 	$couponSource -match 'CouponAppliesToNaEu' -or
 	$couponSource -match 'validatedNaEuCouponKeys' -or

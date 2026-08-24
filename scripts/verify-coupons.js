@@ -34,6 +34,7 @@ const extractedCode = [
   extractFunction("couponEscape", "couponCodeKey"),
   extractFunction("couponCodeKey", "couponRedeemedMap"),
   extractFunction("couponRewardListHtml", "couponExpiryText"),
+  extractFunction("couponSourceAttribution", "couponCacheAgeText"),
   extractFunction("renderCouponDetail", "initializeCoupons"),
   "globalThis.couponTests={couponEl,couponState,couponRewardListHtml,renderCouponDetail};"
 ].join("\n");
@@ -42,6 +43,46 @@ const context = {};
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 const tests = context.couponTests;
+
+const fixedNow = Date.parse("2026-08-24T23:59:00.000Z");
+const NativeDate = Date;
+class FixedDate extends NativeDate {
+  static now() { return fixedNow; }
+}
+const expiryBadgeCode = [
+  extractFunction("couponEscape", "couponCodeKey"),
+  extractFunction("couponExpiryText", "couponExpiryBadge"),
+  extractFunction("couponExpiryBadge", "couponSourceAttribution"),
+  "globalThis.expiryBadgeTests={couponExpiryBadge};"
+].join("\n");
+const expiryBadgeContext = {Date:FixedDate};
+vm.createContext(expiryBadgeContext);
+vm.runInContext(expiryBadgeCode, expiryBadgeContext);
+const futureExpiry = "2026-08-27T23:59:00.000Z";
+const exactExpiryDate = new NativeDate(futureExpiry).toLocaleDateString([], {
+  year:"numeric",
+  month:"short",
+  day:"numeric",
+  timeZone:"UTC"
+});
+const futureExpiryBadge = expiryBadgeContext.expiryBadgeTests.couponExpiryBadge({
+  expiryUtc:futureExpiry,
+  isExpired:false,
+  expiryText:""
+});
+const unknownExpiryBadge = expiryBadgeContext.expiryBadgeTests.couponExpiryBadge({
+  expiryUtc:null,
+  isExpired:false,
+  expiryText:"No expiry listed"
+});
+if (!futureExpiryBadge.includes(`EXPIRES ${exactExpiryDate} · IN 3 DAYS`)
+  || !/class="couponCodeExpiry unknown">EXPIRY NOT LISTED<\/span>/.test(unknownExpiryBadge)
+  || !/timeZone:"UTC"/.test(appScript)
+  || !/couponCodeText[\s\S]{0,180}\$\{couponExpiryBadge\(c\)\}/.test(appScript)
+  || !/#couponsView \.couponCodeExpiry\{[\s\S]*?border:1px solid rgba\(49,230,255,\.72\)[\s\S]*?background:linear-gradient[\s\S]*?color:#62efff/.test(appCss)) {
+  throw new Error("Every coupon row must show a vibrant exact and relative expiry badge, including the unknown fallback.");
+}
+
 const intervalDeclaration = appScript.match(
   /const COUPON_AUTO_REFRESH_INTERVAL_MS=([^;]+);/);
 if (!intervalDeclaration) {
@@ -87,6 +128,7 @@ const coupon = {
   code:"TEST-COUPON",
   isExpired:false,
   expiryText:"No expiry listed",
+  source:"BDO Alerts + Garmoth",
   rewards
 };
 
@@ -95,7 +137,10 @@ let html = tests.couponEl.detail.innerHTML;
 if (!/aria-expanded="false"/.test(html)
   || !/id="couponRewardList-TESTCOUPON" hidden/.test(html)
   || !/8 items/.test(html)
-  || !/Choose Your Transcendent Hammer Box/.test(html)) {
+  || !/Choose Your Transcendent Hammer Box/.test(html)
+  || !/class="couponDetailSource"><span>SOURCES<\/span>/.test(html)
+  || !/<strong>BDO Alerts<\/strong>/.test(html)
+  || !/data-open-url="https:\/\/garmoth\.com\/coupons\/">Garmoth &nearr;<\/button>/.test(html)) {
   throw new Error("Collapsed coupon reward disclosure is malformed.");
 }
 
@@ -112,10 +157,20 @@ if (!/aria-expanded="true"/.test(html)
   throw new Error("Expanded coupon reward list does not preserve every reward safely.");
 }
 
+tests.renderCouponDetail({...coupon,source:"BDO Alerts"});
+html = tests.couponEl.detail.innerHTML;
+if (!/<span>SOURCE<\/span><strong>BDO Alerts<\/strong>/.test(html)
+  || /garmoth\.com\/coupons/.test(html)) {
+  throw new Error("Coupon source attribution must be data-driven and link only Garmoth observations.");
+}
+
 if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"":key/.test(appScript)
   || !/data-coupon-rewards-toggle/.test(appScript)
+  || !/function couponSourceAttribution\(c\)/.test(appScript)
+  || !/https:\/\/garmoth\.com\/coupons\//.test(appScript)
   || !/\.couponRewardList\{[\s\S]*?max-height:280px;[\s\S]*?overflow-y:auto;/.test(appCss)
   || !/\.couponRewardList\[hidden\]\{display:none\}/.test(appCss)
+  || !/\.couponDetailSource\{/.test(appCss)
   || !/\.couponRewardDisclosure:focus-visible/.test(appCss)) {
   throw new Error("Coupon reward disclosure lost its state, scrolling, or keyboard safeguards.");
 }

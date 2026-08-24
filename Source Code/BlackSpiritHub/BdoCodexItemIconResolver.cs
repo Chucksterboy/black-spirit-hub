@@ -88,6 +88,7 @@ internal sealed class BdoCodexItemIconResolver : IDisposable
 
 		string[] itemNames = couponList
 			.SelectMany(coupon => coupon.Rewards)
+			.Where(reward => !HasTrustedGarmothIcon(reward))
 			.Select(reward => NormalizeDisplayName(reward.ItemName))
 			.Where(IsConcreteRewardName)
 			.Distinct(StringComparer.OrdinalIgnoreCase)
@@ -135,6 +136,8 @@ internal sealed class BdoCodexItemIconResolver : IDisposable
 		{
 			Rewards = coupon.Rewards.Select(reward =>
 			{
+				if (HasTrustedGarmothIcon(reward))
+					return reward;
 				string key = NormalizeForMatch(reward.ItemName);
 				if (!entries.TryGetValue(key, out BdoCodexItemIconCacheEntry? match)
 					|| !match.Found)
@@ -150,6 +153,18 @@ internal sealed class BdoCodexItemIconResolver : IDisposable
 				};
 			}).ToList()
 		}).ToList();
+	}
+
+	private static bool HasTrustedGarmothIcon(CouponReward reward)
+	{
+		return Uri.TryCreate(reward.IconUrl, UriKind.Absolute, out Uri? uri)
+			&& uri.Scheme == Uri.UriSchemeHttps
+			&& uri.Host.Equals("assets.garmoth.com", StringComparison.OrdinalIgnoreCase)
+			&& uri.AbsolutePath.StartsWith(
+				"/img/new_icon/",
+				StringComparison.OrdinalIgnoreCase)
+			&& uri.Query.Length == 0
+			&& uri.Fragment.Length == 0;
 	}
 
 	private async Task<BdoCodexItemIconCacheEntry?> ResolveOneAsync(

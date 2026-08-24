@@ -17,6 +17,11 @@ internal sealed class CouponService : IDisposable
 	private const string SourceUrl = "https://api.bdoalerts.net/api/coupons";
 	private const string OfficialSourceUrl = "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=5676";
 	private const long MaxResponseBytes = 8 * 1024 * 1024;
+	private static readonly TimeSpan GarmothSuccessTtl = TimeSpan.FromHours(2);
+	private static readonly TimeSpan ProviderFailureBackoff = TimeSpan.FromMinutes(15);
+	private const string BdoProviderId = "bdo-alerts";
+	private const string GarmothProviderId = "garmoth";
+	private const string LegacyProviderId = "legacy";
 	private static readonly string[] PlatformPropertyNames =
 	[
 		"platform",
@@ -52,6 +57,8 @@ internal sealed class CouponService : IDisposable
 	private readonly HttpClient officialHttp;
 	private readonly HttpClient bdoAlertsHttp;
 	private readonly BdoCodexItemIconResolver itemIconResolver;
+	private readonly Func<CancellationToken, Task<string>>? garmothPayloadLoader;
+	private readonly SemaphoreSlim refreshGate = new(1, 1);
 	private readonly Dictionary<string, (DateTime LastWriteUtc, long Length, string DataUrl)> iconDataCache = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -60,10 +67,14 @@ internal sealed class CouponService : IDisposable
 		WriteIndented = true
 	};
 
-	public CouponService(AppPaths paths, AppLogger logger)
+	public CouponService(
+		AppPaths paths,
+		AppLogger logger,
+		Func<CancellationToken, Task<string>>? garmothPayloadLoader = null)
 	{
 		this.paths = paths;
 		this.logger = logger;
+		this.garmothPayloadLoader = garmothPayloadLoader;
 		http = new HttpClient(new HttpClientHandler
 		{
 			AllowAutoRedirect = false
@@ -128,13 +139,41 @@ internal sealed class CouponService : IDisposable
 
 	public async Task<object> RefreshAsync(CancellationToken cancellationToken)
 	{
+		await refreshGate.WaitAsync(cancellationToken);
+		try
+		{
+			return await RefreshCoreAsync(cancellationToken);
+		}
+		finally
+		{
+			refreshGate.Release();
+		}
+	}
+
+	private async Task<object> RefreshCoreAsync(CancellationToken cancellationToken)
+	{
 		DateTimeOffset attemptTime = DateTimeOffset.UtcNow;
 		logger.Info("Coupons refresh started.");
 		logger.Info($"Coupons official source URL: {OfficialSourceUrl}");
 		logger.Info($"Coupons BDO Alerts source URL: {SourceUrl}");
+		logger.Info($"Coupons Garmoth source URL: {GarmothCouponProvider.PageUrl}");
 		bool cacheUpdated = false;
 		try
 		{
+			await EnsureSeedCacheAsync(cancellationToken);
+			CouponCache? existingCache = await ReadJsonAsync<CouponCache>(
+				paths.CouponsCachePath,
+				cancellationToken);
+			Dictionary<string, CouponProviderCache> providers =
+				MigrateProviderCaches(existingCache, attemptTime);
+			providers.TryGetValue(GarmothProviderId, out CouponProviderCache? previousGarmoth);
+			bool garmothDue = garmothPayloadLoader is not null
+				&& (previousGarmoth?.NextAllowedUtc is not { } nextAllowed
+					|| nextAllowed <= attemptTime);
+			Task<string>? garmothPayloadTask = garmothDue
+				? garmothPayloadLoader!(cancellationToken)
+				: null;
+
 			List<CouponEntry> officialCoupons = [];
 			string? officialFailure = null;
 			int officialLength = 0;
@@ -173,146 +212,190 @@ internal sealed class CouponService : IDisposable
 				officialFailure = "Official BDO source could not be read: " + ex.Message;
 				logger.Warn(officialFailure);
 			}
-			CouponCache? existingCache = await ReadJsonAsync<CouponCache>(
-				paths.CouponsCachePath,
-				cancellationToken);
 
-			using HttpRequestMessage bdoAlertsRequest = new(HttpMethod.Get, SourceUrl);
-			if (!BdoAlertsApiCredentials.TryApply(
-					bdoAlertsRequest,
-					new Uri(SourceUrl)))
+			List<CouponEntry> bdoCurrent = [];
+			string? bdoFailure = null;
+			int? bdoStatusCode = null;
+			int bdoLength = 0;
+			bool bdoSnapshotComplete = false;
+			bool bdoAlertsSucceeded = false;
+			try
 			{
-				const string failure = "BDO Alerts API access is not configured.";
+				using HttpRequestMessage request = new(HttpMethod.Get, SourceUrl);
+				if (!BdoAlertsApiCredentials.TryApply(request, new Uri(SourceUrl)))
+					throw new InvalidOperationException("BDO Alerts API access is not configured.");
+				using HttpResponseMessage response = await bdoAlertsHttp.SendAsync(
+					request,
+					HttpCompletionOption.ResponseContentRead,
+					cancellationToken);
+				bdoStatusCode = (int)response.StatusCode;
+				string json = await response.Content.ReadAsStringAsync(cancellationToken);
+				bdoLength = json.Length;
+				if (!response.IsSuccessStatusCode)
+					throw new HttpRequestException($"BDO Alerts returned HTTP {bdoStatusCode}.");
+				List<CouponEntry> alertCoupons = ParseBdoAlertsResponse(json);
+				if (alertCoupons.Count == 0)
+					throw new InvalidDataException("BDO Alerts returned no readable non-console coupons.");
+				bdoSnapshotComplete = IsCompleteBdoAlertsSnapshot(json);
+				bdoCurrent = MergeCouponSources(officialCoupons, alertCoupons);
+				bdoAlertsSucceeded = true;
+				logger.Info($"BDO Alerts non-console coupons accepted: {alertCoupons.Count}.");
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				bdoFailure = ex.Message;
+				logger.Warn("BDO Alerts refresh failed: " + bdoFailure);
 				if (officialCoupons.Count > 0)
+					bdoCurrent = officialCoupons;
+			}
+
+			bool bdoUpdated = bdoCurrent.Count > 0;
+			providers.TryGetValue(BdoProviderId, out CouponProviderCache? previousBdo);
+			if (bdoUpdated)
+			{
+				providers[BdoProviderId] = UpdateProviderCache(
+					previousBdo,
+					bdoCurrent,
+					attemptTime,
+					bdoSnapshotComplete,
+					bdoFailure);
+			}
+			else
+			{
+				providers[BdoProviderId] = MarkProviderFailure(
+					previousBdo,
+					attemptTime,
+					bdoFailure ?? officialFailure ?? "BDO coupon sources were unavailable.");
+			}
+
+			bool garmothUpdated = false;
+			string? garmothFailure = null;
+			int garmothLength = 0;
+			int garmothParsed = 0;
+			if (garmothDue)
+			{
+				try
 				{
-					List<CouponEntry> merged = MergeCouponSources(
-						officialCoupons,
-						NormalizedCachedCoupons(existingCache));
-					merged = await itemIconResolver.ResolveAsync(
-						merged,
-						cancellationToken);
-					int officialIcons = await CacheIconsAsync(
-						merged,
-						cancellationToken);
-					CouponCache officialCache = new(
-						DateTimeOffset.UtcNow,
-						"Official BDO",
-						merged,
-						failure);
+					string payload = await garmothPayloadTask!;
+					garmothLength = payload.Length;
+					GarmothCouponSnapshot snapshot =
+						GarmothCouponProvider.ParseNuxtPayload(payload, attemptTime);
+					garmothParsed = snapshot.Coupons.Count;
+					CouponProviderCache? garmothBase = ApplyProviderInactiveObservations(
+						previousGarmoth,
+						snapshot.InactiveCoupons,
+						attemptTime);
+					providers[GarmothProviderId] = UpdateProviderCache(
+						garmothBase,
+						snapshot.Coupons,
+						attemptTime,
+						snapshot.IsComplete,
+						null,
+						attemptTime + GarmothSuccessTtl);
+					garmothUpdated = true;
+					logger.Info(
+						$"Garmoth available coupons accepted: {garmothParsed}; "
+						+ $"source rows: {snapshot.SourceEntryCount}; "
+						+ $"rejected rows: {snapshot.RejectedEntryCount}.");
+				}
+				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+				{
+					throw;
+				}
+				catch (Exception ex)
+				{
+					garmothFailure = ex.Message;
+					logger.Warn("Garmoth coupon refresh failed: " + garmothFailure);
+					providers[GarmothProviderId] = MarkProviderFailure(
+						previousGarmoth,
+						attemptTime,
+						garmothFailure);
+				}
+			}
+			else if (!string.IsNullOrWhiteSpace(previousGarmoth?.LastError))
+			{
+				garmothFailure =
+					"Garmoth is temporarily unavailable; showing its saved coupon data.";
+			}
+
+			List<CouponEntry> coupons = MergeProviderCoupons(providers.Values, attemptTime);
+			if (coupons.Count == 0)
+				coupons = NormalizedCachedCoupons(existingCache);
+			if (coupons.Count == 0)
+				throw new InvalidDataException("No coupon entries are available from live or saved sources.");
+
+			bool anyProviderUpdated = bdoUpdated || garmothUpdated;
+			string? failure = CombineFailures(
+				bdoAlertsSucceeded ? null : officialFailure,
+				bdoFailure,
+				garmothFailure);
+			DateTimeOffset refreshedAt = anyProviderUpdated
+				? attemptTime
+				: existingCache?.LastRefreshed ?? attemptTime;
+			CouponCache facts = new(
+				refreshedAt,
+				"BDO Alerts + Garmoth",
+				coupons,
+				failure)
+			{
+				SchemaVersion = 2,
+				Providers = providers
+			};
+			await WriteJsonAsync(paths.CouponsCachePath, facts, cancellationToken);
+			cacheUpdated = true;
+			logger.Info("Coupons provider facts saved before optional icon enrichment.");
+
+			int icons = 0;
+			using CancellationTokenSource enrichmentTimeout =
+				CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+			enrichmentTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+			try
+			{
+				List<CouponEntry> resolved = await itemIconResolver.ResolveAsync(
+					coupons,
+					enrichmentTimeout.Token);
+				icons = await CacheIconsAsync(resolved, enrichmentTimeout.Token);
+				if (!CouponEntriesEquivalent(resolved, coupons))
+				{
+					facts = facts with { Coupons = resolved };
 					await WriteJsonAsync(
 						paths.CouponsCachePath,
-						officialCache,
-						cancellationToken);
-					cacheUpdated = true;
-					LogSummary(merged, officialIcons, "Official BDO");
-					return await BuildDashboardAsync(
-						"LIVE",
-						failure,
-						cancellationToken,
-						attemptTime,
-						new CouponRefreshDebug(
-							OfficialSourceUrl,
-							null,
-							officialLength,
-							officialCoupons.Count,
-							true,
-							true,
-							failure));
+						facts,
+						enrichmentTimeout.Token);
+					coupons = resolved;
 				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				throw;
+			}
+			catch (OperationCanceledException)
+			{
+				logger.Warn("Coupon icon enrichment reached its 20-second best-effort limit.");
+			}
+			catch (Exception ex)
+			{
+				logger.Warn("Coupon icon enrichment failed after coupon facts were saved: " + ex.Message);
+			}
 
-				return await BuildDashboardAsync(
-					"CACHED",
-					failure,
-					cancellationToken,
-					attemptTime,
-					new CouponRefreshDebug(
-						SourceUrl,
-						null,
-						0,
-						0,
-						false,
-						false,
-						failure));
-			}
-			using HttpResponseMessage response = await bdoAlertsHttp.SendAsync(
-				bdoAlertsRequest,
-				HttpCompletionOption.ResponseContentRead,
-				cancellationToken);
-			string html = await response.Content.ReadAsStringAsync(cancellationToken);
-			int statusCode = (int)response.StatusCode;
-			logger.Info($"Coupons HTTP status: {statusCode} {response.StatusCode}");
-			if (!response.IsSuccessStatusCode)
-			{
-				string failure = statusCode == 403
-					? "Live refresh blocked by BDO Alerts: HTTP 403. Showing cached data."
-					: $"Live coupon refresh failed: HTTP {statusCode}. Showing cached data.";
-				if (officialCoupons.Count > 0)
-				{
-					List<CouponEntry> merged = MergeCouponSources(
-						officialCoupons,
-						NormalizedCachedCoupons(existingCache));
-					merged = await itemIconResolver.ResolveAsync(
-						merged,
-						cancellationToken);
-					int officialIcons = await CacheIconsAsync(merged, cancellationToken);
-					CouponCache officialCache = new(
-						DateTimeOffset.UtcNow,
-						"Official BDO",
-						merged,
-						failure);
-					await WriteJsonAsync(paths.CouponsCachePath, officialCache, cancellationToken);
-					cacheUpdated = true;
-					LogSummary(merged, officialIcons, "Official BDO");
-					return await BuildDashboardAsync("LIVE", failure, cancellationToken, attemptTime,
-						new CouponRefreshDebug(OfficialSourceUrl, statusCode, officialLength, officialCoupons.Count, true, true, failure));
-				}
-				logger.Info("Coupons parsing succeeded: no (HTTP request was rejected).");
-				logger.Info("Coupons parsed: 0.");
-				logger.Info("Coupons cache updated: no.");
-				logger.Warn("Coupons refresh failed reason: " + failure);
-				return await BuildDashboardAsync("CACHED", failure, cancellationToken, attemptTime,
-					new CouponRefreshDebug(SourceUrl, statusCode, 0, 0, false, false, failure));
-			}
-			logger.Info($"Coupons raw response length: {html.Length} characters.");
-			List<CouponEntry> bdoAlertsCoupons = ParseBdoAlertsResponse(html);
-			logger.Info(
-				$"BDO Alerts non-console coupons accepted: {bdoAlertsCoupons.Count}.");
-			List<CouponEntry> coupons = MergeCouponSources(
-				officialCoupons,
-				bdoAlertsCoupons);
-			int currentCouponCount = coupons.Count;
-			logger.Info($"Coupons parsed from the current snapshot: {currentCouponCount}.");
-			logger.Info($"Coupons parsing succeeded: {(currentCouponCount > 0 ? "yes" : "no")}.");
-			if (coupons.Count == 0)
-			{
-				throw new InvalidDataException(
-					"No non-console coupon entries could be read from the live sources.");
-			}
-			bool snapshotComplete = IsCompleteBdoAlertsSnapshot(html);
-			coupons = MergeCouponHistory(
-				coupons,
-				existingCache?.Coupons ?? [],
+			LogSummary(coupons, icons, anyProviderUpdated ? "LIVE" : "CACHED");
+			return await BuildDashboardAsync(
+				anyProviderUpdated ? "LIVE" : "CACHED",
+				failure,
+				cancellationToken,
 				attemptTime,
-				snapshotComplete);
-			logger.Info(
-				$"Coupons history retained: {coupons.Count - currentCouponCount}; " +
-				$"snapshot complete: {(snapshotComplete ? "yes" : "no")}.");
-
-			coupons = await itemIconResolver.ResolveAsync(
-				coupons,
-				cancellationToken);
-			int icons = await CacheIconsAsync(coupons, cancellationToken);
-			CouponCache cache = new(
-				DateTimeOffset.UtcNow,
-				"BDO Alerts",
-				coupons,
-				null);
-			await WriteJsonAsync(paths.CouponsCachePath, cache, cancellationToken);
-			cacheUpdated = true;
-			logger.Info("Coupons cache updated: yes.");
-			LogSummary(coupons, icons, "LIVE");
-			return await BuildDashboardAsync("LIVE", null, cancellationToken, attemptTime,
-				new CouponRefreshDebug($"{OfficialSourceUrl} + {SourceUrl}", statusCode, html.Length + officialLength, coupons.Count, true, true, officialFailure));
+				new CouponRefreshDebug(
+					$"{OfficialSourceUrl} + {SourceUrl} + {GarmothCouponProvider.PageUrl}",
+					bdoStatusCode,
+					officialLength + bdoLength + garmothLength,
+					coupons.Count,
+					anyProviderUpdated,
+					true,
+					failure));
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -372,7 +455,7 @@ internal sealed class CouponService : IDisposable
 		{
 			status,
 			message = error,
-			sourceUrl = SourceUrl,
+			sourceUrl = $"{SourceUrl} + {GarmothCouponProvider.PageUrl}",
 			lastRefreshed = cache.LastRefreshed,
 			lastAttempt,
 			isStale,
@@ -392,43 +475,20 @@ internal sealed class CouponService : IDisposable
 		CouponCache? existing = await ReadJsonAsync<CouponCache>(paths.CouponsCachePath, cancellationToken);
 		if (existing is null)
 		{
-			List<CouponEntry> seedCoupons = SeedCoupons();
-			CouponCache seed = new(
+			CouponCache empty = new(
 				DateTimeOffset.UtcNow,
 				"Cached",
-				seedCoupons,
-				"Seed cache created from the last publicly verified coupon listing.");
-			await WriteJsonAsync(paths.CouponsCachePath, seed, cancellationToken);
-			logger.Info($"Coupon seed cache created with {seed.Coupons.Count} entries.");
+				[],
+				"No live coupon snapshot has been saved yet.")
+			{
+				SchemaVersion = 2
+			};
+			await WriteJsonAsync(paths.CouponsCachePath, empty, cancellationToken);
+			logger.Info("Empty coupon cache created; live providers will populate it.");
 		}
 		if (await ReadJsonAsync<CouponSettings>(paths.CouponSettingsPath, cancellationToken) is null)
 			await WriteJsonAsync(paths.CouponSettingsPath, new CouponSettings(true, true, "", "all"), cancellationToken);
 	}
-
-	private static List<CouponEntry> SeedCoupons() =>
-	[
-		new("BDAYWAKAPARTYNOW", null, "2 days ago", null, "5 days", false,
-			[new("Resplendent Oasis Box", 1, "https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp")], "Garmoth"),
-		new("THEDESERTTHNXYOU", null, "6 months ago", null, "9 days", false,
-			[new("Cron Stone", 10000, "https://assets.garmoth.com/img/new_icon/03_etc/00016080.webp", "00016080.webp")], "Garmoth"),
-		new("THNX4BEINGWITHUS", null, "6 months ago", null, "9 days", false,
-			[
-				new("Cron Stone", 20000, "https://assets.garmoth.com/img/new_icon/03_etc/00016080.webp", "00016080.webp"),
-				new("Choose Your Transcendent Hammer Box", 5, "https://assets.garmoth.com/img/new_icon/09_cash/00046991.webp", "00046991.webp"),
-				new("Advice of Valks (+400)", 1, "https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000400_11.webp", "00000400_11.webp"),
-				new("Advice of Valks (+350)", 1, "https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000350_11.webp", "00000350_11.webp"),
-				new("Advice of Valks (+300)", 1, "https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000300_11.webp", "00000300_11.webp"),
-				new("Advice of Valks (+250)", 1, "https://assets.garmoth.com/img/new_icon/03_etc/15_advice/00000250_11.webp", "00000250_11.webp"),
-				new("Weapon Exchange Coupon Box", 1, "https://assets.garmoth.com/img/new_icon/09_cash/00290007.webp", "00290007.webp"),
-				new("J's Special Scroll", 20, "https://assets.garmoth.com/img/new_icon/03_etc/08_potion/00000771.webp", "00000771.webp")
-			], "Garmoth"),
-		new("OFFTOBATTLE", null, "15 days ago", null, "Expired 2 days ago", true,
-			[new("Perfume of Courage", 3, "", ""), new("Perfume of Deep Sea", 3, "", ""), new("Tough Whale Tendon Elixir", 3, "", "")], "Garmoth"),
-		new("POTIMATOUBDAY", null, "1 month ago", null, "Expired 1 month ago", true,
-			[new("Resplendent Oasis Box", 1, "https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp")], "Garmoth"),
-		new("BLADENZBDAY", null, "1 month ago", null, "Expired 1 month ago", true,
-			[new("Resplendent Oasis Box", 1, "https://assets.garmoth.com/img/new_icon/03_etc/01000306.webp", "01000306.webp")], "Garmoth")
-	];
 
 	internal static string CanonicalCouponCode(string value)
 	{
@@ -453,7 +513,194 @@ internal sealed class CouponService : IDisposable
 	{
 		return cache is null
 			? []
-			: DeduplicateCouponEntries(cache.Coupons);
+			: NormalizeCouponEntriesAt(cache.Coupons, DateTimeOffset.UtcNow);
+	}
+
+	private static List<CouponEntry> NormalizeCouponEntriesAt(
+		IEnumerable<CouponEntry> coupons,
+		DateTimeOffset observedAt)
+	{
+		return DeduplicateCouponEntries(coupons.Select(coupon =>
+		{
+			bool expired = coupon.IsExpired
+				|| coupon.ExpiryUtc is { } expiry && expiry <= observedAt;
+			return expired == coupon.IsExpired
+				? coupon
+				: coupon with
+				{
+					IsExpired = true,
+					ExpiryText = FormatExpiry(coupon.ExpiryUtc, true)
+				};
+		}));
+	}
+
+	private static Dictionary<string, CouponProviderCache> MigrateProviderCaches(
+		CouponCache? cache,
+		DateTimeOffset observedAt)
+	{
+		if (cache?.Providers is { Count: > 0 })
+		{
+			return cache.Providers.ToDictionary(
+				pair => pair.Key,
+				pair => pair.Value with
+				{
+					Coupons = NormalizeCouponEntriesAt(pair.Value.Coupons, observedAt)
+				},
+				StringComparer.OrdinalIgnoreCase);
+		}
+
+		Dictionary<string, List<CouponEntry>> migrated = new(StringComparer.OrdinalIgnoreCase);
+		foreach (CouponEntry coupon in NormalizeCouponEntriesAt(cache?.Coupons ?? [], observedAt))
+		{
+			string[] sources = (coupon.Source ?? string.Empty).Split(
+				'+',
+				StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+			bool mapped = false;
+			if (sources.Any(source => source.Equals(
+					GarmothCouponProvider.SourceName,
+					StringComparison.OrdinalIgnoreCase)))
+			{
+				AddMigrated(
+					GarmothProviderId,
+					coupon with { Source = GarmothCouponProvider.SourceName });
+				mapped = true;
+			}
+			string[] bdoSources = sources.Where(source =>
+				source.Equals("BDO Alerts", StringComparison.OrdinalIgnoreCase)
+				|| source.Equals("Official BDO", StringComparison.OrdinalIgnoreCase))
+				.ToArray();
+			if (bdoSources.Length > 0)
+			{
+				AddMigrated(
+					BdoProviderId,
+					coupon with { Source = CombineCouponSources(bdoSources) });
+				mapped = true;
+			}
+			if (!mapped)
+				AddMigrated(LegacyProviderId, coupon);
+		}
+
+		void AddMigrated(string providerId, CouponEntry coupon)
+		{
+			if (!migrated.TryGetValue(providerId, out List<CouponEntry>? list))
+			{
+				list = [];
+				migrated[providerId] = list;
+			}
+			list.Add(coupon);
+		}
+
+		DateTimeOffset? legacySuccess = cache?.LastRefreshed;
+		return migrated.ToDictionary(
+			pair => pair.Key,
+			pair => new CouponProviderCache(
+				legacySuccess,
+				legacySuccess,
+				null,
+				0,
+				false,
+				DeduplicateCouponEntries(pair.Value),
+				null),
+			StringComparer.OrdinalIgnoreCase);
+	}
+
+	internal static CouponProviderCache UpdateProviderCache(
+		CouponProviderCache? previous,
+		IEnumerable<CouponEntry> current,
+		DateTimeOffset observedAt,
+		bool snapshotComplete,
+		string? warning,
+		DateTimeOffset? nextAllowedUtc = null)
+	{
+		List<CouponEntry> merged = MergeCouponHistory(
+			NormalizeCouponEntriesAt(current, observedAt),
+			NormalizeCouponEntriesAt(previous?.Coupons ?? [], observedAt),
+			observedAt,
+			snapshotComplete);
+		return new CouponProviderCache(
+			observedAt,
+			observedAt,
+			nextAllowedUtc,
+			0,
+			snapshotComplete,
+			merged,
+			warning);
+	}
+
+	internal static CouponProviderCache? ApplyProviderInactiveObservations(
+		CouponProviderCache? previous,
+		IEnumerable<GarmothInactiveCoupon> inactiveCoupons,
+		DateTimeOffset observedAt)
+	{
+		if (previous is null)
+			return null;
+		Dictionary<string, DateTimeOffset> inactiveByCode = inactiveCoupons
+			.GroupBy(
+				coupon => coupon.CanonicalCode,
+				StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(
+				group => group.Key,
+				group => group.Min(coupon => coupon.ExpiryUtc),
+				StringComparer.OrdinalIgnoreCase);
+		if (inactiveByCode.Count == 0)
+			return previous;
+
+		List<CouponEntry> updated = previous.Coupons.Select(coupon =>
+		{
+			string key = CanonicalCouponCode(coupon.Code);
+			if (!inactiveByCode.TryGetValue(key, out DateTimeOffset expiry))
+				return coupon;
+			return coupon with
+			{
+				ExpiryUtc = expiry,
+				ExpiryText = FormatExpiry(expiry, expired: true),
+				IsExpired = expiry <= observedAt
+			};
+		}).ToList();
+		return previous with { Coupons = updated };
+	}
+
+	private static CouponProviderCache MarkProviderFailure(
+		CouponProviderCache? previous,
+		DateTimeOffset attemptedAt,
+		string failure)
+	{
+		previous ??= new CouponProviderCache(
+			null,
+			null,
+			null,
+			0,
+			false,
+			[],
+			null);
+		int failures = Math.Min(4, previous.ConsecutiveFailures + 1);
+		double minutes = ProviderFailureBackoff.TotalMinutes * Math.Pow(2, failures - 1);
+		return previous with
+		{
+			LastAttemptUtc = attemptedAt,
+			NextAllowedUtc = attemptedAt + TimeSpan.FromMinutes(minutes),
+			ConsecutiveFailures = failures,
+			LastError = failure
+		};
+	}
+
+	internal static List<CouponEntry> MergeProviderCoupons(
+		IEnumerable<CouponProviderCache> providers,
+		DateTimeOffset observedAt)
+	{
+		return NormalizeCouponEntriesAt(
+			providers.SelectMany(provider => provider.Coupons),
+			observedAt);
+	}
+
+	private static string? CombineFailures(params string?[] failures)
+	{
+		string[] messages = failures
+			.Where(failure => !string.IsNullOrWhiteSpace(failure))
+			.Select(failure => failure!.Trim())
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToArray();
+		return messages.Length == 0 ? null : string.Join(" ", messages);
 	}
 
 	private static bool TryReadAudienceValues(
@@ -608,6 +855,13 @@ internal sealed class CouponService : IDisposable
 
 	private static string CombineCouponSources(params string[] sources)
 	{
+		static int SourcePriority(string source) => source.ToUpperInvariant() switch
+		{
+			"OFFICIAL BDO" => 0,
+			"BDO ALERTS" => 1,
+			"GARMOTH" => 2,
+			_ => 3
+		};
 		return string.Join(
 			" + ",
 			sources
@@ -615,7 +869,9 @@ internal sealed class CouponService : IDisposable
 					'+',
 					StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 				.Where(source => source.Length > 0)
-				.Distinct(StringComparer.OrdinalIgnoreCase));
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.OrderBy(SourcePriority)
+				.ThenBy(source => source, StringComparer.OrdinalIgnoreCase));
 	}
 
 	private static List<CouponEntry> DeduplicateCouponEntries(
@@ -651,20 +907,59 @@ internal sealed class CouponService : IDisposable
 					"Reward details available on BDO Alerts",
 					StringComparison.OrdinalIgnoreCase)
 				&& !reward.ItemName.Equals(
+					"Reward details available on Garmoth",
+					StringComparison.OrdinalIgnoreCase)
+				&& !reward.ItemName.Equals(
 					"Official BDO coupon reward",
 					StringComparison.OrdinalIgnoreCase));
 			return concreteRewards * 100
 				+ coupon.Rewards.Count * 10
 				+ (coupon.ExpiryUtc.HasValue ? 4 : 0)
-				+ (coupon.AddedUtc.HasValue ? 2 : 0)
-				+ (coupon.IsExpired ? 1 : 0);
+				+ (coupon.AddedUtc.HasValue ? 2 : 0);
 		}
 
-		CouponEntry preferred = Quality(second) >= Quality(first)
-			? second
-			: first;
+		CouponEntry preferred;
+		if (first.IsExpired != second.IsExpired)
+		{
+			preferred = first.IsExpired ? second : first;
+		}
+		else
+		{
+			int firstQuality = Quality(first);
+			int secondQuality = Quality(second);
+			if (firstQuality != secondQuality)
+				preferred = firstQuality > secondQuality ? first : second;
+			else
+			{
+				string firstKey = first.Source + "\0" + first.Code;
+				string secondKey = second.Source + "\0" + second.Code;
+				preferred = string.Compare(
+					firstKey,
+					secondKey,
+					StringComparison.OrdinalIgnoreCase) <= 0
+						? first
+						: second;
+			}
+		}
+		CouponEntry other = ReferenceEquals(preferred, first) ? second : first;
+		bool mayBorrowExpiry = preferred.ExpiryUtc is null
+			&& other.ExpiryUtc is not null
+			&& preferred.IsExpired == other.IsExpired;
+		DateTimeOffset? mergedAddedUtc = first.AddedUtc switch
+		{
+			null => second.AddedUtc,
+			{ } firstAdded when second.AddedUtc is { } secondAdded
+				=> firstAdded <= secondAdded ? firstAdded : secondAdded,
+			_ => first.AddedUtc
+		};
 		return preferred with
 		{
+			AddedUtc = mergedAddedUtc,
+			AddedText = mergedAddedUtc == preferred.AddedUtc
+				? preferred.AddedText
+				: other.AddedText,
+			ExpiryUtc = mayBorrowExpiry ? other.ExpiryUtc : preferred.ExpiryUtc,
+			ExpiryText = mayBorrowExpiry ? other.ExpiryText : preferred.ExpiryText,
 			Source = CombineCouponSources(first.Source, second.Source)
 		};
 	}
@@ -687,12 +982,7 @@ internal sealed class CouponService : IDisposable
 				continue;
 			if (merged.TryGetValue(key, out CouponEntry? official))
 			{
-				merged[key] = coupon with
-				{
-					Source = CombineCouponSources(
-						official.Source,
-						coupon.Source)
-				};
+				merged[key] = PreferCouponEntry(official, coupon);
 			}
 			else
 			{
@@ -796,6 +1086,9 @@ internal sealed class CouponService : IDisposable
 		return rewards.Any(reward =>
 			!reward.ItemName.Equals(
 				"Reward details available on BDO Alerts",
+				StringComparison.OrdinalIgnoreCase)
+			&& !reward.ItemName.Equals(
+				"Reward details available on Garmoth",
 				StringComparison.OrdinalIgnoreCase)
 			&& !reward.ItemName.Equals(
 				"Official BDO coupon reward",
@@ -1159,6 +1452,19 @@ internal sealed record CouponEntry(string Code, DateTimeOffset? AddedUtc, string
 internal sealed record CouponCache(
 	DateTimeOffset LastRefreshed,
 	string Source,
+	List<CouponEntry> Coupons,
+	string? LastError)
+{
+	public int SchemaVersion { get; init; }
+	public Dictionary<string, CouponProviderCache> Providers { get; init; } =
+		new(StringComparer.OrdinalIgnoreCase);
+}
+internal sealed record CouponProviderCache(
+	DateTimeOffset? LastAttemptUtc,
+	DateTimeOffset? LastSuccessUtc,
+	DateTimeOffset? NextAllowedUtc,
+	int ConsecutiveFailures,
+	bool LastSnapshotComplete,
 	List<CouponEntry> Coupons,
 	string? LastError);
 internal sealed record CouponRefreshDebug(string SourceUrl, int? HttpStatus, int RawResponseLength, int CouponsParsed, bool ParsingSucceeded, bool CacheUpdated, string? FailureReason);
