@@ -75,11 +75,30 @@ const unknownExpiryBadge = expiryBadgeContext.expiryBadgeTests.couponExpiryBadge
   isExpired:false,
   expiryText:"No expiry listed"
 });
+const couponRowIdentityMarkup = /class="couponRowCode"><span class="couponTicket" aria-hidden="true">[\s\S]*?<span class="couponCodeIdentity"><span class="couponCodeText" title="\$\{couponEscape\(c\.code\)\}">\$\{couponEscape\(c\.code\)\}<\/span>\$\{couponExpiryBadge\(c\)\}<\/span><\/div><div class="couponRedeemCell">/;
+const couponRowCellOrder = /<div class="couponRedeemCell">\$\{couponRedeemButton\(c\)\}<\/div><div class="couponRewardSummary">/;
+const expiryRuleBodies = [...appCss.matchAll(/#couponsView \.couponCodeExpiry(?:\.[^{]+)?\{([^}]*)\}/g)]
+  .map(match => match[1]);
+const couponRowGridTemplates = [...appCss.matchAll(/(?:#couponsView )?\.couponRowV2\{[^}]*grid-template-columns:([^;}]+)/g)]
+  .map(match => match[1].trim().split(/\s+/));
 if (!futureExpiryBadge.includes(`EXPIRES ${exactExpiryDate} · IN 3 DAYS`)
   || !/class="couponCodeExpiry unknown">EXPIRY NOT LISTED<\/span>/.test(unknownExpiryBadge)
   || !/timeZone:"UTC"/.test(appScript)
-  || !/couponCodeText[\s\S]{0,180}\$\{couponExpiryBadge\(c\)\}/.test(appScript)
-  || !/#couponsView \.couponCodeExpiry\{[\s\S]*?border:1px solid rgba\(49,230,255,\.72\)[\s\S]*?background:linear-gradient[\s\S]*?color:#62efff/.test(appCss)) {
+  || !couponRowIdentityMarkup.test(appScript)
+  || !couponRowCellOrder.test(appScript)
+  || /<div class="couponStatusV2">/.test(appScript)
+  || /\.couponStatusV2(?:\s|\{|\.)/.test(appCss)
+  || couponRowGridTemplates.length < 3
+  || couponRowGridTemplates.some(tracks => tracks.length !== 4 || tracks.at(-1) !== "28px")
+  || !/#couponsView \.couponListPane\{container-name:coupon-list;container-type:inline-size\}/.test(appCss)
+  || !/#couponsView \.couponRowV2\{grid-template-columns:minmax\(365px,1\.65fr\) 155px minmax\(300px,1\.4fr\) 28px\}/.test(appCss)
+  || !/#couponsView \.couponCodeIdentity\{[^}]*display:grid[^}]*grid-template-columns:minmax\(0,1fr\) max-content[^}]*align-items:center/.test(appCss)
+  || !/#couponsView \.couponCodeExpiry\{[^}]*justify-self:end[^}]*border:1px solid rgba\(49,230,255,\.72\)[^}]*background:linear-gradient[^}]*color:#62efff/.test(appCss)
+  || !/@container coupon-list \(max-width:1000px\)/.test(appCss)
+  || !/#couponsView \.couponRowV2\{grid-template-columns:minmax\(275px,1\.35fr\) 120px minmax\(245px,1fr\) 28px\}/.test(appCss)
+  || !/#couponsView \.couponCodeIdentity\{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px\}/.test(appCss)
+  || !/#couponsView \.couponCodeExpiry\{justify-self:auto\}/.test(appCss)
+  || expiryRuleBodies.some(body => /position:(?:absolute|fixed|sticky)|(?:^|;)\s*(?:inset|left|right|top|bottom):|margin-left:/i.test(body))) {
   throw new Error("Every coupon row must show a vibrant exact and relative expiry badge, including the unknown fallback.");
 }
 
