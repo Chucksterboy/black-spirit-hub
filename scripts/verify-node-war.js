@@ -177,13 +177,19 @@ if (tests.nodeWarAlertStage(settings, 10 * 60_000, keyBase) !== null
 
   if (!/data-app-view="resetTimersView"[^>]*>[\s\S]*?<span class="navLabel">Timers<\/span>/.test(appHtml)
     || /<span class="navLabel">Reset Timers<\/span>/.test(appHtml)
+    || (appHtml.match(/class="nodeWarSettingLabel"/g) || []).length !== 2
     || !/id="resetTimersGrid"[^>]*aria-label="Black Desert timers"/.test(appHtml)
+    || !/<span class="nodeWarSettingLabel">Nodewar Notification<\/span>/.test(appHtml)
+    || !/<span class="nodeWarSettingLabel">First Alert<\/span>/.test(appHtml)
     || !/id="nodeWarNotificationMode"[^>]*class="settingSelect resetTimerSelect"[^>]*>[\s\S]*?<option value="off" selected>Off<\/option>/.test(appHtml)
     || !/id="nodeWarLeadTime"[^>]*class="settingSelect resetTimerSelect"[^>]*disabled/.test(appHtml)
     || !/<option value="0">Nodewar Starting<\/option>[\s\S]*?<option value="5">5 minutes<\/option>[\s\S]*?<option value="15" selected>15 minutes<\/option>[\s\S]*?<option value="30">30 minutes<\/option>/.test(appHtml)) {
     throw new Error("Timers navigation or Node War controls are malformed.");
   }
-  if (!/\.resetTimerCard\[data-reset-id="nodewar"\]\{--reset-accent:#ef4444\}/.test(appCss)
+  if (!/\.resetTimersShell\{--node-war-accent:#ef4444;--node-war-label-color:color-mix\(in srgb,var\(--node-war-accent\) 74%,#fff\)/.test(appCss)
+    || !/\.resetTimerCard\[data-reset-id="nodewar"\]\{--reset-accent:var\(--node-war-accent\)\}/.test(appCss)
+    || !/\.resetTimerSetting\{[^}]*font-size:10px/.test(appCss)
+    || !/\.resetTimerSetting>\.nodeWarSettingLabel\{[^}]*color:var\(--node-war-label-color\)[^}]*font-size:11px[^}]*text-transform:none/.test(appCss)
     || !/\.resetTimerSetting \.(?:resetTimerSelect|settingSelect)|\.resetTimerSetting \.resetTimerSelect/.test(appCss)
     || !/checkNodeWarNotifications\(resetSettings,now\)/.test(appScript)) {
     throw new Error("Node War card, dropdown styling, or background scheduler wiring is missing.");

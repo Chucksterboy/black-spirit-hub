@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.53-timers-coupon-simplification-20260824">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.53-timers-label-readability-20260824">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -100,8 +100,8 @@
       </div>
       <div class="resetTimersActions">
         <label class="resetLocalToggle" title="Show timer times in your local PC time instead of CET/CEST"><input id="resetLocalTime" type="checkbox"><span>Local time</span></label>
-        <label class="resetTimerSetting"><span>Nodewar Notification</span><select id="nodeWarNotificationMode" class="settingSelect resetTimerSelect" aria-label="Node War notification mode"><option value="off" selected>Off</option><option value="tts">TTS</option><option value="alarm">Alarm</option></select></label>
-        <label class="resetTimerSetting"><span>First alert</span><select id="nodeWarLeadTime" class="settingSelect resetTimerSelect" aria-label="First Node War alert time" disabled><option value="0">Nodewar Starting</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></label>
+        <label class="resetTimerSetting"><span class="nodeWarSettingLabel">Nodewar Notification</span><select id="nodeWarNotificationMode" class="settingSelect resetTimerSelect" aria-label="Node War notification mode"><option value="off" selected>Off</option><option value="tts">TTS</option><option value="alarm">Alarm</option></select></label>
+        <label class="resetTimerSetting"><span class="nodeWarSettingLabel">First Alert</span><select id="nodeWarLeadTime" class="settingSelect resetTimerSelect" aria-label="First Node War alert time" disabled><option value="0">Nodewar Starting</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></label>
         <div class="homeStatus"><i></i><span id="resetTimersStatus">Timers loading...</span></div>
       </div>
     </header>
@@ -1215,7 +1215,7 @@
 <script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.53"></script>
 <script src="Assets/GrindTracker/grind-guides.js?v=v0.9.53"></script>
 <script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.53"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.53-timers-coupon-simplification-20260824"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.53-timers-label-readability-20260824"></script>
 
 </body>
 </html>

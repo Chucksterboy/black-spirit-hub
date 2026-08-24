@@ -548,7 +548,11 @@ assert.match(css,/input\[type="range"\]::\-webkit-slider-runnable-track\{[^}]*--
 assert.match(css,/input\[type="range"\]::\-webkit-slider-thumb\{[^}]*width:20px;height:20px/ ,"craft planner slider must provide a clear draggable thumb");
 
 const resetPalette={daily:"#22d3ee",nodewar:"#ef4444",imperial:"#fbbf24",bsa:"#f472b6",agris:"#4ade80",barter:"#fb923c",trading:"#a78bfa"};
-for(const [resetId,color] of Object.entries(resetPalette))assert.match(css,new RegExp(`\\.resetTimerCard\\[data-reset-id="${resetId}"\\]\\{--reset-accent:${color}\\}`),`${resetId} reset timer must have its own vibrant color`);
+for(const [resetId,color] of Object.entries(resetPalette)){
+  if(resetId==="nodewar")assert.match(css,/\.resetTimerCard\[data-reset-id="nodewar"\]\{--reset-accent:var\(--node-war-accent\)\}/,"nodewar reset timer must consume the shared Node War accent");
+  else assert.match(css,new RegExp(`\\.resetTimerCard\\[data-reset-id="${resetId}"\\]\\{--reset-accent:${color}\\}`),`${resetId} reset timer must have its own vibrant color`);
+}
+assert.match(css,/\.resetTimersShell\{--node-war-accent:#ef4444;/,"shared Node War accent must remain vibrant red");
 assert.equal(new Set(Object.values(resetPalette)).size,7,"all timer accents must be distinct");
 assert.match(css,/\.resetTimerValue\{color:var\(--reset-value\)/ ,"reset countdown digits must consume the semantic card color");
 assert.match(css,/body\[data-mode="light"\] \.resetTimerCard[\s\S]*?--reset-value:/ ,"reset timer colors must retain contrast in light mode");
