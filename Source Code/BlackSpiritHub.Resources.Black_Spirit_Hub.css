@@ -3776,7 +3776,7 @@ body[data-motion="reduced"] :is(.appNav,.navFrame,.card,.panel,.kpi,.tableWrap,.
   width:100%;
   min-height:94px;
   display:grid;
-  grid-template-columns:minmax(0,1fr) auto 18px;
+  grid-template-columns:minmax(0,1fr) auto 32px;
   align-items:center;
   gap:12px;
   padding:15px 16px;
@@ -3814,14 +3814,35 @@ body[data-motion="reduced"] :is(.appNav,.navFrame,.card,.panel,.kpi,.tableWrap,.
 .couponRewardDisclosureReward span{min-width:0;overflow-wrap:anywhere}
 .couponRewardCount{white-space:nowrap;color:#d8d0c5;font-size:13px}
 .couponRewardDisclosureChevron{
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  justify-self:end;
+  align-self:center;
+  box-sizing:border-box;
+  border:1px solid rgba(225,171,77,.58);
+  border-radius:6px;
+  background:linear-gradient(145deg,rgba(225,171,77,.12),rgba(7,10,12,.78));
   color:#e1ab4d;
-  font-size:22px;
-  line-height:1;
-  transform:translateY(-2px);
+  transition:border-color .18s ease,background .18s ease,color .18s ease;
+}
+.couponRewardDisclosureChevron::before{
+  content:"";
+  width:7px;
+  height:7px;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:translateY(-2px) rotate(45deg);
   transition:transform .18s ease;
 }
-.couponRewardDisclosure[aria-expanded="true"] .couponRewardDisclosureChevron{
-  transform:translateY(2px) rotate(180deg);
+.couponRewardDisclosure:hover .couponRewardDisclosureChevron{
+  border-color:rgba(241,190,91,.88);
+  background:linear-gradient(145deg,rgba(225,171,77,.2),rgba(7,10,12,.86));
+  color:#f1be5b;
+}
+.couponRewardDisclosure[aria-expanded="true"] .couponRewardDisclosureChevron::before{
+  transform:translateY(2px) rotate(-135deg);
 }
 .couponRewardList{
   display:grid;

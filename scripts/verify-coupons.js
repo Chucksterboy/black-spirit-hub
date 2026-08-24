@@ -166,6 +166,8 @@ const coupon = {
 tests.renderCouponDetail(coupon);
 let html = tests.couponEl.detail.innerHTML;
 if (!/aria-expanded="false"/.test(html)
+  || !/aria-controls="couponRewardList-TESTCOUPON"/.test(html)
+  || !/class="couponRewardDisclosureChevron" aria-hidden="true"><\/span>/.test(html)
   || !/id="couponRewardList-TESTCOUPON" hidden/.test(html)
   || !/8 items/.test(html)
   || !/Choose Your Transcendent Hammer Box/.test(html)
@@ -180,6 +182,8 @@ tests.renderCouponDetail(coupon);
 html = tests.couponEl.detail.innerHTML;
 const rowCount = (html.match(/class="couponRewardListItem"/g) || []).length;
 if (!/aria-expanded="true"/.test(html)
+  || !/aria-controls="couponRewardList-TESTCOUPON"/.test(html)
+  || !/class="couponRewardDisclosureChevron" aria-hidden="true"><\/span>/.test(html)
   || /id="couponRewardList-TESTCOUPON" hidden/.test(html)
   || rowCount !== 8
   || !/class="couponRewardListQuantity">4x/.test(html)
@@ -195,6 +199,10 @@ if (!/<span>SOURCE<\/span><strong>BDO Alerts<\/strong>/.test(html)
   throw new Error("Coupon source attribution must be data-driven and link only Garmoth observations.");
 }
 
+const rewardDisclosureRule = appCss.match(/\.couponRewardDisclosure\{([^}]*)\}/)?.[1] || "";
+const rewardChevronRule = appCss.match(/\.couponRewardDisclosureChevron\{([^}]*)\}/)?.[1] || "";
+const rewardChevronGlyphRule = appCss.match(/\.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
+const expandedRewardChevronRule = appCss.match(/\.couponRewardDisclosure\[aria-expanded="true"\] \.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
 if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"":key/.test(appScript)
   || !/data-coupon-rewards-toggle/.test(appScript)
   || !/function couponSourceAttribution\(c\)/.test(appScript)
@@ -202,7 +210,25 @@ if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"
   || !/\.couponRewardList\{[\s\S]*?max-height:280px;[\s\S]*?overflow-y:auto;/.test(appCss)
   || !/\.couponRewardList\[hidden\]\{display:none\}/.test(appCss)
   || !/\.couponDetailSource\{/.test(appCss)
-  || !/\.couponRewardDisclosure:focus-visible/.test(appCss)) {
+  || !/\.couponRewardDisclosure:focus-visible/.test(appCss)
+  || !/grid-template-columns:minmax\(0,1fr\) auto 32px/.test(rewardDisclosureRule)
+  || !/width:30px/.test(rewardChevronRule)
+  || !/height:30px/.test(rewardChevronRule)
+  || !/display:grid/.test(rewardChevronRule)
+  || !/place-items:center/.test(rewardChevronRule)
+  || !/justify-self:end/.test(rewardChevronRule)
+  || !/align-self:center/.test(rewardChevronRule)
+  || !/border:1px solid/.test(rewardChevronRule)
+  || !/border-radius:6px/.test(rewardChevronRule)
+  || /transform:/.test(rewardChevronRule)
+  || !/content:""/.test(rewardChevronGlyphRule)
+  || !/width:7px/.test(rewardChevronGlyphRule)
+  || !/height:7px/.test(rewardChevronGlyphRule)
+  || !/border-right:2px solid currentColor/.test(rewardChevronGlyphRule)
+  || !/border-bottom:2px solid currentColor/.test(rewardChevronGlyphRule)
+  || !/transform:translateY\(-2px\) rotate\(45deg\)/.test(rewardChevronGlyphRule)
+  || !/transform:translateY\(2px\) rotate\(-135deg\)/.test(expandedRewardChevronRule)
+  || /couponRewardDisclosureChevron" aria-hidden="true">&#8964;/.test(appScript)) {
   throw new Error("Coupon reward disclosure lost its state, scrolling, or keyboard safeguards.");
 }
 
