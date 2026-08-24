@@ -33,16 +33,28 @@ function extractFunction(name, nextName) {
 const extractedCode = [
   "const couponEl={detail:{innerHTML:''}};",
   "const couponState={expandedRewardsCode:''};",
+  "const couponCopyFeedbackTimers=new WeakMap();",
+  "const couponCopyAttempts=new WeakMap();",
   "function couponIsRedeemed(){return false}",
   "function couponExpiryText(){return 'No expiry listed'}",
   extractFunction("couponEscape", "couponCodeKey"),
   extractFunction("couponCodeKey", "couponRedeemedMap"),
   extractFunction("couponRewardListHtml", "couponExpiryText"),
+  extractFunction("showCouponCopyFeedback", "renderCouponDetail"),
   extractFunction("renderCouponDetail", "initializeCoupons"),
-  "globalThis.couponTests={couponEl,couponState,couponRewardListHtml,renderCouponDetail};"
+  "globalThis.couponTests={couponEl,couponState,couponRewardListHtml,showCouponCopyFeedback,renderCouponDetail};"
 ].join("\n");
 
-const context = {};
+let nextFeedbackTimerId = 1;
+const feedbackTimers = new Map();
+const context = {
+  setTimeout(callback,delay) {
+    const id = nextFeedbackTimerId++;
+    feedbackTimers.set(id,{callback,delay});
+    return id;
+  },
+  clearTimeout(id) { feedbackTimers.delete(id); }
+};
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 const tests = context.couponTests;
@@ -170,6 +182,10 @@ if (!/aria-expanded="false"/.test(html)
   || !/id="couponRewardList-TESTCOUPON" hidden/.test(html)
   || !/8 items/.test(html)
   || !/Choose Your Transcendent Hammer Box/.test(html)
+  || !/class="couponCopyLarge" type="button"[^>]*aria-label="Copy coupon code TEST-COUPON"/.test(html)
+  || !/class="couponCopyLargeDefault" aria-hidden="true">Copy Code<\/span>/.test(html)
+  || !/class="couponCopyLargeSuccess" aria-hidden="true">Copied to Clipboard<\/span>/.test(html)
+  || !/class="couponCopyLiveStatus" role="status" aria-live="polite" aria-atomic="true"><\/span>/.test(html)
   || /couponDetailSource|>SOURCES?<|Garmoth &nearr;|<strong>BDO Alerts<\/strong>/.test(html)) {
   throw new Error("Collapsed coupon reward disclosure is malformed.");
 }
@@ -193,6 +209,34 @@ const rewardDisclosureRule = appCss.match(/\.couponRewardDisclosure\{([^}]*)\}/)
 const rewardChevronRule = appCss.match(/\.couponRewardDisclosureChevron\{([^}]*)\}/)?.[1] || "";
 const rewardChevronGlyphRule = appCss.match(/\.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
 const expandedRewardChevronRule = appCss.match(/\.couponRewardDisclosure\[aria-expanded="true"\] \.couponRewardDisclosureChevron::before\{([^}]*)\}/)?.[1] || "";
+const copyLargeRule = appCss.match(/\.couponCopyLarge\{([^}]*)\}/g)?.at(-1)?.match(/\{([^}]*)\}/)?.[1] || "";
+const copyLargeSpansRule = appCss.match(/\.couponCopyLarge>span:not\(\.couponCopyLiveStatus\)\{([^}]*)\}/)?.[1] || "";
+
+const copiedClasses = new Set();
+const copiedLiveStatus = {textContent:""};
+const copiedButton = {
+  isConnected:true,
+  classList:{
+    contains:value => value === "couponCopyLarge" || copiedClasses.has(value),
+    add:value => copiedClasses.add(value),
+    remove:value => copiedClasses.delete(value)
+  },
+  querySelector:selector => selector === ".couponCopyLiveStatus" ? copiedLiveStatus : null
+};
+tests.showCouponCopyFeedback(copiedButton);
+tests.showCouponCopyFeedback(copiedButton);
+const activeFeedbackTimers = [...feedbackTimers.values()];
+if (!copiedClasses.has("copied")
+  || copiedLiveStatus.textContent !== "Copied to Clipboard"
+  || activeFeedbackTimers.length !== 1
+  || activeFeedbackTimers[0].delay !== 1800) {
+  throw new Error("Coupon copy success feedback did not enter or refresh its visible state.");
+}
+activeFeedbackTimers[0].callback();
+if (copiedClasses.has("copied")
+  || copiedLiveStatus.textContent !== "") {
+  throw new Error("Coupon copy success feedback did not return to its default state.");
+}
 if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"":key/.test(appScript)
   || !/data-coupon-rewards-toggle/.test(appScript)
   || /function couponSourceAttribution\(c\)|couponDetailSource/.test(appScript)
@@ -219,6 +263,23 @@ if (!/couponState\.expandedRewardsCode=couponState\.expandedRewardsCode===key\?"
   || !/transform:translateY\(2px\) rotate\(-135deg\)/.test(expandedRewardChevronRule)
   || /couponRewardDisclosureChevron" aria-hidden="true">&#8964;/.test(appScript)) {
   throw new Error("Coupon reward disclosure lost its state, scrolling, or keyboard safeguards.");
+}
+
+if (!/position:relative!important/.test(copyLargeRule)
+  || !/overflow:hidden!important/.test(copyLargeRule)
+  || !/transition:/.test(copyLargeRule)
+  || !/position:absolute/.test(copyLargeSpansRule)
+  || !/inset:0/.test(copyLargeSpansRule)
+  || !/transition:opacity \.22s ease,transform \.22s/.test(copyLargeSpansRule)
+  || !/\.couponCopyLargeSuccess\{[^}]*opacity:0[^}]*translateY\(9px\)/.test(appCss)
+  || !/\.couponCopyLarge\.copied \.couponCopyLargeDefault\{[^}]*opacity:0[^}]*translateY\(-9px\)/.test(appCss)
+  || !/\.couponCopyLarge\.copied \.couponCopyLargeSuccess\{[^}]*opacity:1[^}]*translateY\(0\)/.test(appCss)
+  || !/function copyCouponCodeToClipboard\(code\)/.test(appScript)
+  || !/document\.execCommand\("copy"\)===true/.test(appScript)
+  || !/couponCopyAttempts\.get\(button\)!==attempt\|\|!button\.isConnected\|\|button\.dataset\.copyCoupon!==code/.test(appScript)
+  || !/showCouponCopyFeedback\(button\);return;/.test(appScript)
+  || !/\.couponCopyLiveStatus\{[^}]*width:1px[^}]*height:1px[^}]*overflow:hidden/.test(appCss)) {
+  throw new Error("Coupon copy success feedback lost its smooth in-button transition or success-only trigger.");
 }
 
 console.log("Coupon JavaScript verification passed.");
