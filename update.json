@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.54",
+    "version":  "v0.9.55",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.54/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "FCB58419328C83AC9F6645245AAEDB9163E4550C54F0D4ABCE552470A6CA5987",
-    "notes":  "Adds available Garmoth coupons with expiry and source attribution, improves responsive coupon rows and removes redundant coupon panels, adds a 20:00 CET/CEST Node War countdown with optional TTS or alarm alerts, and improves notification label readability."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.55/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "8F283E7980FBC077E34AC5E2EDFD3BD3A8BA6CC2DBB10FADB2D95F83478CC3C8",
+    "notes":  "Improves coupon details with a properly aligned boxed rewards toggle, removes unnecessary source attribution from the detail panel, and adds smooth success-only Copied to Clipboard feedback with a safe clipboard fallback."
 }
