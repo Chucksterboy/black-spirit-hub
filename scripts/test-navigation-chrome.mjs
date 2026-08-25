@@ -8,6 +8,148 @@ if (!scriptPath) {
 }
 
 const source = fs.readFileSync(scriptPath, "utf8");
+const resourceBasePath = scriptPath.replace(/\.js$/i, "");
+assert.notEqual(resourceBasePath, scriptPath, "The navigation script must be a JavaScript resource.");
+const stylesheet = fs.readFileSync(`${resourceBasePath}.css`, "utf8");
+const markup = fs.readFileSync(`${resourceBasePath}.html`, "utf8");
+
+const expectedInterfaceStyles = [
+  "custom", "fantasy", "cyber", "cinematic", "crystal", "tactical", "retro",
+  "abyssal", "royal", "paper", "foundry", "void", "caravan",
+];
+const interfaceStyleOptions = markup.match(
+  /<select\b[^>]*\bid="interfaceStyle"[^>]*>([\s\S]*?)<\/select>/,
+);
+assert.ok(interfaceStyleOptions, "The interface-style selector must remain available.");
+const selectableInterfaceStyles = [...interfaceStyleOptions[1].matchAll(
+  /<option\b[^>]*\bvalue="([^"]+)"/g,
+)].map((match) => match[1]);
+assert.deepEqual(
+  selectableInterfaceStyles,
+  expectedInterfaceStyles,
+  "All 13 selectable interface styles must retain the shared rectangular navigation buttons.",
+);
+
+const interfacePresets = source.match(/const INTERFACE_PRESETS\s*=\s*\{([\s\S]*?)\n\};/);
+assert.ok(interfacePresets, "The interface preset definitions must remain available.");
+const presetInterfaceStyles = [...interfacePresets[1].matchAll(
+  /^\s*([a-z][a-z\d]*)\s*:/gm,
+)].map((match) => match[1]);
+assert.deepEqual(
+  presetInterfaceStyles,
+  expectedInterfaceStyles.slice(1),
+  "Every selectable non-custom interface style must retain its existing appearance preset.",
+);
+for (const style of expectedInterfaceStyles.slice(1)) {
+  assert.match(
+    stylesheet,
+    new RegExp(`body\\[data-style="${style}"\\]\\s*\\{`),
+    `The ${style} theme must retain its existing theme-specific colors.`,
+  );
+}
+
+const navigationButtonSelector = String.raw`body\[data-style\]\s+\.navFrame\s+\.appNav\s*>\s*\.navButton`;
+
+function finalNavigationRule(suffix, description) {
+  const matches = [...stylesheet.matchAll(new RegExp(
+    `${navigationButtonSelector}${suffix}\\s*\\{([^}]*)\\}`,
+    "g",
+  ))];
+  const match = matches.at(-1);
+  assert.ok(match, `${description} must use the universal direct navigation-button selector.`);
+  return { body: match[1], index: match.index };
+}
+
+function finalDeclaration(rule, property, expected, description) {
+  const propertyPattern = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [...rule.body.matchAll(new RegExp(
+    `(?:^|;)\\s*${propertyPattern}\\s*:\\s*([^;]+)`,
+    "g",
+  ))];
+  const value = matches.at(-1)?.[1].trim();
+  assert.ok(value, `${description} must explicitly set ${property}.`);
+  assert.match(value, expected, `${description} must keep ${property} free of chevrons and decorative lines.`);
+  return value;
+}
+
+const normalNavigationRule = finalNavigationRule("", "Normal navigation buttons");
+for (const [property, value] of [
+  ["border-radius", /^8px\s*!important$/],
+  ["clip-path", /^none\s*!important$/],
+  ["mask", /^none\s*!important$/],
+  ["-webkit-mask", /^none\s*!important$/],
+  ["background-image", /^none\s*!important$/],
+  ["box-shadow", /^none\s*!important$/],
+]) {
+  finalDeclaration(normalNavigationRule, property, value, "Normal navigation buttons");
+}
+finalDeclaration(
+  normalNavigationRule,
+  "background-color",
+  /var\(--(?:surface2|surface|field-bg|bg0|a1)\)/,
+  "Normal navigation buttons",
+);
+finalDeclaration(normalNavigationRule, "border", /var\(--(?:a1|border)\)/, "Normal navigation buttons");
+assert.doesNotMatch(
+  normalNavigationRule.body,
+  /(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(|--asset-nav(?:-hover|-active)?/,
+  "Normal navigation buttons must not reintroduce striped artwork or decorative gradients.",
+);
+
+for (const [suffix, assetSuffix, description] of [
+  [":hover", "-hover", "Hovered navigation buttons"],
+  ["\\.active", "-active", "Active navigation buttons"],
+]) {
+  const stateRule = finalNavigationRule(suffix, description);
+  finalDeclaration(stateRule, "background-image", /^none\s*!important$/, description);
+  finalDeclaration(
+    stateRule,
+    "background-color",
+    /var\(--(?:surface2|surface|field-bg|bg0|a1)\)/,
+    description,
+  );
+  finalDeclaration(stateRule, "border-color", /var\(--(?:a1|border)\)/, description);
+  assert.doesNotMatch(
+    stateRule.body,
+    /(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(|--asset-nav(?:-hover|-active)?/,
+    `${description} must not reintroduce internal decorative lines.`,
+  );
+  const previousArtwork = stylesheet.lastIndexOf(`background-image:var(--asset-nav${assetSuffix})`);
+  assert.ok(
+    previousArtwork < stateRule.index,
+    `${description} must override the earlier chevron-shaped theme artwork.`,
+  );
+}
+assert.ok(
+  stylesheet.lastIndexOf("background-image:var(--asset-nav)!") < normalNavigationRule.index,
+  "Normal navigation buttons must override the earlier chevron-shaped theme artwork.",
+);
+
+const pseudoElementRules = [...stylesheet.matchAll(new RegExp(
+  `${navigationButtonSelector}::before\\s*,\\s*${navigationButtonSelector}::after\\s*\\{([^}]*)\\}`,
+  "g",
+))];
+const pseudoElementRule = pseudoElementRules.at(-1);
+assert.ok(pseudoElementRule, "Decorative pseudo-elements on navigation buttons must be disabled universally.");
+const navigationDecorationRule = { body: pseudoElementRule[1], index: pseudoElementRule.index };
+finalDeclaration(navigationDecorationRule, "content", /^none\s*!important$/, "Navigation button decorations");
+finalDeclaration(navigationDecorationRule, "display", /^none\s*!important$/, "Navigation button decorations");
+assert.ok(
+  navigationDecorationRule.index > normalNavigationRule.index,
+  "Decorative navigation-button pseudo-elements must remain disabled by the final theme override.",
+);
+
+for (const view of ["marketView", "couponsView", "playerGuildView", "recipeBookView"]) {
+  const iconRules = [...stylesheet.matchAll(new RegExp(
+    `\\.navButton\\[data-app-view="${view}"\\]\\s+\\.navIcon::before\\s*\\{([^}]*)\\}`,
+    "g",
+  ))];
+  assert.ok(
+    iconRules.some((rule) => /(?:^|;)\s*(?:-webkit-)?mask\s*:\s*url\(/.test(rule[1])),
+    `The ${view} navigation icon must retain its existing masked glyph.`,
+  );
+}
+
 assert.match(
   source,
   /function applyAppearance\(settings = \{\}\) \{[\s\S]*?saveAppearance\([\s\S]*?scheduleFixedChromeOffsetSync\(\);[\s\S]*?\n\}/,
@@ -214,4 +356,4 @@ function createHarness(storedValue) {
   assert.equal(harness.state().hidden, true);
 }
 
-console.log("Navigation chrome JavaScript verification passed.");
+console.log("Navigation chrome and all 13 theme button styles verification passed.");

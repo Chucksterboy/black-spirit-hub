@@ -155,6 +155,109 @@ if (autoRefreshTests.clearedTimer !== 123
   throw new Error("Coupons must automatically refresh every two hours while the app is open.");
 }
 
+const couponStatusAlertMarkup = appHtml.match(
+  /<button\b(?=[^>]*\bid="couponStatusAlert")[^>]*><\/button>/)?.[0] || "";
+const couponStatusAlertRule = [...appCss.matchAll(
+  /\.couponStatusAlert\s*\{([^}]*)\}/g)].at(-1)?.[1] || "";
+const couponStatusAlertFocusRule = appCss.match(
+  /\.couponStatusAlert:focus-visible\s*\{([^}]*)\}/)?.[1] || "";
+const openAvailableCouponsSource = appScript.match(
+  /function openAvailableCoupons\(\)\s*\{[^}]*\}/)?.[0] || "";
+const couponStatusAlertClickListener = appScript.match(
+  /couponEl\.statusAlert\?\.addEventListener\(\s*["']click["']\s*,\s*openAvailableCoupons\s*\)\s*;/)?.[0] || "";
+
+if (!couponStatusAlertMarkup
+  || !/\bclass="[^"]*\bcouponStatusAlert\b[^"]*"/.test(couponStatusAlertMarkup)
+  || !/\btype="button"/.test(couponStatusAlertMarkup)
+  || !/\baria-label="Open available coupons"/.test(couponStatusAlertMarkup)
+  || !/\btitle="Open available coupons"/.test(couponStatusAlertMarkup)
+  || !/(?:^|;)\s*font\s*:\s*inherit\s*(?=;|$)/.test(couponStatusAlertRule)
+  || !/(?:^|;)\s*font-weight\s*:\s*900\s*(?=;|$)/.test(couponStatusAlertRule)
+  || !/(?:^|;)\s*cursor\s*:\s*pointer\s*(?=;|$)/.test(couponStatusAlertRule)
+  || !couponStatusAlertFocusRule.trim()
+  || !openAvailableCouponsSource
+  || !couponStatusAlertClickListener) {
+  throw new Error("The coupon footer notification must be a keyboard-accessible button that opens available coupons.");
+}
+
+function createCouponStatusAlertNavigationHarness({activeTab="available",hasNavigation=true,hasAvailableTab=true}={}) {
+  const interactions = [];
+  const handlers = new Map();
+  const state = {activeTab};
+  const navigationButton = {dataset:{appView:"couponsView"}};
+  const availableTab = {
+    click() {
+      interactions.push("available-tab");
+      state.activeTab = "available";
+    }
+  };
+  const statusAlert = {
+    addEventListener(type,handler) { handlers.set(type,handler); }
+  };
+  const navigationContext = {
+    couponEl:{statusAlert},
+    couponState:state,
+    document:{
+      querySelector(selector) {
+        if (selector === '[data-app-view="couponsView"]') {
+          return hasNavigation ? navigationButton : null;
+        }
+        if (selector === '[data-coupon-tab="available"]') {
+          interactions.push("find-available-tab");
+          return hasAvailableTab ? availableTab : null;
+        }
+        throw new Error(`Unexpected coupon-navigation selector: ${selector}`);
+      }
+    },
+    activateAppView(button) {
+      if (button !== navigationButton) {
+        throw new Error("Coupon footer navigation targeted the wrong application view.");
+      }
+      interactions.push("coupons-view");
+    }
+  };
+  vm.createContext(navigationContext);
+  vm.runInContext([
+    openAvailableCouponsSource,
+    couponStatusAlertClickListener
+  ].join("\n"),navigationContext);
+
+  return {handlers,interactions,state};
+}
+
+const couponNavigationFromAnotherTab = createCouponStatusAlertNavigationHarness({activeTab:"expired"});
+if (couponNavigationFromAnotherTab.handlers.get("click")?.() !== true
+  || couponNavigationFromAnotherTab.state.activeTab !== "available"
+  || couponNavigationFromAnotherTab.interactions.join("|") !== "find-available-tab|available-tab|coupons-view") {
+  throw new Error("Clicking the coupon footer notification must select Available before opening Coupons.");
+}
+
+const couponNavigationAlreadyAvailable = createCouponStatusAlertNavigationHarness();
+if (couponNavigationAlreadyAvailable.handlers.get("click")?.({detail:0}) !== true
+  || couponNavigationAlreadyAvailable.state.activeTab !== "available"
+  || couponNavigationAlreadyAvailable.interactions.join("|") !== "find-available-tab|coupons-view") {
+  throw new Error("Native keyboard or pointer activation must open Coupons without reselecting the Available tab.");
+}
+
+const couponNavigationWithoutButton = createCouponStatusAlertNavigationHarness({
+  activeTab:"expired",
+  hasNavigation:false
+});
+if (couponNavigationWithoutButton.handlers.get("click")?.() !== false
+  || couponNavigationWithoutButton.state.activeTab !== "expired"
+  || couponNavigationWithoutButton.interactions.length !== 0) {
+  throw new Error("Coupon footer navigation must safely ignore a missing Coupons navigation button.");
+}
+
+const couponNavigationWithoutAvailableTab = createCouponStatusAlertNavigationHarness({
+  activeTab:"redeemed",
+  hasAvailableTab:false
+});
+if (couponNavigationWithoutAvailableTab.handlers.get("click")?.() !== true
+  || couponNavigationWithoutAvailableTab.interactions.join("|") !== "find-available-tab|coupons-view") {
+  throw new Error("Coupon footer navigation must still open Coupons if the Available tab is temporarily absent.");
+}
+
 const rewards = Array.from({ length: 8 }, (_, index) => ({
   itemName:index === 0
     ? "Choose Your Transcendent Hammer Box"
