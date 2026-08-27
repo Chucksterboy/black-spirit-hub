@@ -643,13 +643,12 @@ $navigationViews = if ($navigationMarkupMatch.Success) {
 } else { @() }
 if (!$navigationMarkupMatch.Success -or
 	($navigationViews -join "|") -ne ($expectedNavigationViews -join "|") -or
-	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 2 -or
-	$navigationMarkupMatch.Value -notmatch '(?s)data-app-view="settingsView".*?<span class="navRowBreak" aria-hidden="true"></span>\s*<button[^>]*data-app-view="playerGuildView"' -or
-	$navigationMarkupMatch.Value -notmatch '(?s)data-app-view="masteryBracketsView".*?<span class="navRowBreak" aria-hidden="true"></span>\s*<button[^>]*data-app-view="recipeBookView"') {
-	throw "The Cartographer navigation must retain its exact 7/6/3 button order."
+	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 1 -or
+	$navigationMarkupMatch.Value -notmatch '(?s)data-app-view="playerGuildView".*?</button>\s*<span class="navRowBreak" aria-hidden="true"></span>\s*<button[^>]*data-app-view="grindTrackerView"') {
+	throw "The Cartographer navigation must retain its exact 8/8 button order."
 }
 
-if ($html -notmatch '(?s)<span class="navRowBreak"[^>]*></span>\s*<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?data-app-view="grindTrackerView"' -or
+if ($html -notmatch '(?s)<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?</button>\s*<span class="navRowBreak"[^>]*></span>\s*<button[^>]*data-app-view="grindTrackerView"' -or
 	$html -notmatch 'id="playerGuildSearchMode"' -or
 	$html -notmatch '<option value="eu"' -or
 	$html -notmatch '<option value="na"' -or
@@ -854,10 +853,11 @@ if ($css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.wi
 	throw "The non-custom title bar must keep its window controls in the far-right grid column."
 }
 if ($html -notmatch '<button\s+class="navPinButton"\s+id="navigationPinButton"[^>]+aria-pressed="false"[^>]+aria-label="Keep navigation visible"' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton\s*\{[^}]*right:\s*14px!important;[^}]*bottom:\s*6px!important;[^}]*width:\s*23px!important;[^}]*height:\s*23px!important;' -or
+	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton\s*\{[^}]*right:\s*14px!important;[^}]*bottom:\s*6px!important;[^}]*width:\s*26px!important;[^}]*height:\s*26px!important;' -or
+	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton::before\s*\{[^}]*width:\s*16px!important;[^}]*height:\s*16px!important;' -or
 	$css -notmatch '(?s)\.navPinButton:focus-visible\s*\{[^}]*outline:' -or
 	$css -notmatch '(?s)\.navPinButton\[aria-pressed="true"\]::before\s*\{[^}]*mask:' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*padding:\s*12px\s+12px\s+24px!important;' -or
+	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*padding:\s*12px\s+12px\s+32px!important;' -or
 	$script -notmatch 'const\s+NAVIGATION_PIN_SETTING="navigationPinned";' -or
 	$script -notmatch 'readSetting\(NAVIGATION_PIN_SETTING,false\)===true' -or
 	$script -notmatch 'persistSetting\(NAVIGATION_PIN_SETTING,navigationPinned\)' -or
@@ -1789,14 +1789,24 @@ if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px
 	$css -notmatch 'background-position:calc\(100% - 18px\) 50%,calc\(100% - 12px\) 50%,0 0!important') {
 	throw "The dashboard lead-time selector can shrink and clip multi-digit minute labels."
 }
-if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]\{[^}]*grid-template-columns:40px minmax\(0,1fr\)!important;[^}]*height:52px!important;' -or
+if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]\{[^}]*grid-template-columns:40px minmax\(0,1fr\)!important;[^}]*column-gap:8px!important;[^}]*flex:0 0 var\(--nav-button-width\)!important;[^}]*height:48px!important;' -or
 	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navIcon\{[^}]*width:40px!important;[^}]*height:40px!important;' -or
 	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*grid-column:2!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*justify-content:flex-start!important;') {
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*justify-content:center!important;[^}]*text-align:center!important;') {
 	throw "Cartographer navigation labels can drift away from their shared medallions."
 }
 if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
 	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
+}
+if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*width:min\(100%,1260px\)!important;[^}]*margin:0 auto!important;' -or
+	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*flex-flow:row wrap!important;[^}]*width:min\(100%,1260px\)!important;[^}]*margin:0 auto!important;' -or
+	$css -notmatch '(?s)body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{[^}]*transform:none!important;') {
+	throw "Fullscreen navigation must stay centered across every preset without restoring the giant rotated frame ornament."
+}
+if ($css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view="homeView"\]\{flex-grow:' -or
+	$css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\.betaNavButton\[data-app-view="[^"]+"\]\{flex:0 1 clamp\(' -or
+	$css -notmatch '@media\(max-width:1210px\)\{[^}]*body\[data-style\] \.navFrame>\.appNav,[^}]*flex-wrap:nowrap!important;[^}]*overflow-x:auto!important;') {
+	throw "The compact 8/8 navigation geometry or its narrow-window scrolling fallback has regressed."
 }
 if ($css -notmatch 'body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{--nav-label:#f4e5c0\}') {
 	throw "Custom light mode must keep bright, readable navigation labels on the dark plaques."

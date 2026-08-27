@@ -4441,7 +4441,7 @@ body[data-style] .navFrame{
   height:auto!important;
   min-height:0!important;
   margin:4px 4px 14px!important;
-  padding:12px 12px 24px!important;
+  padding:12px 12px 32px!important;
   border:2px solid var(--nav-accent-deep)!important;
   border-radius:8px!important;
   background:
@@ -4493,10 +4493,10 @@ body[data-style] .navFrame>.appNav{
   align-content:center!important;
   justify-content:center!important;
   column-gap:7px!important;
-  row-gap:9px!important;
+  row-gap:8px!important;
   width:min(100%,1260px)!important;
   height:auto!important;
-  margin:0!important;
+  margin:0 auto!important;
   padding:0!important;
   border:0!important;
   background:none!important;
@@ -4512,17 +4512,17 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   grid-template-rows:1fr!important;
   align-items:center!important;
   justify-items:center!important;
-  column-gap:0!important;
-  flex:1 1 0!important;
+  column-gap:8px!important;
+  flex:0 0 var(--nav-button-width)!important;
   min-width:0!important;
-  max-width:none!important;
-  min-height:52px!important;
-  height:52px!important;
+  max-width:var(--nav-button-width)!important;
+  min-height:48px!important;
+  height:48px!important;
   margin:0!important;
-  padding:4px 8px!important;
+  padding:3px 8px!important;
   overflow:hidden!important;
   color:var(--nav-label)!important;
-  font:700 15px/1.03 Georgia,"Times New Roman",serif!important;
+  font:700 14px/1.05 Georgia,"Times New Roman",serif!important;
   letter-spacing:0!important;
   text-align:center!important;
   text-transform:none!important;
@@ -4548,29 +4548,22 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   cursor:pointer!important;
   transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background-color .16s ease!important;
 }
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{
-  flex:0 1 auto!important;
-  max-width:none!important;
-  grid-template-columns:40px minmax(0,1fr)!important;
-  gap:6px!important;
-  padding:4px 8px!important;
-}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="homeView"]{flex-grow:301!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="calculatorView"]{flex-grow:298!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="marketView"]{flex-grow:290!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="portraitView"]{flex-grow:284!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="fontChangerView"]{flex-grow:280!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="couponsView"]{flex-grow:281!important}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="settingsView"]{flex-grow:267!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="playerGuildView"]{flex:0 1 clamp(175px,14.4vw,315px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="grindTrackerView"]{flex:0 1 clamp(165px,13.4vw,295px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="resetTimersView"]{flex:0 1 clamp(138px,11.3vw,248px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="eventsView"]{flex:0 1 clamp(142px,11.6vw,255px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="bracketsView"]{flex:0 1 clamp(144px,11.8vw,260px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="masteryBracketsView"]{flex:0 1 clamp(168px,13.7vw,300px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="recipeBookView"]{flex:0 1 clamp(185px,15.5vw,340px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="dehkiaFuelView"]{flex:0 1 clamp(175px,14.8vw,325px)!important}
-body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="lightstoneSetsView"]{flex:0 1 clamp(205px,17.1vw,375px)!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="homeView"]{--nav-button-width:112px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="calculatorView"]{--nav-button-width:132px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="marketView"]{--nav-button-width:138px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="portraitView"]{--nav-button-width:134px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="fontChangerView"]{--nav-button-width:166px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="couponsView"]{--nav-button-width:132px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="settingsView"]{--nav-button-width:128px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="playerGuildView"]{--nav-button-width:164px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="grindTrackerView"]{--nav-button-width:156px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="resetTimersView"]{--nav-button-width:120px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="eventsView"]{--nav-button-width:118px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="bracketsView"]{--nav-button-width:130px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="masteryBracketsView"]{--nav-button-width:132px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="recipeBookView"]{--nav-button-width:158px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="dehkiaFuelView"]{--nav-button-width:154px}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="lightstoneSetsView"]{--nav-button-width:148px}
 body[data-style] .navFrame .appNav>.navButton[data-app-view]::before{
   content:""!important;
   display:block!important;
@@ -4646,7 +4639,7 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon{
   grid-column:1!important;
   grid-row:1!important;
   align-self:center!important;
-  justify-self:start!important;
+  justify-self:center!important;
   z-index:4!important;
   width:40px!important;
   height:40px!important;
@@ -4704,18 +4697,18 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{
   padding:0!important;
   display:flex!important;
   align-items:center!important;
-  justify-content:flex-start!important;
+  justify-content:center!important;
   overflow:visible!important;
   overflow-wrap:normal!important;
   white-space:normal!important;
-  text-align:left!important;
+  text-align:center!important;
   text-overflow:clip!important;
 }
 body[data-style] .navFrame>.navPinButton{
   right:14px!important;
   bottom:6px!important;
-  width:23px!important;
-  height:23px!important;
+  width:26px!important;
+  height:26px!important;
   border-color:color-mix(in srgb,var(--nav-accent) 60%,#2b261a)!important;
   border-radius:50%!important;
   background:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 11%,var(--nav-panel-top)),var(--nav-panel-bottom))!important;
@@ -4728,22 +4721,46 @@ body[data-style] .navFrame>.navPinButton[aria-pressed="true"]{
   border-color:var(--nav-accent-bright)!important;
   background:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 22%,var(--nav-panel-top)),var(--nav-panel-bottom))!important;
 }
+body[data-style] .navFrame>.navPinButton::before{
+  width:16px!important;
+  height:16px!important;
+}
+/* Some non-Custom presets define a more specific full-width rail earlier in
+   the stylesheet. Keep every desktop preset on the same centered canvas. */
+body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
+  flex-flow:row wrap!important;
+  align-items:center!important;
+  align-content:center!important;
+  justify-content:center!important;
+  column-gap:7px!important;
+  row-gap:8px!important;
+  width:min(100%,1260px)!important;
+  margin:0 auto!important;
+  overflow:visible!important;
+}
+/* Clear the legacy 45-degree transforms before using the Custom navigation
+   pseudos as full-frame inset artwork. */
+body[data-style="custom"] .navFrame::before,
+body[data-style="custom"] .navFrame::after{
+  transform:none!important;
+}
 /* The Custom theme keeps the title-bar grid slot for alignment, but no longer
    renders the legacy center diamond/orb or the smaller navigation diamond. */
 body[data-style="custom"] .windowTitleBar>.headerCenterCrest,
 body[data-style="custom"] .navFrame>.navCrest{
   visibility:hidden!important;
 }
-@media(max-width:1160px){
-  body[data-style] .navFrame>.appNav{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
+@media(max-width:1210px){
+  body[data-style] .navFrame>.appNav,
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 168px!important;max-width:168px!important;gap:6px!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 var(--nav-button-width)!important;max-width:var(--nav-button-width)!important;column-gap:8px!important}
   body[data-style] .navFrame .navRowBreak{display:none!important;flex:0 0 0!important;width:0!important}
 }
 @media(max-width:720px){
   body[data-style] .navFrame{padding-inline:10px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;flex-basis:156px!important;max-width:156px!important;height:48px!important;min-height:48px!important;font-size:14px!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;flex-basis:calc(var(--nav-button-width) - 6px)!important;max-width:calc(var(--nav-button-width) - 6px)!important;height:46px!important;min-height:46px!important;font-size:13px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
   body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:36px!important;height:36px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}

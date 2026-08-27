@@ -77,7 +77,10 @@ function finalDeclaration(rule, property, expected, description) {
 const normalNavigationRule = finalNavigationRule("", "Normal navigation buttons");
 for (const [property, value] of [
   ["grid-template-columns", /^40px minmax\(0,1fr\)\s*!important$/],
-  ["height", /^52px\s*!important$/],
+  ["column-gap", /^8px\s*!important$/],
+  ["flex", /^0 0 var\(--nav-button-width\)\s*!important$/],
+  ["max-width", /^var\(--nav-button-width\)\s*!important$/],
+  ["height", /^48px\s*!important$/],
   ["border-radius", /^5px\s*!important$/],
   ["clip-path", /^none\s*!important$/],
   ["mask", /^none\s*!important$/],
@@ -94,7 +97,7 @@ finalDeclaration(
   "Normal navigation buttons",
 );
 finalDeclaration(normalNavigationRule, "border", /var\(--nav-accent-deep\)/, "Normal navigation buttons");
-finalDeclaration(normalNavigationRule, "font", /700 15px\/1\.03 Georgia/, "Normal navigation buttons");
+finalDeclaration(normalNavigationRule, "font", /700 14px\/1\.05 Georgia/, "Normal navigation buttons");
 assert.match(
   normalNavigationRule.body,
   /overflow\s*:\s*hidden\s*!important/,
@@ -158,10 +161,18 @@ const expectedIcons = new Map([
   ["dehkiaFuelView", "nav-icon-dehkia-fuel"],
   ["lightstoneSetsView", "nav-icon-lightstone-sets"],
 ]);
-assert.equal(
-  [...markup.matchAll(/<span class="navRowBreak" aria-hidden="true"><\/span>/g)].length,
-  2,
-  "Desktop navigation must retain explicit 7/6/3 row breaks.",
+const appNavMarkup = markup.match(/<nav\b[^>]*class="appNav"[^>]*>([\s\S]*?)<\/nav>/);
+assert.ok(appNavMarkup, "The application navigation markup must remain available.");
+const navigationLayoutTokens = [...appNavMarkup[1].matchAll(
+  /<button\b[^>]*\bdata-app-view="([^"]+)"[^>]*>|<span\s+class="navRowBreak"\s+aria-hidden="true"><\/span>/g,
+)].map((match) => match[1] ?? "__ROW_BREAK__");
+const expectedNavigationLayout = [...expectedIcons.keys()].flatMap((view, index) => (
+  index === 8 ? ["__ROW_BREAK__", view] : [view]
+));
+assert.deepEqual(
+  navigationLayoutTokens,
+  expectedNavigationLayout,
+  "Desktop navigation must retain exactly two balanced rows of eight buttons.",
 );
 const navigationSpritePath = path.join(path.dirname(scriptPath), "NavigationAssets", "nav-icons.svg");
 assert.ok(fs.existsSync(navigationSpritePath), "The shared navigation SVG sprite must ship beside the UI resources.");
@@ -205,11 +216,120 @@ assert.match(
   /body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\] \.navGlyph\{[^}]*width:40px!important;[^}]*height:40px!important;/,
   "Desktop navigation glyphs must use the compact 40px geometry.",
 );
+const compactNavigationBreakpoint = stylesheet.lastIndexOf("@media(max-width:1210px){");
+assert.ok(compactNavigationBreakpoint >= 0, "The compact navigation breakpoint must remain defined.");
+const cartographerNavigationStart = stylesheet.lastIndexOf("/* Cartographer's Brass navigation.");
+assert.ok(cartographerNavigationStart >= 0, "The final Cartographer navigation block must remain available.");
+const desktopNavigationCss = stylesheet.slice(cartographerNavigationStart, compactNavigationBreakpoint);
+const desktopCanvasRules = [...desktopNavigationCss.matchAll(
+  /body\[data-style\] \.navFrame>\.appNav\{([^}]*)\}/g,
+)];
+const desktopCanvasRule = { body: desktopCanvasRules.at(-1)?.[1] ?? "" };
+assert.ok(desktopCanvasRule.body, "Desktop navigation must retain its final capped canvas rule.");
+for (const [property, value] of [
+  ["flex-flow", /^row wrap\s*!important$/],
+  ["justify-content", /^center\s*!important$/],
+  ["width", /^min\(100%,1260px\)\s*!important$/],
+  ["margin", /^0 auto\s*!important$/],
+]) {
+  finalDeclaration(desktopCanvasRule, property, value, "Desktop navigation canvas");
+}
+const nonCustomDesktopCanvasRules = [...desktopNavigationCss.matchAll(
+  /body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\{([^}]*)\}/g,
+)];
+const nonCustomDesktopCanvasRule = { body: nonCustomDesktopCanvasRules.at(-1)?.[1] ?? "" };
+assert.ok(nonCustomDesktopCanvasRule.body, "Non-Custom themes must override the legacy fullscreen rail.");
+for (const [property, value] of [
+  ["flex-flow", /^row wrap\s*!important$/],
+  ["justify-content", /^center\s*!important$/],
+  ["width", /^min\(100%,1260px\)\s*!important$/],
+  ["margin", /^0 auto\s*!important$/],
+]) {
+  finalDeclaration(nonCustomDesktopCanvasRule, property, value, "Non-Custom desktop navigation canvas");
+}
+const compactNavigationCss = stylesheet.slice(compactNavigationBreakpoint);
+for (const expected of [
+  /flex-wrap:nowrap!important/,
+  /justify-content:flex-start!important/,
+  /overflow-x:auto!important/,
+  /overflow-y:hidden!important/,
+  /\.navRowBreak\{display:none!important/,
+  /flex:0 0 var\(--nav-button-width\)!important/,
+  /max-width:var\(--nav-button-width\)!important/,
+]) {
+  assert.match(compactNavigationCss, expected, "Compact navigation must retain its horizontal scroller contract.");
+}
+const desktopButtonWidths = new Map([
+  ["homeView", 112],
+  ["calculatorView", 132],
+  ["marketView", 138],
+  ["portraitView", 134],
+  ["fontChangerView", 166],
+  ["couponsView", 132],
+  ["settingsView", 128],
+  ["playerGuildView", 164],
+  ["grindTrackerView", 156],
+  ["resetTimersView", 120],
+  ["eventsView", 118],
+  ["bracketsView", 130],
+  ["masteryBracketsView", 132],
+  ["recipeBookView", 158],
+  ["dehkiaFuelView", 154],
+  ["lightstoneSetsView", 148],
+]);
+for (const [view, width] of desktopButtonWidths) {
+  assert.match(
+    desktopNavigationCss,
+    new RegExp(`body\\[data-style\\] \\.navFrame \\.appNav>\\.navButton\\[data-app-view="${view}"\\]\\{--nav-button-width:${width}px\\}`),
+    `${view} must retain its content-sized desktop width.`,
+  );
+}
+const desktopWidthValues = [...desktopButtonWidths.values()];
+for (const [rowNumber, rowWidths] of [desktopWidthValues.slice(0, 8), desktopWidthValues.slice(8)].entries()) {
+  assert.ok(
+    rowWidths.reduce((total, width) => total + width, 0) + (7 * 7) <= 1260,
+    `Desktop navigation row ${rowNumber + 1} must fit the centered canvas without a third row.`,
+  );
+}
+assert.doesNotMatch(desktopNavigationCss, /flex-grow\s*:|flex\s*:\s*[^;]*clamp\(/, "Legacy row-expansion rules must not return.");
+
+const navigationLabelRules = [...desktopNavigationCss.matchAll(new RegExp(
+  `${navigationButtonSelector}>\\.navLabel\\s*\\{([^}]*)\\}`,
+  "g",
+))];
+const navigationLabelRule = { body: navigationLabelRules.at(-1)?.[1] ?? "" };
+assert.ok(navigationLabelRule.body, "The final desktop navigation-label rule must remain available.");
+for (const [property, value] of [
+  ["justify-content", /^center\s*!important$/],
+  ["text-align", /^center\s*!important$/],
+  ["width", /^100%\s*!important$/],
+]) {
+  finalDeclaration(navigationLabelRule, property, value, "Navigation labels");
+}
+const navigationIconRule = finalNavigationRule(">\\.navIcon", "Navigation medallions");
+finalDeclaration(navigationIconRule, "justify-self", /^center\s*!important$/, "Navigation medallions");
+
+const navigationLockRules = [...desktopNavigationCss.matchAll(
+  /body\[data-style\] \.navFrame>\.navPinButton\{([^}]*)\}/g,
+)];
+const navigationLockRule = { body: navigationLockRules.at(-1)?.[1] ?? "" };
+assert.ok(navigationLockRule.body, "The final navigation lock geometry must remain available.");
+finalDeclaration(navigationLockRule, "width", /^26px\s*!important$/, "Navigation lock");
+finalDeclaration(navigationLockRule, "height", /^26px\s*!important$/, "Navigation lock");
+const navigationLockGlyphRules = [...desktopNavigationCss.matchAll(
+  /body\[data-style\] \.navFrame>\.navPinButton::before\{([^}]*)\}/g,
+)];
+const navigationLockGlyphRule = { body: navigationLockGlyphRules.at(-1)?.[1] ?? "" };
+assert.ok(navigationLockGlyphRule.body, "The final navigation lock glyph geometry must remain available.");
+finalDeclaration(navigationLockGlyphRule, "width", /^16px\s*!important$/, "Navigation lock glyph");
+finalDeclaration(navigationLockGlyphRule, "height", /^16px\s*!important$/, "Navigation lock glyph");
+
 const narrowNavigationCss = stylesheet.slice(stylesheet.lastIndexOf("@media(max-width:720px){"));
 for (const expected of [
   /grid-template-columns:36px minmax\(0,1fr\)!important/,
-  /height:48px!important/,
-  /font-size:14px!important/,
+  /height:46px!important/,
+  /font-size:13px!important/,
+  /flex-basis:calc\(var\(--nav-button-width\) - 6px\)!important/,
   /\.navGlyph\{width:36px!important;height:36px!important\}/,
 ]) {
   assert.match(narrowNavigationCss, expected, "Narrow-window navigation must remain smaller than the compact desktop geometry.");
@@ -235,6 +355,15 @@ assert.match(
   customOrnamentRules.at(-1)[1],
   /(?:^|;)\s*visibility\s*:\s*hidden\s*!important\s*(?:;|$)/,
   "The Custom theme must suppress both legacy center ornaments without collapsing title-bar alignment.",
+);
+const customFramePseudoRules = [...stylesheet.matchAll(
+  /body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{([^}]*)\}/g,
+)];
+assert.ok(customFramePseudoRules.length, "The Custom theme must explicitly reset its full-frame navigation pseudos.");
+assert.match(
+  customFramePseudoRules.at(-1)[1],
+  /(?:^|;)\s*transform\s*:\s*none\s*!important\s*(?:;|$)/,
+  "Custom navigation frame artwork must not inherit the legacy fullscreen diamond rotation.",
 );
 
 assert.match(
