@@ -1,7 +1,7 @@
 {
-  "version": "v0.9.57",
+  "version": "v0.9.58",
   "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.57/Black-Spirit-Hub-Installer.exe",
-  "sha256": "61F12C6C195EDAB4BDAF60354CEBE91A200548D996CB7D651E589E3FF1785ADA",
-  "notes": "Introduces the compact Cartographer's Brass navigation with immutable shared vector icons across all 13 themes, removes the legacy Custom-theme center ornaments, tightens desktop and narrow-window sizing, and hardens local WebView2 resource serving for reliable startup and offline Recipe Book loading."
+  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.58/Black-Spirit-Hub-Installer.exe",
+  "sha256": "6C4F0C67848CB59EA87F3218951567331E7B5E0D257AD54396333A668132468C",
+  "notes": "Improves the Cartographer's Brass navigation with equal-sized buttons, responsive two- and three-row layouts at narrower window sizes, removes horizontal scrolling, tightens the navigation frame, and positions the lock control outside the frame."
 }
