@@ -4437,10 +4437,10 @@ body[data-style="caravan"] .navFrame{--nav-accent:#c08a4b;--nav-label:#f1dfbd;--
 
 body[data-style] .navFrame{
   box-sizing:border-box!important;
-  width:calc(100% - 8px)!important;
+  width:min(calc(100% - 8px),1364px)!important;
   height:auto!important;
   min-height:0!important;
-  margin:4px 4px 14px!important;
+  margin:4px auto 14px!important;
   padding:12px 12px 32px!important;
   border:2px solid var(--nav-accent-deep)!important;
   border-radius:8px!important;
@@ -4487,14 +4487,14 @@ body[data-style] .navFrame::after{
 body[data-style] .navFrame>.appNav{
   position:relative!important;
   z-index:2!important;
-  display:flex!important;
-  flex-flow:row wrap!important;
+  display:grid!important;
+  grid-template-columns:repeat(8,160px)!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
-  column-gap:7px!important;
+  column-gap:8px!important;
   row-gap:8px!important;
-  width:min(100%,1260px)!important;
+  width:min(100%,1336px)!important;
   height:auto!important;
   margin:0 auto!important;
   padding:0!important;
@@ -4513,9 +4513,9 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   align-items:center!important;
   justify-items:center!important;
   column-gap:8px!important;
-  flex:0 0 var(--nav-button-width)!important;
+  flex:0 0 160px!important;
   min-width:0!important;
-  max-width:var(--nav-button-width)!important;
+  max-width:160px!important;
   min-height:48px!important;
   height:48px!important;
   margin:0!important;
@@ -4548,22 +4548,6 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   cursor:pointer!important;
   transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background-color .16s ease!important;
 }
-body[data-style] .navFrame .appNav>.navButton[data-app-view="homeView"]{--nav-button-width:112px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="calculatorView"]{--nav-button-width:132px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="marketView"]{--nav-button-width:138px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="portraitView"]{--nav-button-width:134px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="fontChangerView"]{--nav-button-width:166px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="couponsView"]{--nav-button-width:132px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="settingsView"]{--nav-button-width:128px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="playerGuildView"]{--nav-button-width:164px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="grindTrackerView"]{--nav-button-width:156px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="resetTimersView"]{--nav-button-width:120px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="eventsView"]{--nav-button-width:118px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="bracketsView"]{--nav-button-width:130px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="masteryBracketsView"]{--nav-button-width:132px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="recipeBookView"]{--nav-button-width:158px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="dehkiaFuelView"]{--nav-button-width:154px}
-body[data-style] .navFrame .appNav>.navButton[data-app-view="lightstoneSetsView"]{--nav-button-width:148px}
 body[data-style] .navFrame .appNav>.navButton[data-app-view]::before{
   content:""!important;
   display:block!important;
@@ -4728,15 +4712,20 @@ body[data-style] .navFrame>.navPinButton::before{
 /* Some non-Custom presets define a more specific full-width rail earlier in
    the stylesheet. Keep every desktop preset on the same centered canvas. */
 body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
-  flex-flow:row wrap!important;
+  display:grid!important;
+  grid-template-columns:repeat(8,160px)!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
-  column-gap:7px!important;
+  column-gap:8px!important;
   row-gap:8px!important;
-  width:min(100%,1260px)!important;
+  width:min(100%,1336px)!important;
   margin:0 auto!important;
   overflow:visible!important;
+}
+body[data-style]:not([data-style="custom"]) .navFrame{
+  width:min(calc(100% - 8px),1364px)!important;
+  margin:4px auto 14px!important;
 }
 /* Clear the legacy 45-degree transforms before using the Custom navigation
    pseudos as full-frame inset artwork. */
@@ -4750,17 +4739,17 @@ body[data-style="custom"] .windowTitleBar>.headerCenterCrest,
 body[data-style="custom"] .navFrame>.navCrest{
   visibility:hidden!important;
 }
-@media(max-width:1210px){
+@media(max-width:1372px){
   body[data-style] .navFrame>.appNav,
-  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:flex!important;flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 var(--nav-button-width)!important;max-width:var(--nav-button-width)!important;column-gap:8px!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 160px!important;max-width:160px!important;column-gap:8px!important}
   body[data-style] .navFrame .navRowBreak{display:none!important;flex:0 0 0!important;width:0!important}
 }
 @media(max-width:720px){
   body[data-style] .navFrame{padding-inline:10px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;flex-basis:calc(var(--nav-button-width) - 6px)!important;max-width:calc(var(--nav-button-width) - 6px)!important;height:46px!important;min-height:46px!important;font-size:13px!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;height:46px!important;min-height:46px!important;font-size:13px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
   body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:36px!important;height:36px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
