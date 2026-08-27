@@ -13,19 +13,72 @@ const appHtml = fs.readFileSync(path.join(
   repoRoot,
   "Source Code",
   "BlackSpiritHub.Resources.Black_Spirit_Hub.html"), "utf8");
+const appCss = fs.readFileSync(path.join(
+  repoRoot,
+  "Source Code",
+  "BlackSpiritHub.Resources.Black_Spirit_Hub.css"), "utf8");
 
-function extractFunction(name, nextName) {
+function extractFunction(name) {
   let start = appScript.indexOf(`function ${name}(`);
   if (start >= 6 && appScript.slice(start - 6, start) === "async ") {
     start -= 6;
   }
-  const remainder = start < 0 ? "" : appScript.slice(start);
-  const nextMatch = remainder.match(new RegExp(`\\n(?:async\\s+)?function ${nextName}\\(`));
-  const end = nextMatch ? start + nextMatch.index : -1;
-  if (start < 0 || end < 0) {
+  if (start < 0) {
     throw new Error(`Could not extract ${name} from the application script.`);
   }
-  return appScript.slice(start, end);
+  const bodyStart = appScript.indexOf("{", start);
+  if (bodyStart < 0) throw new Error(`Could not locate the body of ${name}.`);
+
+  let depth = 0;
+  let mode = "code";
+  let escaped = false;
+  const templateExpressionDepths = [];
+  for (let index = bodyStart; index < appScript.length; index++) {
+    const character = appScript[index];
+    const next = appScript[index + 1];
+    if (mode === "line-comment") {
+      if (character === "\n") mode = "code";
+      continue;
+    }
+    if (mode === "block-comment") {
+      if (character === "*" && next === "/") { mode = "code"; index++; }
+      continue;
+    }
+    if (mode === "single" || mode === "double") {
+      if (escaped) { escaped = false; continue; }
+      if (character === "\\") { escaped = true; continue; }
+      if ((mode === "single" && character === "'") || (mode === "double" && character === '"')) mode = "code";
+      continue;
+    }
+    if (mode === "template") {
+      if (escaped) { escaped = false; continue; }
+      if (character === "\\") { escaped = true; continue; }
+      if (character === "`") { mode = "code"; continue; }
+      if (character === "$" && next === "{") {
+        depth++;
+        templateExpressionDepths.push(depth);
+        mode = "code";
+        index++;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") { mode = "line-comment"; index++; continue; }
+    if (character === "/" && next === "*") { mode = "block-comment"; index++; continue; }
+    if (character === "'") { mode = "single"; continue; }
+    if (character === '"') { mode = "double"; continue; }
+    if (character === "`") { mode = "template"; continue; }
+    if (character === "{") { depth++; continue; }
+    if (character !== "}") continue;
+    if (templateExpressionDepths.at(-1) === depth) {
+      depth--;
+      templateExpressionDepths.pop();
+      mode = "template";
+      continue;
+    }
+    depth--;
+    if (depth === 0) return appScript.slice(start, index + 1);
+  }
+  throw new Error(`Could not locate the end of ${name}.`);
 }
 
 function requireMatch(pattern, description) {
@@ -36,16 +89,50 @@ function requireMatch(pattern, description) {
   return match[0];
 }
 
+function requireLineContaining(token, description) {
+  const line = appScript.split(/\r?\n/).find(candidate => candidate.includes(token));
+  if (!line) throw new Error(`Could not locate ${description} in the application script.`);
+  return line;
+}
+
+function openingTagWithId(id) {
+  const match = appHtml.match(new RegExp(`<[^>]+\\bid=["']${id}["'][^>]*>`, "i"));
+  if (!match) throw new Error(`Missing #${id} from the Home notification interface.`);
+  return match[0];
+}
+
+function sameJson(actual, expected) {
+  if (!actual || !expected || typeof actual !== "object" || typeof expected !== "object") return actual === expected;
+  const actualKeys = Object.keys(actual).sort();
+  const expectedKeys = Object.keys(expected).sort();
+  return actualKeys.join("\u0000") === expectedKeys.join("\u0000")
+    && actualKeys.every(key => actual[key] === expected[key]);
+}
+
 const extractedCode = [
   "let savedHomeSettings = {};",
+  "let savedNotificationAudioSettings = {};",
   "let savedDeliverySettings = null;",
   "let bridgeCalls = [];",
   "let bridgePayloads = [];",
   "let bridgeFailures = new Set();",
+  "let bridgeResponses = new Map();",
   "let scheduleSpawns = [];",
 	"const testTtsButton={disabled:false,textContent:'Test TTS',attributes:{},setAttribute(name,value){this.attributes[name]=value},removeAttribute(name){delete this.attributes[name]}};",
-	"const homeEl={testTts:testTtsButton,footer:null};",
-  "function readSetting(){ return savedHomeSettings; }",
+	"const testAlarmButton={disabled:false,textContent:'Test Alarm',attributes:{},setAttribute(name,value){this.attributes[name]=value},removeAttribute(name){delete this.attributes[name]}};",
+	"const addVoicesButton={disabled:false,textContent:'Add voices',listeners:{},addEventListener(name,listener){this.listeners[name]=listener}};",
+	"const collapseLabel={textContent:''};",
+	"const collapseButton={attributes:{},title:'',setAttribute(name,value){this.attributes[name]=value},querySelector(){return collapseLabel}};",
+	"const collapsePanel={classList:{values:new Set(),toggle(name,force){if(force)this.values.add(name);else this.values.delete(name)}}};",
+	"const collapseContent={hidden:false};",
+	"const volumeInput={value:'50',attributes:{},style:{values:{},setProperty(name,value){this.values[name]=value}},setAttribute(name,value){this.attributes[name]=value}};",
+	"const volumeValue={textContent:'50%'};",
+	"const voiceSelect={disabled:true,value:'',options:[],selectedOptions:[],replaceChildren(...items){this.options=[...items]},append(item){this.options.push(item)}};",
+	"const document={createElement(){return{value:'',textContent:''}}};",
+	"const bossFooter={textContent:'Settings are saved automatically.',dataset:{}};",
+	"const homeEl={panel:collapsePanel,collapse:collapseButton,content:collapseContent,volume:volumeInput,volumeValue,voice:voiceSelect,addVoices:addVoicesButton,testTts:testTtsButton,testAlarm:testAlarmButton,footer:bossFooter};",
+  "function readSetting(name,fallback){ if(name==='homeSettings')return savedHomeSettings; if(name==='notificationAudioSettings')return savedNotificationAudioSettings; return fallback; }",
+  "function persistSetting(name,value){ if(name==='notificationAudioSettings')savedNotificationAudioSettings=JSON.parse(JSON.stringify(value)); }",
   "function defaultBossSelection(){ return { Kzarka:true, Garmoth:true, Vell:true }; }",
   "function allBossSpawns(){ return scheduleSpawns; }",
   "let guildTargetValue = null;",
@@ -55,25 +142,39 @@ const extractedCode = [
   "const HOME_TIMER_CONFIG={region:'EU'};",
   "function pruneHomeNotifications(){}",
   "function saveHomeSettings(settings){ savedHomeSettings = JSON.parse(JSON.stringify(settings)); savedDeliverySettings = JSON.parse(JSON.stringify(settings)); }",
-  "function bridgeCall(command,payload){ bridgeCalls.push(command); bridgePayloads.push({command,payload:JSON.parse(JSON.stringify(payload??null))}); return bridgeFailures.has(command) ? Promise.reject(new Error(command + ' failed')) : Promise.resolve({ok:true}); }",
+  "function bridgeCall(command,payload){ bridgeCalls.push(command); bridgePayloads.push({command,payload:JSON.parse(JSON.stringify(payload??null))}); return bridgeFailures.has(command) ? Promise.reject(new Error(command + ' failed')) : Promise.resolve(bridgeResponses.has(command)?bridgeResponses.get(command):{ok:true}); }",
   "const NotificationService={ShowInfo(){},ShowWarning(){},ShowError(){},ShowSuccess(){}};",
-  extractFunction("normalizedHomeSettings", "saveHomeSettings"),
+  requireMatch(/const DEFAULT_NOTIFICATION_VOLUME_PERCENT=50;/, "the default notification volume"),
+  requireMatch(/const MAX_TTS_VOICE_ID_LENGTH=\d+;/, "the native voice-token length limit"),
+  extractFunction("normalizeNotificationVolumePercent"),
+  extractFunction("normalizeTtsVoiceId"),
+  extractFunction("normalizedNotificationAudioSettings"),
+  extractFunction("saveNotificationAudioSettings"),
+  extractFunction("normalizedHomeSettings"),
+  extractFunction("applyBossNotifyCollapse"),
+  extractFunction("applyNotificationAudioSettings"),
   requireMatch(/const homeAlertInFlight=new Set\(\);/, "the in-flight delivery guard"),
   requireMatch(/const HOME_SPAWNING_NOW_GRACE_MS=60\*1000;/, "the Spawning Now polling grace window"),
   requireMatch(/const HOME_ALERT_MILESTONES=Object\.freeze\(\[0,5,10,15,30\]\);/, "the ordered boss alert milestones"),
-  extractFunction("alertStage", "alertLeadText"),
-  extractFunction("alertLeadText", "spokenBossList"),
-  extractFunction("spokenBossList", "notificationKeyDate"),
-  extractFunction("nextAlertableBossSpawn", "sendHomeAlert"),
-  extractFunction("sendHomeAlert", "persistDeliveredHomeAlert"),
-  extractFunction("persistDeliveredHomeAlert", "checkBossNotifications"),
-  extractFunction("checkBossNotifications", "checkGuildBossNotifications"),
-  extractFunction("checkGuildBossNotifications", "runBackgroundNotifications"),
-  extractFunction("setBossAlertTestStatus", "runBossAlertTest"),
-  extractFunction("runBossAlertTest", "bossTestTtsText"),
-  extractFunction("bossTestTtsText", "runBossTtsTest"),
-  extractFunction("runBossTtsTest", "runBossAlarmTest"),
-  "globalThis.alertTests={normalizedHomeSettings,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,bossTestTtsText,runBossTtsTest,setSaved:value=>{savedHomeSettings=value},setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings,getTestTtsButton:()=>testTtsButton};"
+  extractFunction("alertStage"),
+  extractFunction("alertLeadText"),
+  extractFunction("spokenBossList"),
+  extractFunction("nextAlertableBossSpawn"),
+  extractFunction("sendHomeAlert"),
+  extractFunction("persistDeliveredHomeAlert"),
+  extractFunction("migrateLegacyHomeAlert"),
+  extractFunction("checkBossNotifications"),
+  extractFunction("checkGuildBossNotifications"),
+  "let ttsVoiceLoadPromise=null;",
+  extractFunction("populateEnglishTtsVoices"),
+  extractFunction("initializeTtsVoiceSelector"),
+  extractFunction("setBossAlertTestStatus"),
+  requireLineContaining('homeEl.addVoices?.addEventListener("click"', "the Add voices click handler"),
+  extractFunction("runBossAlertTest"),
+  extractFunction("bossTestTtsText"),
+  extractFunction("runBossTtsTest"),
+  extractFunction("runBossAlarmTest"),
+  "globalThis.alertTests={normalizedNotificationAudioSettings,saveNotificationAudioSettings,normalizedHomeSettings,applyBossNotifyCollapse,applyNotificationAudioSettings,populateEnglishTtsVoices,initializeTtsVoiceSelector,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,bossTestTtsText,runBossTtsTest,runBossAlarmTest,setSaved:value=>{savedHomeSettings=value},setAudioSaved:value=>{savedNotificationAudioSettings=value},getAudioSaved:()=>JSON.parse(JSON.stringify(savedNotificationAudioSettings)),setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},setBridgeResponse:(command,value)=>{bridgeResponses.set(command,value)},resetVoiceLoader:()=>{ttsVoiceLoadPromise=null},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings,getTestTtsButton:()=>testTtsButton,getTestAlarmButton:()=>testAlarmButton,getAddVoicesState:()=>({disabled:addVoicesButton.disabled,text:addVoicesButton.textContent,footer:bossFooter.textContent,footerState:bossFooter.dataset.state}),clickAddVoices:()=>addVoicesButton.listeners.click?.(),getCollapseState:()=>({collapsed:collapsePanel.classList.values.has('isCollapsed'),hidden:collapseContent.hidden,expanded:collapseButton.attributes['aria-expanded'],title:collapseButton.title,label:collapseLabel.textContent}),getVolumeState:()=>({value:volumeInput.value,text:volumeValue.textContent,aria:volumeInput.attributes['aria-valuetext'],fill:volumeInput.style.values['--boss-volume']}),getVoiceState:()=>({disabled:voiceSelect.disabled,value:voiceSelect.value,options:voiceSelect.options.map(option=>({value:option.value,text:option.textContent}))})};"
 ].join("\n");
 
 const context = { console:{ debug(){}, warn(){}, log(){}, error(){} } };
@@ -88,10 +189,110 @@ if (!/TTS announcements<\/strong><span>Speak boss alerts with an installed Engli
   throw new Error("The TTS setting must explain that alerts use an installed English Windows voice.");
 }
 
+const volumeInputTag = openingTagWithId("bossNotificationVolume");
+if (!/^<input\b/i.test(volumeInputTag)
+  || !/\btype=["']range["']/i.test(volumeInputTag)
+  || !/\bmin=["']0["']/i.test(volumeInputTag)
+  || !/\bmax=["']100["']/i.test(volumeInputTag)
+  || !/\baria-label=["'][^"']*volume[^"']*["']/i.test(volumeInputTag)) {
+  throw new Error("The notification volume control must be an accessible 0-100 range slider.");
+}
+openingTagWithId("bossNotificationVolumeValue");
+const voiceSelectTag = openingTagWithId("bossTtsVoice");
+if (!/^<select\b/i.test(voiceSelectTag)
+  || !/\baria-label=["'][^"']*(?:voice|text.to.speech)[^"']*["']/i.test(voiceSelectTag)) {
+  throw new Error("The installed-English TTS voice control must be an accessible select element.");
+}
+const addVoicesTag = openingTagWithId("bossAddVoices");
+if (!/^<button\b/i.test(addVoicesTag)
+  || !/\btype=["']button["']/i.test(addVoicesTag)
+  || !/\bclass=["'][^"']*bossAddVoices[^"']*["']/i.test(addVoicesTag)
+  || !/\btitle=["']Open Windows Speech settings["']/i.test(addVoicesTag)
+  || !/<button\b[^>]*\bid=["']bossAddVoices["'][^>]*>\s*Add voices\s*<\/button>/i.test(appHtml)
+  || !/<small>Choose an installed English Windows voice\. New voices appear after restarting Black Spirit Hub\.<\/small>/i.test(appHtml)) {
+  throw new Error("The TTS voice picker must include the exact Add voices button and restart guidance.");
+}
+const collapseButtonTag = openingTagWithId("bossNotifyCollapse");
+const collapseButtonCss = appCss.match(/\.bossNotifyCollapse\s*\{([^}]*)\}/i)?.[1] || "";
+if (!/^<button\b/i.test(collapseButtonTag)
+  || !/\btype=["']button["']/i.test(collapseButtonTag)
+  || !/\bclass=["'][^"']*bossNotifyCollapse[^"']*["']/i.test(collapseButtonTag)
+  || !/\baria-expanded=["']true["']/i.test(collapseButtonTag)
+  || !/\baria-controls=["']bossNotifyContent["']/i.test(collapseButtonTag)
+  || !/\bborder\s*:/.test(collapseButtonCss)
+  || !/\bbackground\s*:/.test(collapseButtonCss)) {
+  throw new Error("Boss Notifications must use a boxed disclosure button with correct expanded-state semantics.");
+}
+openingTagWithId("bossNotifyContent");
+if (!/getElementById\(["']bossNotificationVolume["']\)/.test(appScript)
+  || !/getElementById\(["']bossNotificationVolumeValue["']\)/.test(appScript)
+  || !/getElementById\(["']bossTtsVoice["']\)/.test(appScript)
+  || !/getElementById\(["']bossAddVoices["']\)/.test(appScript)
+  || !/getElementById\(["']bossNotifyCollapse["']\)/.test(appScript)
+  || !/getElementById\(["']bossNotifyContent["']\)/.test(appScript)
+  || !/bridgeCall\(["']getEnglishTtsVoices["']/.test(appScript)
+  || !/bridgeCall\(["']openSpeechSettings["']\s*,\s*\{\s*\}\s*\)/.test(appScript)
+  || !/notificationsCollapsed\s*:\s*saved\.notificationsCollapsed\s*===\s*true/.test(appScript)) {
+  throw new Error("Notification audio, installed-English voice discovery, or collapsible-panel JavaScript wiring is incomplete.");
+}
+
+for (const [saved, expectedVolume, expectedVoice] of [
+  [{}, 50, ""],
+  [{ volumePercent:"not-a-number", voiceId:42 }, 50, ""],
+  [{ volumePercent:-12, voiceId:"voice-low" }, 0, "voice-low"],
+  [{ volumePercent:0, voiceId:"voice-muted" }, 0, "voice-muted"],
+  [{ volumePercent:49.6, voiceId:"voice-rounded" }, 50, "voice-rounded"],
+  [{ volumePercent:100, voiceId:"voice-max" }, 100, "voice-max"],
+  [{ volumePercent:180, voiceId:"voice-clamped" }, 100, "voice-clamped"]
+]) {
+  tests.setAudioSaved(saved);
+  const normalized = tests.normalizedNotificationAudioSettings();
+  if (normalized.volumePercent !== expectedVolume || normalized.voiceId !== expectedVoice) {
+    throw new Error(`Notification audio normalization failed: ${JSON.stringify({saved, normalized, expectedVolume, expectedVoice})}`);
+  }
+}
+tests.saveNotificationAudioSettings({ volumePercent:64, voiceId:"voice-persisted" });
+if (!sameJson(tests.getAudioSaved(), { volumePercent:64, voiceId:"voice-persisted" })) {
+  throw new Error("Notification volume and voice selection were not persisted together.");
+}
+
 tests.setSaved({ ttsEnabled:true, soundEnabled:true, leadMinutes:10 });
 let settings = tests.normalizedHomeSettings();
-if (!settings.ttsEnabled || !settings.soundEnabled || settings.leadMinutes !== 10) {
+if (!settings.ttsEnabled || !settings.soundEnabled || settings.leadMinutes !== 10 || settings.notificationsCollapsed !== false) {
   throw new Error("TTS and Alarm.mp3 must remain independently enabled.");
+}
+
+tests.setSaved({ notificationsCollapsed:true });
+if (tests.normalizedHomeSettings().notificationsCollapsed !== true) {
+  throw new Error("The collapsed Boss Notifications state must persist as an explicit boolean.");
+}
+tests.setSaved({ notificationsCollapsed:"true" });
+if (tests.normalizedHomeSettings().notificationsCollapsed !== false) {
+  throw new Error("Non-boolean Boss Notifications collapse state must normalize to expanded.");
+}
+
+tests.applyBossNotifyCollapse(true);
+let collapseState = tests.getCollapseState();
+if (!collapseState.collapsed || !collapseState.hidden || collapseState.expanded !== "false"
+  || collapseState.title !== "Expand boss notifications" || collapseState.label !== collapseState.title) {
+  throw new Error(`Collapsed Boss Notifications state is inaccessible or incomplete: ${JSON.stringify(collapseState)}`);
+}
+tests.applyBossNotifyCollapse(false);
+collapseState = tests.getCollapseState();
+if (collapseState.collapsed || collapseState.hidden || collapseState.expanded !== "true"
+  || collapseState.title !== "Collapse boss notifications" || collapseState.label !== collapseState.title) {
+  throw new Error(`Expanded Boss Notifications state is inaccessible or incomplete: ${JSON.stringify(collapseState)}`);
+}
+
+tests.applyNotificationAudioSettings({ volumePercent:0, voiceId:"" });
+let volumeState = tests.getVolumeState();
+if (volumeState.value !== "0" || volumeState.text !== "Muted" || volumeState.aria !== "Muted" || volumeState.fill !== "0%") {
+  throw new Error(`The volume slider did not render the mute boundary correctly: ${JSON.stringify(volumeState)}`);
+}
+tests.applyNotificationAudioSettings({ volumePercent:37, voiceId:"" });
+volumeState = tests.getVolumeState();
+if (volumeState.value !== "37" || volumeState.text !== "37%" || volumeState.aria !== "37 percent" || volumeState.fill !== "37%") {
+  throw new Error(`The volume slider did not render its persisted percentage correctly: ${JSON.stringify(volumeState)}`);
 }
 
 tests.setSaved({ leadMinutes:999 });
@@ -245,9 +446,91 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
   if (!delivered || actual !== expected.join(",")) {
     throw new Error(`Unexpected alert channel routing: ${actual}`);
   }
+  for (const call of tests.getPayloads()) {
+    if (call.command === "playAlarmSound"
+      && !sameJson(call.payload, { volumePercent:37 })) {
+      throw new Error(`Boss alarm did not receive the shared volume: ${JSON.stringify(call)}`);
+    }
+    if (call.command === "speakText"
+      && !sameJson(call.payload, { text:"Boss speech", volumePercent:37, voiceId:"voice-en-gb" })) {
+      throw new Error(`Boss TTS did not receive the shared volume and installed voice ID: ${JSON.stringify(call)}`);
+    }
+  }
 }
 
 (async () => {
+  tests.setAudioSaved({ volumePercent:37, voiceId:"voice-alpha" });
+  tests.setBridgeResponse("getEnglishTtsVoices", {
+    defaultVoiceId:"voice-beta",
+    voices:[
+      { id:"voice-beta", name:"Beta English" },
+      { id:"voice-alpha", name:"Alpha English" },
+      { id:"VOICE-ALPHA", name:"Duplicate Alpha" }
+    ]
+  });
+  tests.resetVoiceLoader();
+  tests.resetCalls();
+  await Promise.all([tests.initializeTtsVoiceSelector(), tests.initializeTtsVoiceSelector()]);
+  let voiceState = tests.getVoiceState();
+  if (tests.getCalls().join(",") !== "getEnglishTtsVoices"
+    || voiceState.disabled
+    || voiceState.value !== "voice-alpha"
+    || !sameJson(voiceState.options[0], { value:"", text:"Automatic (Beta English)" })
+    || voiceState.options.length !== 3
+    || voiceState.options[1].value !== "voice-alpha"
+    || voiceState.options[2].value !== "voice-beta") {
+    throw new Error(`Installed English voices were not loaded, deduplicated, sorted, and selected exactly once: ${JSON.stringify({calls:tests.getCalls(),voiceState})}`);
+  }
+
+  tests.setAudioSaved({ volumePercent:37, voiceId:"voice-no-longer-installed" });
+  tests.populateEnglishTtsVoices({ defaultVoiceId:"voice-beta", voices:[{ id:"voice-beta", name:"Beta English" }] });
+  voiceState = tests.getVoiceState();
+  if (tests.getAudioSaved().voiceId !== "" || voiceState.value !== "" || voiceState.disabled) {
+    throw new Error(`An unavailable persisted TTS voice did not safely fall back to Automatic: ${JSON.stringify({audio:tests.getAudioSaved(),voiceState})}`);
+  }
+
+  let finishOpeningSpeechSettings;
+  tests.setFailures([]);
+  tests.setBridgeResponse("openSpeechSettings", new Promise(resolve => { finishOpeningSpeechSettings = resolve; }));
+  tests.resetCalls();
+  const speechSettingsRequest = tests.clickAddVoices();
+  await Promise.resolve();
+  let addVoicesState = tests.getAddVoicesState();
+  if (!addVoicesState.disabled
+    || addVoicesState.text !== "Add voices"
+    || tests.getCalls().join(",") !== "openSpeechSettings"
+    || !sameJson(tests.getPayloads()[0]?.payload, {})) {
+    throw new Error(`Add voices did not enter a single busy native Speech-settings request with an empty payload: ${JSON.stringify({addVoicesState,calls:tests.getPayloads()})}`);
+  }
+  await tests.clickAddVoices();
+  if (tests.getCalls().length !== 1) {
+    throw new Error("Add voices allowed a duplicate request while its first request was still busy.");
+  }
+  finishOpeningSpeechSettings({ opened:true, page:"speech" });
+  await speechSettingsRequest;
+  await tests.initializeTtsVoiceSelector();
+  addVoicesState = tests.getAddVoicesState();
+  if (addVoicesState.disabled
+    || addVoicesState.text !== "Add voices"
+    || addVoicesState.footer !== "Windows Speech settings opened. Installed English voices will appear after restarting Black Spirit Hub."
+    || addVoicesState.footerState !== "success"
+    || tests.getCalls().join(",") !== "openSpeechSettings") {
+    throw new Error(`Add voices did not restore itself, show restart guidance, or preserve one voice enumeration per start: ${JSON.stringify({addVoicesState,calls:tests.getCalls()})}`);
+  }
+
+  tests.setFailures(["openSpeechSettings"]);
+  tests.resetCalls();
+  await tests.clickAddVoices();
+  addVoicesState = tests.getAddVoicesState();
+  if (addVoicesState.disabled
+    || addVoicesState.text !== "Add voices"
+    || tests.getCalls().join(",") !== "openSpeechSettings"
+    || !sameJson(tests.getPayloads()[0]?.payload, {})) {
+    throw new Error(`Add voices did not restore its button after a failed Speech-settings request: ${JSON.stringify({addVoicesState,calls:tests.getPayloads()})}`);
+  }
+  tests.setFailures([]);
+
+  tests.setAudioSaved({ volumePercent:37, voiceId:"voice-en-gb" });
   await verifyChannels(false, false, ["showDesktopNotification"]);
   await verifyChannels(true, false, ["showDesktopNotification", "playAlarmSound"]);
   await verifyChannels(false, true, ["showDesktopNotification", "speakText"]);
@@ -270,6 +553,8 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
 	if (testTtsPayloads.length !== 1
 		|| testTtsPayloads[0].command !== "speakText"
 		|| testTtsPayloads[0].payload?.text !== "Kzarka spawning now."
+		|| testTtsPayloads[0].payload?.volumePercent !== 37
+		|| testTtsPayloads[0].payload?.voiceId !== "voice-en-gb"
 		|| tests.getTestTtsButton().disabled
 		|| tests.getTestTtsButton().attributes["aria-busy"] !== undefined) {
 		throw new Error(`The Test TTS button did not route its English Spawning Now copy through the native speech bridge: ${JSON.stringify(testTtsPayloads)}`);
@@ -281,8 +566,32 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
 	testTtsPayloads = tests.getPayloads();
 	if (testTtsPayloads.length !== 1
 		|| testTtsPayloads[0].command !== "speakText"
-		|| testTtsPayloads[0].payload?.text !== "Black Spirit Hub text to speech test.") {
+		|| testTtsPayloads[0].payload?.text !== "Black Spirit Hub text to speech test."
+		|| testTtsPayloads[0].payload?.volumePercent !== 37
+		|| testTtsPayloads[0].payload?.voiceId !== "voice-en-gb") {
 		throw new Error("The Test TTS button lost its English fallback announcement.");
+	}
+
+	tests.setAudioSaved({ volumePercent:100, voiceId:"voice-en-us" });
+	tests.resetCalls();
+	await tests.runBossAlarmTest();
+	const testAlarmPayloads = tests.getPayloads();
+	if (testAlarmPayloads.length !== 1
+		|| testAlarmPayloads[0].command !== "playAlarmSound"
+		|| !sameJson(testAlarmPayloads[0].payload, { volumePercent:100 })
+		|| tests.getTestAlarmButton().disabled
+		|| tests.getTestAlarmButton().attributes["aria-busy"] !== undefined) {
+		throw new Error(`The Test Alarm button did not route maximum volume through the native alarm bridge: ${JSON.stringify(testAlarmPayloads)}`);
+	}
+
+	tests.setAudioSaved({ volumePercent:0, voiceId:"voice-muted" });
+	tests.resetCalls();
+	await tests.sendHomeAlert("Muted boss", "Message", "Muted speech", { soundEnabled:true, ttsEnabled:true });
+	const mutedPayloads = tests.getPayloads().filter(call => call.command === "playAlarmSound" || call.command === "speakText");
+	if (mutedPayloads.length !== 2
+		|| mutedPayloads.some(call => call.payload?.volumePercent !== 0)
+		|| mutedPayloads.find(call => call.command === "speakText")?.payload?.voiceId !== "voice-muted") {
+		throw new Error(`Zero percent must remain a valid mute value for alarm and TTS: ${JSON.stringify(mutedPayloads)}`);
 	}
 
   tests.resetCalls();
@@ -327,6 +636,7 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
   let releaseDelivery;
   attempts = 0;
   const concurrentSettings = { leadMinutes:10, soundEnabled:true, notified:{} };
+  tests.setAudioSaved({ volumePercent:18, voiceId:"voice-before-delivery" });
   tests.setSaved({ leadMinutes:10, soundEnabled:true, notified:{} });
   const firstDelivery = tests.persistDeliveredHomeAlert(
     alertKey,
@@ -344,6 +654,7 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
     throw new Error("Overlapping checks delivered the same milestone more than once.");
   }
   tests.setSaved({ leadMinutes:30, soundEnabled:false, notified:{} });
+  tests.setAudioSaved({ volumePercent:82, voiceId:"voice-during-delivery" });
   releaseDelivery(true);
   if (!await firstDelivery) {
     throw new Error("The guarded milestone delivery did not complete successfully.");
@@ -353,6 +664,9 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
     || mergedDelivery.soundEnabled !== false
     || !mergedDelivery.notified[alertKey]) {
     throw new Error("Alert completion overwrote settings changed during delivery.");
+  }
+  if (!sameJson(tests.getAudioSaved(), { volumePercent:82, voiceId:"voice-during-delivery" })) {
+    throw new Error("Alert completion overwrote notification audio preferences changed during delivery.");
   }
 
   const sharedSpawnDate = new Date("2026-07-29T12:00:00.000Z");
@@ -423,6 +737,7 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
     bosses:{ Kzarka:true },
     notified:{}
   };
+  tests.setAudioSaved({ volumePercent:23, voiceId:"voice-production" });
   tests.setSaved(spawningNowSettings);
   tests.setGuildTarget({ date:spawningNowDate, day:3, time:"20:00" });
   tests.setFailures([]);
@@ -442,12 +757,14 @@ async function verifyChannels(soundEnabled, ttsEnabled, expected) {
   const spokenCopy = spawningNowPayloads
     .filter(call => call.command === "speakText")
     .map(call => call.payload?.text || "");
+  const spokenPayloads = spawningNowPayloads.filter(call => call.command === "speakText");
   if (!worldSpawningNow
     || !guildSpawningNow
     || !spawningNowDelivery.notified[`boss|${spawningNowDate.toISOString()}|0`]
     || !spawningNowDelivery.notified[`guild|${spawningNowDate.toISOString()}|0`]
     || desktopCopy.length !== 2
     || spokenCopy.length !== 2
+    || spokenPayloads.some(call => call.payload?.volumePercent !== 23 || call.payload?.voiceId !== "voice-production")
     || [...desktopCopy, ...spokenCopy].some(copy => !/spawning now/i.test(copy))
     || [...desktopCopy, ...spokenCopy].some(copy => /minute warning|spawning in 1 minute/i.test(copy))) {
     throw new Error(`Spawning Now alerts used the wrong delivery, ledger key, or copy: ${JSON.stringify({worldSpawningNow,guildSpawningNow,spawningNowDelivery,spawningNowPayloads})}`);

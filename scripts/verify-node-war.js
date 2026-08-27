@@ -9,14 +9,63 @@ const appScript = fs.readFileSync(path.join(repoRoot, "Source Code", "BlackSpiri
 const appHtml = fs.readFileSync(path.join(repoRoot, "Source Code", "BlackSpiritHub.Resources.Black_Spirit_Hub.html"), "utf8");
 const appCss = fs.readFileSync(path.join(repoRoot, "Source Code", "BlackSpiritHub.Resources.Black_Spirit_Hub.css"), "utf8");
 
-function extractFunction(name, nextName) {
+function extractFunction(name) {
   let start = appScript.indexOf(`function ${name}(`);
   if (start >= 6 && appScript.slice(start - 6, start) === "async ") start -= 6;
-  const remainder = start < 0 ? "" : appScript.slice(start);
-  const next = remainder.match(new RegExp(`\\n(?:async\\s+)?function ${nextName}\\(`));
-  const end = next ? start + next.index : -1;
-  if (start < 0 || end < 0) throw new Error(`Could not extract ${name}.`);
-  return appScript.slice(start, end);
+  if (start < 0) throw new Error(`Could not extract ${name}.`);
+  const bodyStart = appScript.indexOf("{", start);
+  if (bodyStart < 0) throw new Error(`Could not locate the body of ${name}.`);
+
+  let depth = 0;
+  let mode = "code";
+  let escaped = false;
+  const templateExpressionDepths = [];
+  for (let index = bodyStart; index < appScript.length; index++) {
+    const character = appScript[index];
+    const next = appScript[index + 1];
+    if (mode === "line-comment") {
+      if (character === "\n") mode = "code";
+      continue;
+    }
+    if (mode === "block-comment") {
+      if (character === "*" && next === "/") { mode = "code"; index++; }
+      continue;
+    }
+    if (mode === "single" || mode === "double") {
+      if (escaped) { escaped = false; continue; }
+      if (character === "\\") { escaped = true; continue; }
+      if ((mode === "single" && character === "'") || (mode === "double" && character === '"')) mode = "code";
+      continue;
+    }
+    if (mode === "template") {
+      if (escaped) { escaped = false; continue; }
+      if (character === "\\") { escaped = true; continue; }
+      if (character === "`") { mode = "code"; continue; }
+      if (character === "$" && next === "{") {
+        depth++;
+        templateExpressionDepths.push(depth);
+        mode = "code";
+        index++;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") { mode = "line-comment"; index++; continue; }
+    if (character === "/" && next === "*") { mode = "block-comment"; index++; continue; }
+    if (character === "'") { mode = "single"; continue; }
+    if (character === '"') { mode = "double"; continue; }
+    if (character === "`") { mode = "template"; continue; }
+    if (character === "{") { depth++; continue; }
+    if (character !== "}") continue;
+    if (templateExpressionDepths.at(-1) === depth) {
+      depth--;
+      templateExpressionDepths.pop();
+      mode = "template";
+      continue;
+    }
+    depth--;
+    if (depth === 0) return appScript.slice(start, index + 1);
+  }
+  throw new Error(`Could not locate the end of ${name}.`);
 }
 
 function requireMatch(pattern, description) {
@@ -32,33 +81,40 @@ const extracted = [
   requireMatch(/const NODE_WAR_ALERT_MILESTONES=Object\.freeze\(\[0,5,15,30\]\);/, "Node War milestones"),
   requireMatch(/const NODE_WAR_NOTIFICATION_MODES=Object\.freeze\(\["off","tts","alarm"\]\);/, "Node War notification modes"),
   requireMatch(/const HOME_SPAWNING_NOW_GRACE_MS=60\*1000;/, "start grace"),
+  requireMatch(/const DEFAULT_NOTIFICATION_VOLUME_PERCENT=50;/, "default notification volume"),
+  requireMatch(/const MAX_TTS_VOICE_ID_LENGTH=\d+;/, "voice-token length limit"),
   "let savedResetSettings={};",
+  "let savedNotificationAudioSettings={};",
   "let bridgeCalls=[];",
   "let bridgePayloads=[];",
   "let failedCommands=new Set();",
-  "function readSetting(name,fallback){return name==='resetTimerSettings'?savedResetSettings:fallback}",
-  "function persistSetting(name,value){if(name==='resetTimerSettings')savedResetSettings=JSON.parse(JSON.stringify(value))}",
+  "function readSetting(name,fallback){if(name==='resetTimerSettings')return savedResetSettings;if(name==='notificationAudioSettings')return savedNotificationAudioSettings;return fallback}",
+  "function persistSetting(name,value){if(name==='resetTimerSettings')savedResetSettings=JSON.parse(JSON.stringify(value));if(name==='notificationAudioSettings')savedNotificationAudioSettings=JSON.parse(JSON.stringify(value))}",
   "function normalizedHomeSettings(){return {timeFormat:'12'}}",
   "function saveResetSettings(settings){persistSetting('resetTimerSettings',settings)}",
   "function resetTimerServerLabel(){return '08:00 PM CET'}",
-  extractFunction("alertLeadText", "notificationKeyDate"),
+  extractFunction("normalizeNotificationVolumePercent"),
+  extractFunction("normalizeTtsVoiceId"),
+  extractFunction("normalizedNotificationAudioSettings"),
+  extractFunction("saveNotificationAudioSettings"),
+  extractFunction("alertLeadText"),
   "const HOME_TIMER_CONFIG={region:'EU'};",
   "function bridgeCall(command,payload){bridgeCalls.push(command);bridgePayloads.push({command,payload});return failedCommands.has(command)?Promise.reject(new Error(command+' failed')):Promise.resolve({ok:true})}",
   "const NotificationService={ShowInfo(){},ShowError(){},ShowWarning(){}};",
   "const nodeWarAlertInFlight=new Set();",
   requireMatch(/function serverTimeZoneLabel\(date=new Date\(\)\)\{\r?\n[\s\S]*?\r?\n\}/, "CET/CEST label helper"),
-  extractFunction("zonedParts", "zonedOffsetMs"),
-  extractFunction("zonedOffsetMs", "zonedTimeToDate"),
-  extractFunction("zonedTimeToDate", "serverWeekMondayUtc"),
-  extractFunction("nextNodeWarOccurrence", "resetTimerTarget"),
-  extractFunction("normalizedResetSettings", "saveResetSettings"),
-  extractFunction("notificationKeyDate", "pruneHomeNotifications"),
-  extractFunction("nodeWarAlertStage", "pruneNodeWarNotifications"),
-  extractFunction("pruneNodeWarNotifications", "sendNodeWarAlert"),
-  extractFunction("sendNodeWarAlert", "persistDeliveredNodeWarAlert"),
-  extractFunction("persistDeliveredNodeWarAlert", "checkNodeWarNotifications"),
-  extractFunction("checkNodeWarNotifications", "migrateLegacyHomeAlert"),
-  "globalThis.tests={serverTimeZoneLabel,nextNodeWarOccurrence,normalizedResetSettings,nodeWarAlertStage,sendNodeWarAlert,persistDeliveredNodeWarAlert,checkNodeWarNotifications,setSaved:value=>{savedResetSettings=JSON.parse(JSON.stringify(value))},getSaved:()=>JSON.parse(JSON.stringify(savedResetSettings)),setFailures:value=>{failedCommands=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[];failedCommands=new Set()},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice()};"
+  extractFunction("zonedParts"),
+  extractFunction("zonedOffsetMs"),
+  extractFunction("zonedTimeToDate"),
+  extractFunction("nextNodeWarOccurrence"),
+  extractFunction("normalizedResetSettings"),
+  extractFunction("notificationKeyDate"),
+  extractFunction("nodeWarAlertStage"),
+  extractFunction("pruneNodeWarNotifications"),
+  extractFunction("sendNodeWarAlert"),
+  extractFunction("persistDeliveredNodeWarAlert"),
+  extractFunction("checkNodeWarNotifications"),
+  "globalThis.tests={serverTimeZoneLabel,nextNodeWarOccurrence,normalizedNotificationAudioSettings,saveNotificationAudioSettings,normalizedResetSettings,nodeWarAlertStage,sendNodeWarAlert,persistDeliveredNodeWarAlert,checkNodeWarNotifications,setSaved:value=>{savedResetSettings=JSON.parse(JSON.stringify(value))},getSaved:()=>JSON.parse(JSON.stringify(savedResetSettings)),setAudioSaved:value=>{savedNotificationAudioSettings=JSON.parse(JSON.stringify(value))},getAudioSaved:()=>JSON.parse(JSON.stringify(savedNotificationAudioSettings)),setFailures:value=>{failedCommands=new Set(value)},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[];failedCommands=new Set()},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice()};"
 ].join("\n");
 
 const NativeDate = Date;
@@ -67,6 +123,14 @@ const context = { console:{warn(){},debug(){},error(){},log(){}}, Intl, Date:Fix
 vm.createContext(context);
 vm.runInContext(extracted, context);
 const tests = context.tests;
+
+function sameJson(actual, expected) {
+  if (!actual || !expected || typeof actual !== "object" || typeof expected !== "object") return actual === expected;
+  const actualKeys = Object.keys(actual).sort();
+  const expectedKeys = Object.keys(expected).sort();
+  return actualKeys.join("\u0000") === expectedKeys.join("\u0000")
+    && actualKeys.every(key => actual[key] === expected[key]);
+}
 
 function iso(value) { return tests.nextNodeWarOccurrence(new Date(value), false)?.toISOString(); }
 const scheduleCases = new Map([
@@ -113,15 +177,22 @@ if (tests.nodeWarAlertStage(settings, 10 * 60_000, keyBase) !== null
 }
 
 (async () => {
+  tests.setAudioSaved({volumePercent:0,voiceId:"voice-en-us"});
   tests.resetCalls();
   if (await tests.sendNodeWarAlert("title","message","Nodewar starting in 30 minutes.",{nodeWarNotificationMode:"off"}) !== false
     || tests.getCalls().length !== 0) throw new Error("Off mode must not deliver a Node War alert.");
   await tests.sendNodeWarAlert("title","message","Nodewar starting in 30 minutes.",{nodeWarNotificationMode:"tts"});
   if (tests.getCalls().join(",") !== "speakText"
-    || tests.getPayloads()[0]?.payload?.text !== "Nodewar starting in 30 minutes.") throw new Error("TTS mode must speak the exact 30-minute wording once.");
+    || !sameJson(tests.getPayloads()[0]?.payload, {
+      text:"Nodewar starting in 30 minutes.",
+      volumePercent:0,
+      voiceId:"voice-en-us"
+    })) throw new Error("TTS mode must speak the exact wording once using the shared mute volume and installed voice ID.");
   tests.resetCalls();
+  tests.setAudioSaved({volumePercent:100,voiceId:"voice-en-us"});
   await tests.sendNodeWarAlert("title","message","Nodewar starting in 30 minutes.",{nodeWarNotificationMode:"alarm"});
-  if (tests.getCalls().join(",") !== "playAlarmSound") throw new Error("Alarm mode must play only Alarm.mp3 once.");
+  if (tests.getCalls().join(",") !== "playAlarmSound"
+    || !sameJson(tests.getPayloads()[0]?.payload, {volumePercent:100})) throw new Error("Alarm mode must play only Alarm.mp3 once at the shared maximum volume.");
 
   tests.resetCalls();
   tests.setSaved({nodeWarNotificationMode:"tts",nodeWarLeadMinutes:30,nodeWarNotified:{},showLocalTime:false,timeFormat:"12"});
@@ -151,15 +222,24 @@ if (tests.nodeWarAlertStage(settings, 10 * 60_000, keyBase) !== null
   }
 
   tests.resetCalls();
+  tests.setAudioSaved({volumePercent:37,voiceId:"voice-production"});
   tests.setSaved({nodeWarNotificationMode:"tts",nodeWarLeadMinutes:30,nodeWarNotified:{},showLocalTime:false,timeFormat:"12"});
   if (!await tests.checkNodeWarNotifications(tests.normalizedResetSettings(), new Date("2026-01-12T18:40:00.000Z"))
-    || tests.getPayloads().at(-1)?.payload?.text !== "Nodewar starting in 20 minutes.") {
+    || !sameJson(tests.getPayloads().at(-1)?.payload, {
+      text:"Nodewar starting in 20 minutes.",
+      volumePercent:37,
+      voiceId:"voice-production"
+    })) {
     throw new Error("A late Node War alert must speak the actual remaining time, not its missed milestone.");
   }
   tests.resetCalls();
   tests.setSaved({nodeWarNotificationMode:"tts",nodeWarLeadMinutes:30,nodeWarNotified:{},showLocalTime:false,timeFormat:"12"});
   if (!await tests.checkNodeWarNotifications(tests.normalizedResetSettings(), new Date("2026-01-12T18:59:00.000Z"))
-    || tests.getPayloads().at(-1)?.payload?.text !== "Nodewar starting in 1 minute.") {
+    || !sameJson(tests.getPayloads().at(-1)?.payload, {
+      text:"Nodewar starting in 1 minute.",
+      volumePercent:37,
+      voiceId:"voice-production"
+    })) {
     throw new Error("A one-minute late Node War alert must use singular wording.");
   }
 
@@ -170,7 +250,11 @@ if (tests.nodeWarAlertStage(settings, 10 * 60_000, keyBase) !== null
     const now = new Date(occurrence.getTime() - minutes * 60_000);
     settings = tests.normalizedResetSettings();
     if (!await tests.checkNodeWarNotifications(settings, now)) throw new Error(`Node War ${minutes}-minute alert was not delivered.`);
-    if (tests.getPayloads().at(-1)?.payload?.text !== wording) throw new Error(`Unexpected Node War TTS wording at ${minutes} minutes.`);
+    if (!sameJson(tests.getPayloads().at(-1)?.payload, {
+      text:wording,
+      volumePercent:37,
+      voiceId:"voice-production"
+    })) throw new Error(`Unexpected Node War TTS wording, volume, or voice at ${minutes} minutes.`);
   }
   if (tests.getCalls().some(command => command !== "speakText") || tests.getCalls().length !== 4) throw new Error("Node War TTS cascade must be exactly 30, 15, 5, and starting.");
   if (await tests.checkNodeWarNotifications(tests.normalizedResetSettings(), occurrence)) throw new Error("A persisted Node War stage repeated.");

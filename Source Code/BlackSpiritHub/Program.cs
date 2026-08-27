@@ -283,9 +283,29 @@ internal static class Program
 		try
 		{
 			if (CalculatorForm.DefaultAlertVolumePercent != 50
-				|| CalculatorForm.DefaultAlarmMciVolume != 500)
+				|| CalculatorForm.DefaultAlarmMciVolume != 500
+				|| CalculatorForm.NormalizeAlertVolumePercent(null) != 50
+				|| CalculatorForm.NormalizeAlertVolumePercent(-10) != 0
+				|| CalculatorForm.NormalizeAlertVolumePercent(0) != 0
+				|| CalculatorForm.NormalizeAlertVolumePercent(37) != 37
+				|| CalculatorForm.NormalizeAlertVolumePercent(100) != 100
+				|| CalculatorForm.NormalizeAlertVolumePercent(120) != 100
+				|| CalculatorForm.AlertVolumePercentToMciVolume(0) != 0
+				|| CalculatorForm.AlertVolumePercentToMciVolume(37) != 370
+				|| CalculatorForm.AlertVolumePercentToMciVolume(100) != 1000)
 			{
 				return 118;
+			}
+			using (JsonDocument validAudioPayload = JsonDocument.Parse("{\"volumePercent\":37,\"voiceId\":\"  voice-b  \"}"))
+			using (JsonDocument invalidAudioPayload = JsonDocument.Parse("{\"volumePercent\":\"loud\",\"voiceId\":42}"))
+			{
+				if (CalculatorForm.ReadAlertVolumePercent(validAudioPayload.RootElement) != 37
+					|| CalculatorForm.ReadTtsVoiceId(validAudioPayload.RootElement) != "voice-b"
+					|| CalculatorForm.ReadAlertVolumePercent(invalidAudioPayload.RootElement) != 50
+					|| CalculatorForm.ReadTtsVoiceId(invalidAudioPayload.RootElement) != string.Empty)
+				{
+					return 122;
+				}
 			}
 			if (CalculatorForm.GetEnglishSapiVoicePriority("409;9") != 0
 				|| CalculatorForm.GetEnglishSapiVoicePriority("809;9") != 1
@@ -295,7 +315,19 @@ internal static class Program
 				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "809;9", "409;9"]) != 2
 				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "809;9"]) != 1
 				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["409"]) != 0
-				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "40C", "not-a-language", null]) != -1)
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(["407", "40C", "not-a-language", null]) != -1
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(
+					["409", "809", "407"],
+					["voice-a", "voice-b", "voice-c"],
+					"voice-b") != 1
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(
+					["409", "809", "407"],
+					["voice-a", "voice-b", "voice-c"],
+					"voice-c") != 0
+				|| CalculatorForm.SelectEnglishSapiVoiceIndex(
+					["409", "809"],
+					["voice-a", "voice-b"],
+					"missing-voice") != 0)
 			{
 				return 121;
 			}

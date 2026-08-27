@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "cartographers-brass-compact-navigation-20260827b";
+	private const string UiRevision = "notification-audio-controls-20260827a";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -123,7 +123,13 @@ internal sealed class CalculatorForm : Form
 
 	private const int MciMaximumVolume = 1000;
 
-	internal static int DefaultAlarmMciVolume => MciMaximumVolume * DefaultAlertVolumePercent / 100;
+	internal static int NormalizeAlertVolumePercent(int? volumePercent) =>
+		Math.Clamp(volumePercent ?? DefaultAlertVolumePercent, 0, 100);
+
+	internal static int AlertVolumePercentToMciVolume(int? volumePercent) =>
+		MciMaximumVolume * NormalizeAlertVolumePercent(volumePercent) / 100;
+
+	internal static int DefaultAlarmMciVolume => AlertVolumePercentToMciVolume(DefaultAlertVolumePercent);
 
 	private const int WmNcLButtonDown = 161;
 
@@ -607,8 +613,9 @@ internal sealed class CalculatorForm : Form
 		graphics.DrawEllipse(border, bounds.X, bounds.Y, bounds.Width, bounds.Height);
 	}
 
-	private object PlayAlarmSound()
+	private object PlayAlarmSound(int requestedVolumePercent)
 	{
+		int volumePercent = NormalizeAlertVolumePercent(requestedVolumePercent);
 		string alarmPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Alarm.mp3");
 		if (!File.Exists(alarmPath))
 		{
@@ -621,7 +628,7 @@ internal sealed class CalculatorForm : Form
 		try
 		{
 			SendMciCommand($"open \"{safePath}\" type mpegvideo alias {alias}");
-			SendMciCommand($"setaudio {alias} volume to {DefaultAlarmMciVolume}");
+			SendMciCommand($"setaudio {alias} volume to {AlertVolumePercentToMciVolume(volumePercent)}");
 			StringBuilder lengthText = new StringBuilder(32);
 			SendMciCommand($"status {alias} length", lengthText);
 			int durationMilliseconds = int.TryParse(
@@ -652,7 +659,7 @@ internal sealed class CalculatorForm : Form
 				played = true,
 				fileName = "Alarm.mp3",
 				durationMilliseconds,
-				volumePercent = DefaultAlertVolumePercent
+				volumePercent
 			};
 		}
 		catch
@@ -748,9 +755,32 @@ internal sealed class CalculatorForm : Form
 		return bestPriority;
 	}
 
-	internal static int SelectEnglishSapiVoiceIndex(IReadOnlyList<string?> languageAttributes)
+	internal static int SelectEnglishSapiVoiceIndex(
+		IReadOnlyList<string?> languageAttributes,
+		IReadOnlyList<string?>? voiceIds = null,
+		string? requestedVoiceId = null)
 	{
 		ArgumentNullException.ThrowIfNull(languageAttributes);
+		if (voiceIds is not null && voiceIds.Count != languageAttributes.Count)
+		{
+			throw new ArgumentException("Voice IDs and language attributes must have matching counts.", nameof(voiceIds));
+		}
+
+		string preferredVoiceId = NormalizeTtsVoiceId(requestedVoiceId);
+		if (preferredVoiceId.Length > 0 && voiceIds is not null)
+		{
+			for (int index = 0; index < languageAttributes.Count; index++)
+			{
+				if (GetEnglishSapiVoicePriority(languageAttributes[index]) != int.MaxValue
+					&& string.Equals(
+						NormalizeTtsVoiceId(voiceIds[index]),
+						preferredVoiceId,
+						StringComparison.OrdinalIgnoreCase))
+				{
+					return index;
+				}
+			}
+		}
 
 		int selectedIndex = -1;
 		int selectedPriority = int.MaxValue;
@@ -767,14 +797,175 @@ internal sealed class CalculatorForm : Form
 		return selectedIndex;
 	}
 
-	private static (string Name, string Language) SelectEnglishSapiVoice(Type voiceType, object voice)
+	private sealed record SapiVoiceDescriptor(string Id, string Name, string Language);
+
+	internal static string NormalizeTtsVoiceId(string? voiceId)
+	{
+		const int maximumLength = 2048;
+		string normalized = voiceId?.Trim() ?? string.Empty;
+		return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
+	}
+
+	private static SapiVoiceDescriptor? DescribeEnglishSapiVoiceToken(object token)
+	{
+		Type tokenType = token.GetType();
+		string? languageAttribute;
+		try
+		{
+			languageAttribute = Convert.ToString(
+				tokenType.InvokeMember(
+					"GetAttribute",
+					System.Reflection.BindingFlags.InvokeMethod,
+					null,
+					token,
+					new object[] { "Language" }),
+				System.Globalization.CultureInfo.InvariantCulture);
+		}
+		catch
+		{
+			return null;
+		}
+
+		if (GetEnglishSapiVoicePriority(languageAttribute) == int.MaxValue)
+		{
+			return null;
+		}
+
+		string id;
+		try
+		{
+			id = NormalizeTtsVoiceId(Convert.ToString(
+				tokenType.InvokeMember(
+					"Id",
+					System.Reflection.BindingFlags.GetProperty,
+					null,
+					token,
+					Array.Empty<object>()),
+				System.Globalization.CultureInfo.InvariantCulture));
+		}
+		catch
+		{
+			return null;
+		}
+		if (id.Length == 0)
+		{
+			return null;
+		}
+
+		string name;
+		try
+		{
+			name = Convert.ToString(
+				tokenType.InvokeMember(
+					"GetDescription",
+					System.Reflection.BindingFlags.InvokeMethod,
+					null,
+					token,
+					new object[] { 0 }),
+				System.Globalization.CultureInfo.InvariantCulture) ?? "English Windows voice";
+		}
+		catch
+		{
+			name = "English Windows voice";
+		}
+
+		return new SapiVoiceDescriptor(id, name.Trim(), languageAttribute ?? "en");
+	}
+
+	private static object GetEnglishTtsVoices()
+	{
+		object? voice = null;
+		object? voices = null;
+		try
+		{
+			Type? voiceType = Type.GetTypeFromProgID("SAPI.SpVoice");
+			if (voiceType is null || (voice = Activator.CreateInstance(voiceType)) is null)
+			{
+				return new { voices = Array.Empty<object>(), defaultVoiceId = string.Empty };
+			}
+
+			voices = voiceType.InvokeMember(
+				"GetVoices",
+				System.Reflection.BindingFlags.InvokeMethod,
+				null,
+				voice,
+				new object[] { "", "" });
+			if (voices is null)
+			{
+				return new { voices = Array.Empty<object>(), defaultVoiceId = string.Empty };
+			}
+
+			Type voicesType = voices.GetType();
+			int count = Convert.ToInt32(
+				voicesType.InvokeMember(
+					"Count",
+					System.Reflection.BindingFlags.GetProperty,
+					null,
+					voices,
+					Array.Empty<object>()),
+				System.Globalization.CultureInfo.InvariantCulture);
+			List<SapiVoiceDescriptor> descriptors = new();
+			for (int index = 0; index < count; index++)
+			{
+				object? candidate = null;
+				try
+				{
+					candidate = voicesType.InvokeMember(
+						"Item",
+						System.Reflection.BindingFlags.InvokeMethod,
+						null,
+						voices,
+						new object[] { index });
+					if (candidate is not null && DescribeEnglishSapiVoiceToken(candidate) is { } descriptor)
+					{
+						descriptors.Add(descriptor);
+					}
+				}
+				finally
+				{
+					if (candidate is not null && Marshal.IsComObject(candidate))
+					{
+						Marshal.FinalReleaseComObject(candidate);
+					}
+				}
+			}
+
+			int defaultIndex = SelectEnglishSapiVoiceIndex(descriptors.Select(item => (string?)item.Language).ToArray());
+			string defaultVoiceId = defaultIndex >= 0 ? descriptors[defaultIndex].Id : string.Empty;
+			object[] serializedVoices = descriptors
+				.OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
+				.ThenBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
+				.Select(item => (object)new { id = item.Id, name = item.Name, language = item.Language })
+				.ToArray();
+			return new { voices = serializedVoices, defaultVoiceId };
+		}
+		finally
+		{
+			if (voices is not null && Marshal.IsComObject(voices))
+			{
+				Marshal.FinalReleaseComObject(voices);
+			}
+			if (voice is not null && Marshal.IsComObject(voice))
+			{
+				Marshal.FinalReleaseComObject(voice);
+			}
+		}
+	}
+
+	private static (string Name, string Language, string Id) SelectEnglishSapiVoice(
+		Type voiceType,
+		object voice,
+		string? requestedVoiceId)
 	{
 		object? voices = null;
 		object? selectedToken = null;
 		List<object?> voiceTokens = new();
 		List<string?> languageAttributes = new();
+		List<string?> voiceIds = new();
+		List<string> voiceNames = new();
 		string selectedName = "English Windows voice";
 		string selectedLanguage = "en";
+		string selectedVoiceId = string.Empty;
 		try
 		{
 			voices = voiceType.InvokeMember(
@@ -814,28 +1005,16 @@ internal sealed class CalculatorForm : Form
 						continue;
 					}
 
-					Type tokenType = candidate.GetType();
-					string? languageAttribute;
-					try
+					SapiVoiceDescriptor? descriptor = DescribeEnglishSapiVoiceToken(candidate);
+					if (descriptor is null)
 					{
-						languageAttribute = Convert.ToString(
-							tokenType.InvokeMember(
-								"GetAttribute",
-								System.Reflection.BindingFlags.InvokeMethod,
-								null,
-								candidate,
-								new object[] { "Language" }),
-							System.Globalization.CultureInfo.InvariantCulture);
-					}
-					catch
-					{
-						// A malformed third-party token must not prevent a later English voice
-						// from being selected.
 						continue;
 					}
 
 					voiceTokens.Add(candidate);
-					languageAttributes.Add(languageAttribute);
+					languageAttributes.Add(descriptor.Language);
+					voiceIds.Add(descriptor.Id);
+					voiceNames.Add(descriptor.Name);
 					candidate = null;
 				}
 				finally
@@ -847,7 +1026,7 @@ internal sealed class CalculatorForm : Form
 				}
 			}
 
-			int selectedIndex = SelectEnglishSapiVoiceIndex(languageAttributes);
+			int selectedIndex = SelectEnglishSapiVoiceIndex(languageAttributes, voiceIds, requestedVoiceId);
 			if (selectedIndex < 0)
 			{
 				throw new InvalidOperationException(
@@ -857,22 +1036,8 @@ internal sealed class CalculatorForm : Form
 			selectedToken = voiceTokens[selectedIndex];
 			voiceTokens[selectedIndex] = null;
 			selectedLanguage = languageAttributes[selectedIndex] ?? "en";
-			Type selectedTokenType = selectedToken!.GetType();
-			try
-			{
-				selectedName = Convert.ToString(
-					selectedTokenType.InvokeMember(
-						"GetDescription",
-						System.Reflection.BindingFlags.InvokeMethod,
-						null,
-						selectedToken,
-						new object[] { 0 }),
-					System.Globalization.CultureInfo.InvariantCulture) ?? "English Windows voice";
-			}
-			catch
-			{
-				selectedName = "English Windows voice";
-			}
+			selectedName = voiceNames[selectedIndex];
+			selectedVoiceId = voiceIds[selectedIndex] ?? string.Empty;
 
 			voiceType.InvokeMember(
 				"Voice",
@@ -880,7 +1045,7 @@ internal sealed class CalculatorForm : Form
 				null,
 				voice,
 				new object[] { selectedToken });
-			return (selectedName, selectedLanguage);
+			return (selectedName, selectedLanguage, selectedVoiceId);
 		}
 		finally
 		{
@@ -902,8 +1067,14 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
-	private async Task<object> SpeakTextAsync(string text, CancellationToken cancellationToken)
+	private async Task<object> SpeakTextAsync(
+		string text,
+		int requestedVolumePercent,
+		string? requestedVoiceId,
+		CancellationToken cancellationToken)
 	{
+		int volumePercent = NormalizeAlertVolumePercent(requestedVolumePercent);
+		string voiceId = NormalizeTtsVoiceId(requestedVoiceId);
 		string safeText = string.IsNullOrWhiteSpace(text) ? "Black Spirit Hub alert." : text.Trim();
 		if (safeText.Length > 500)
 		{
@@ -936,8 +1107,9 @@ internal sealed class CalculatorForm : Form
 						System.Reflection.BindingFlags.SetProperty,
 						null,
 						voice,
-						new object[] { DefaultAlertVolumePercent });
-					(string voiceName, string voiceLanguage) = SelectEnglishSapiVoice(voiceType, voice);
+						new object[] { volumePercent });
+					(string voiceName, string voiceLanguage, string selectedVoiceId) =
+						SelectEnglishSapiVoice(voiceType, voice, voiceId);
 					voiceType.InvokeMember(
 						"Speak",
 						System.Reflection.BindingFlags.InvokeMethod,
@@ -948,9 +1120,10 @@ internal sealed class CalculatorForm : Form
 					{
 						spoken = true,
 						characters = safeText.Length,
-						volumePercent = DefaultAlertVolumePercent,
+						volumePercent,
 						voiceName,
-						voiceLanguage
+						voiceLanguage,
+						voiceId = selectedVoiceId
 					});
 				}
 				catch (Exception ex)
@@ -1908,6 +2081,12 @@ internal sealed class CalculatorForm : Form
 			});
 			return new { opened = true };
 		}
+		case "openSpeechSettings":
+			Process.Start(new ProcessStartInfo("ms-settings:speech")
+			{
+				UseShellExecute = true
+			});
+			return new { opened = true, page = "speech" };
 		case "initializeCoupons":
 			return await couponService.InitializeAsync(cancellationToken);
 		case "refreshCoupons":
@@ -1994,14 +2173,20 @@ internal sealed class CalculatorForm : Form
 			ShowDesktopNotification(title, message);
 			return new { shown = true };
 		}
+		case "getEnglishTtsVoices":
+			return GetEnglishTtsVoices();
 		case "playAlarmSound":
-			return PlayAlarmSound();
+			return PlayAlarmSound(ReadAlertVolumePercent(payload));
 		case "speakText":
 		{
 			string text = payload.TryGetProperty("text", out JsonElement textValue)
 				? textValue.GetString() ?? string.Empty
 				: string.Empty;
-			return await SpeakTextAsync(text, cancellationToken);
+			return await SpeakTextAsync(
+				text,
+				ReadAlertVolumePercent(payload),
+				ReadTtsVoiceId(payload),
+				cancellationToken);
 		}
 		case "getGrindMarketPrices":
 		{
@@ -2169,6 +2354,25 @@ internal sealed class CalculatorForm : Form
 		}
 
 		return value.GetBoolean();
+	}
+
+	internal static int ReadAlertVolumePercent(JsonElement payload)
+	{
+		return payload.ValueKind == JsonValueKind.Object
+			&& payload.TryGetProperty("volumePercent", out JsonElement value)
+			&& value.ValueKind == JsonValueKind.Number
+			&& value.TryGetInt32(out int volumePercent)
+				? NormalizeAlertVolumePercent(volumePercent)
+				: DefaultAlertVolumePercent;
+	}
+
+	internal static string ReadTtsVoiceId(JsonElement payload)
+	{
+		return payload.ValueKind == JsonValueKind.Object
+			&& payload.TryGetProperty("voiceId", out JsonElement value)
+			&& value.ValueKind == JsonValueKind.String
+				? NormalizeTtsVoiceId(value.GetString())
+				: string.Empty;
 	}
 
 	private async Task<object> LoadEventsWithBrowserFallbackAsync(bool forceRefresh, CancellationToken cancellationToken)

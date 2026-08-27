@@ -1371,7 +1371,7 @@ if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 7 -or $script -match 
 if ($html.Length -gt 100000) { throw "The HTML shell exceeded the 100 KB performance budget." }
 # The local OCR review flow, reviewed BDO substitution metadata, and background timer
 # scheduler intentionally share this dependency-free script; retain measured headroom.
-if ($script.Length -gt 586000) { throw "The main UI script exceeded the OCR and timer-aware 586 KB performance budget." }
+if ($script.Length -gt 596000) { throw "The main UI script exceeded the notification-audio-aware 596 KB performance budget." }
 if ($css -notmatch 'body\[data-motion="reduced"\]' -or $script -notmatch 'visibilitychange') {
 	throw "Reduced-motion or visibility lifecycle handling is missing."
 }
@@ -1504,29 +1504,50 @@ if ($calculatorSource -notmatch 'mciGetErrorString' -or
 	$calculatorSource -notmatch 'SendMciCommand\(\$"play \{alias\} from 0"\)' -or
 	$calculatorSource -notmatch 'speechThread\.SetApartmentState\(ApartmentState\.STA\)' -or
 	$calculatorSource -notmatch 'new object\[\]\s*\{\s*safeText,\s*0\s*\}' -or
-	$calculatorSource -notmatch 'return await SpeakTextAsync\(text, cancellationToken\)' -or
-	$calculatorSource -notmatch 'return PlayAlarmSound\(\)' -or
+	$calculatorSource -notmatch 'return await SpeakTextAsync\(\s*text,\s*ReadAlertVolumePercent\(payload\),\s*ReadTtsVoiceId\(payload\),\s*cancellationToken\s*\)' -or
+	$calculatorSource -notmatch 'return PlayAlarmSound\(ReadAlertVolumePercent\(payload\)\)' -or
 	$calculatorSource -match 'new object\[\]\s*\{\s*safeText,\s*1\s*\}') {
 	throw "Native Alarm.mp3 or TTS playback lost its completion and error-reporting safeguards."
 }
 if ($calculatorSource -notmatch 'internal const int DefaultAlertVolumePercent\s*=\s*50;' -or
-	$calculatorSource -notmatch 'DefaultAlarmMciVolume\s*=>\s*MciMaximumVolume\s*\*\s*DefaultAlertVolumePercent\s*/\s*100;' -or
-	$calculatorSource -notmatch 'SendMciCommand\(\$"setaudio \{alias\} volume to \{DefaultAlarmMciVolume\}"\)' -or
-	$calculatorSource -notmatch '"Volume",\s*System\.Reflection\.BindingFlags\.SetProperty,\s*null,\s*voice,\s*new object\[\]\s*\{\s*DefaultAlertVolumePercent\s*\}') {
-	throw "Alarm.mp3 and Windows TTS must share the exact 50 percent default output volume."
+	$calculatorSource -notmatch 'NormalizeAlertVolumePercent\(int\? volumePercent\)\s*=>\s*Math\.Clamp\(volumePercent \?\? DefaultAlertVolumePercent,\s*0,\s*100\);' -or
+	$calculatorSource -notmatch 'AlertVolumePercentToMciVolume\(int\? volumePercent\)\s*=>\s*MciMaximumVolume\s*\*\s*NormalizeAlertVolumePercent\(volumePercent\)\s*/\s*100;' -or
+	$calculatorSource -notmatch 'DefaultAlarmMciVolume\s*=>\s*AlertVolumePercentToMciVolume\(DefaultAlertVolumePercent\);' -or
+	$calculatorSource -notmatch 'internal static int ReadAlertVolumePercent\(JsonElement payload\)' -or
+	$calculatorSource -notmatch 'payload\.TryGetProperty\("volumePercent",\s*out JsonElement value\)' -or
+	$calculatorSource -notmatch 'value\.ValueKind\s*==\s*JsonValueKind\.Number' -or
+	$calculatorSource -notmatch 'value\.TryGetInt32\(out int volumePercent\)' -or
+	$calculatorSource -notmatch '\?\s*NormalizeAlertVolumePercent\(volumePercent\)\s*:\s*DefaultAlertVolumePercent' -or
+	$calculatorSource -notmatch 'private object PlayAlarmSound\(int requestedVolumePercent\)\s*\{\s*int volumePercent\s*=\s*NormalizeAlertVolumePercent\(requestedVolumePercent\);' -or
+	$calculatorSource -notmatch 'SendMciCommand\(\$"setaudio \{alias\} volume to \{AlertVolumePercentToMciVolume\(volumePercent\)\}"\)' -or
+	$calculatorSource -notmatch 'private async Task<object> SpeakTextAsync\(\s*string text,\s*int requestedVolumePercent,\s*string\? requestedVoiceId,\s*CancellationToken cancellationToken\s*\)\s*\{\s*int volumePercent\s*=\s*NormalizeAlertVolumePercent\(requestedVolumePercent\);' -or
+	$calculatorSource -notmatch '"Volume",\s*System\.Reflection\.BindingFlags\.SetProperty,\s*null,\s*voice,\s*new object\[\]\s*\{\s*volumePercent\s*\}') {
+	throw "Alarm.mp3 and Windows TTS lost their shared, validated 0-100 notification volume contract."
 }
 if ($calculatorSource -notmatch 'GetEnglishSapiVoicePriority' -or
 	$calculatorSource -notmatch 'SelectEnglishSapiVoiceIndex' -or
-	$calculatorSource -notmatch 'GetVoices' -or
+	$calculatorSource -notmatch 'case "getEnglishTtsVoices":\s*return GetEnglishTtsVoices\(\);' -or
+	$calculatorSource -notmatch 'case "openSpeechSettings":\s*Process\.Start\(new ProcessStartInfo\("ms-settings:speech"\)' -or
+	$calculatorSource -notmatch 'private static object GetEnglishTtsVoices\(\)' -or
+	$calculatorSource -notmatch '"GetVoices",\s*System\.Reflection\.BindingFlags\.InvokeMethod' -or
 	$calculatorSource -notmatch '"Item",\s*System\.Reflection\.BindingFlags\.InvokeMethod' -or
 	$calculatorSource -notmatch 'GetAttribute' -or
 	$calculatorSource -notmatch '"Language"' -or
+	$calculatorSource -notmatch '"Id",\s*System\.Reflection\.BindingFlags\.GetProperty' -or
+	$calculatorSource -notmatch 'GetEnglishSapiVoicePriority\(languageAttribute\)\s*==\s*int\.MaxValue' -or
+	$calculatorSource -notmatch 'string preferredVoiceId\s*=\s*NormalizeTtsVoiceId\(requestedVoiceId\);' -or
+	$calculatorSource -notmatch 'GetEnglishSapiVoicePriority\(languageAttributes\[index\]\)\s*!=\s*int\.MaxValue\s*&&\s*string\.Equals\(\s*NormalizeTtsVoiceId\(voiceIds\[index\]\),\s*preferredVoiceId,\s*StringComparison\.OrdinalIgnoreCase\)' -or
+	$calculatorSource -notmatch 'int selectedPriority\s*=\s*int\.MaxValue;[\s\S]*?int priority\s*=\s*GetEnglishSapiVoicePriority\(languageAttributes\[index\]\);[\s\S]*?selectedIndex\s*=\s*index;' -or
+	$calculatorSource -notmatch 'SelectEnglishSapiVoiceIndex\(languageAttributes,\s*voiceIds,\s*requestedVoiceId\)' -or
+	$calculatorSource -notmatch 'internal static string ReadTtsVoiceId\(JsonElement payload\)' -or
+	$calculatorSource -notmatch 'payload\.TryGetProperty\("voiceId",\s*out JsonElement value\)' -or
+	$calculatorSource -notmatch 'NormalizeTtsVoiceId\(value\.GetString\(\)\)' -or
 	$calculatorSource -notmatch '"Voice",\s*System\.Reflection\.BindingFlags\.SetProperty' -or
 	$calculatorSource -notmatch 'No English Windows text-to-speech voice is installed' -or
-	$calculatorSource -notmatch '\(string voiceName, string voiceLanguage\)\s*=\s*SelectEnglishSapiVoice\(voiceType, voice\)' -or
-	$calculatorSource.IndexOf('SelectEnglishSapiVoice(voiceType, voice)', [System.StringComparison]::Ordinal) -gt
+	$calculatorSource -notmatch '\(string voiceName, string voiceLanguage, string selectedVoiceId\)\s*=\s*SelectEnglishSapiVoice\(voiceType,\s*voice,\s*voiceId\)' -or
+	$calculatorSource.IndexOf('SelectEnglishSapiVoice(voiceType, voice, voiceId)', [System.StringComparison]::Ordinal) -gt
 		$calculatorSource.IndexOf('"Speak",', [System.StringComparison]::Ordinal)) {
-	throw "Windows TTS must select an installed English SAPI voice before speaking and must never fall back to a localized default voice."
+	throw "Windows TTS voice discovery or validated requested-English-voice fallback was lost."
 }
 if ($bossScheduleSource -notmatch 'boss-schedule/eu' -or
 	$bossScheduleSource -notmatch 'AtomicFile\.WriteAllTextAsync' -or

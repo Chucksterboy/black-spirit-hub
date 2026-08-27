@@ -75,17 +75,26 @@
         </div>
         <div class="bossScheduleWrap"><table class="bossScheduleTable"><thead id="bossScheduleHead"></thead><tbody id="bossScheduleBody"><tr><td>Loading schedule...</td></tr></tbody></table></div>
       </article>
-      <aside class="bossNotifyPanel">
-        <h2>Boss Notifications</h2>
-        <p>Choose which bosses can send Windows desktop alerts before and when they spawn.</p>
-        <div class="bossSettingRow"><div><strong>Master notifications</strong><span>Enable or disable all boss alerts</span></div><label class="switch"><input id="bossMasterNotifications" type="checkbox" checked><span class="slider"></span></label></div>
-        <div class="bossSettingRow"><div><strong>First alert</strong><span>Also alerts at every shorter option, ending with Spawning Now</span></div><select id="bossLeadTime" class="settingSelect bossLeadSelect" aria-label="First boss alert time"><option value="0">Spawning Now</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></div>
-        <div class="bossSettingRow"><div><strong>Sound</strong><span>Play Alarm.mp3 with desktop alerts</span></div><label class="switch"><input id="bossSoundEnabled" type="checkbox" checked><span class="slider"></span></label></div>
-        <div class="bossSettingRow"><div><strong>TTS announcements</strong><span>Speak boss alerts with an installed English Windows voice</span></div><label class="switch"><input id="bossTtsEnabled" type="checkbox"><span class="slider"></span></label></div>
-        <div class="bossSettingRow"><div><strong>Guild boss notifications</strong><span>Use the same alert sequence for your weekly guild boss timer</span></div><label class="switch"><input id="guildBossNotifications" type="checkbox"><span class="slider"></span></label></div>
-        <div id="bossToggleList" class="bossToggleList"></div>
-        <div class="bossTestActions"><button id="bossTestTts" type="button">Test TTS</button><button id="bossTestAlarm" type="button">Test Alarm</button></div>
-        <div class="bossNotifyFooter" id="bossNotifyFooter">Settings are saved automatically.</div>
+      <aside id="bossNotifyPanel" class="bossNotifyPanel">
+        <div class="bossNotifyHeader">
+          <h2>Boss Notifications</h2>
+          <button id="bossNotifyCollapse" class="bossNotifyCollapse" type="button" aria-expanded="true" aria-controls="bossNotifyContent" title="Collapse boss notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"></path></svg><span class="srOnly">Collapse boss notifications</span></button>
+        </div>
+        <div id="bossNotifyContent" class="bossNotifyContent">
+          <p>Choose which bosses can send Windows desktop alerts before and when they spawn.</p>
+          <div class="bossSettingRow"><div><strong>Master notifications</strong><span>Enable or disable all boss alerts</span></div><label class="switch"><input id="bossMasterNotifications" type="checkbox" checked><span class="slider"></span></label></div>
+          <div class="bossSettingRow"><div><strong>First alert</strong><span>Also alerts at every shorter option, ending with Spawning Now</span></div><select id="bossLeadTime" class="settingSelect bossLeadSelect" aria-label="First boss alert time"><option value="0">Spawning Now</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></div>
+          <div class="bossSettingRow"><div><strong>Sound</strong><span>Play Alarm.mp3 with desktop alerts</span></div><label class="switch"><input id="bossSoundEnabled" type="checkbox" checked><span class="slider"></span></label></div>
+          <div class="bossSettingRow"><div><strong>TTS announcements</strong><span>Speak boss alerts with an installed English Windows voice</span></div><label class="switch"><input id="bossTtsEnabled" type="checkbox"><span class="slider"></span></label></div>
+          <div class="bossSettingRow"><div><strong>Guild boss notifications</strong><span>Use the same alert sequence for your weekly guild boss timer</span></div><label class="switch"><input id="guildBossNotifications" type="checkbox"><span class="slider"></span></label></div>
+          <div id="bossToggleList" class="bossToggleList"></div>
+          <div class="bossAudioTools">
+            <label class="bossVolumeControl" for="bossNotificationVolume"><span><strong>Notification volume</strong><output id="bossNotificationVolumeValue" for="bossNotificationVolume">50%</output></span><input id="bossNotificationVolume" type="range" min="0" max="100" step="5" value="50" aria-label="Notification volume" aria-valuetext="50 percent"></label>
+            <div class="bossTestActions"><button id="bossTestTts" type="button">Test TTS</button><button id="bossTestAlarm" type="button">Test Alarm</button></div>
+          </div>
+          <div class="bossVoiceControl"><label for="bossTtsVoice"><strong>TTS voice</strong><small>Choose an installed English Windows voice. New voices appear after restarting Black Spirit Hub.</small></label><div class="bossVoiceActions"><select id="bossTtsVoice" class="settingSelect bossVoiceSelect" aria-label="TTS voice" disabled><option value="">Loading Windows voices...</option></select><button id="bossAddVoices" class="bossAddVoices" type="button" title="Open Windows Speech settings">Add voices</button></div></div>
+          <div class="bossNotifyFooter" id="bossNotifyFooter">Settings are saved automatically.</div>
+        </div>
       </aside>
     </section>
   </div>
