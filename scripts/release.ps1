@@ -231,6 +231,7 @@ function Assert-AppPublishFiles {
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.html",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+		"NavigationAssets\nav-icons.svg",
 		"gold-coins.png",
 		"Assets\AppIcon\app-icon.ico",
 		"Assets\AppIcon\tray-icon.ico",

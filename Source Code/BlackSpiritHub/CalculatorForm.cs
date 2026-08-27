@@ -23,12 +23,62 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "rounded-navigation-themes-20260825";
+	private const string UiRevision = "cartographers-brass-compact-navigation-20260827b";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
 	private sealed class CTaskbarList
 	{
+	}
+
+	private sealed class WebViewResponseStream(Stream source) : Stream
+	{
+		private Stream? inner = source ?? throw new ArgumentNullException(nameof(source));
+
+		private Stream Active => inner ?? throw new ObjectDisposedException(nameof(WebViewResponseStream));
+
+		public override bool CanRead => inner?.CanRead == true;
+		public override bool CanSeek => inner?.CanSeek == true;
+		public override bool CanWrite => false;
+		public override long Length => Active.Length;
+		public override long Position
+		{
+			get => Active.Position;
+			set => Active.Position = value;
+		}
+
+		public override void Flush()
+		{
+		}
+
+		public override int Read(byte[] buffer, int offset, int count)
+		{
+			try
+			{
+				int read = Active.Read(buffer, offset, count);
+				if (read == 0)
+					Dispose();
+				return read;
+			}
+			catch
+			{
+				Dispose();
+				throw;
+			}
+		}
+
+		public override long Seek(long offset, SeekOrigin origin) => Active.Seek(offset, origin);
+
+		public override void SetLength(long value) => throw new NotSupportedException();
+
+		public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+				Interlocked.Exchange(ref inner, null)?.Dispose();
+			base.Dispose(disposing);
+		}
 	}
 
 	[ComImport]
@@ -1114,9 +1164,33 @@ internal sealed class CalculatorForm : Form
 		ConfigureMainWebView(core);
 		logger.Info($"WebView generation {generation}: controller ready.");
 
+		string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current + "-" + UiRevision)}";
+		ulong? startupNavigationId = null;
 		TaskCompletionSource<bool> navigationReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		void NavigationStarting(object? _, CoreWebView2NavigationStartingEventArgs args)
+		{
+			if (Uri.TryCreate(args.Uri, UriKind.Absolute, out Uri? candidate)
+				&& candidate.Scheme == Uri.UriSchemeHttps
+				&& candidate.Host.Equals(LocalAppHost, StringComparison.OrdinalIgnoreCase)
+				&& candidate.AbsolutePath.Equals(
+					"/" + Path.GetFileName(paths.HtmlPath),
+					StringComparison.OrdinalIgnoreCase))
+			{
+				startupNavigationId = args.NavigationId;
+			}
+		}
 		void NavigationCompleted(object? _, CoreWebView2NavigationCompletedEventArgs args)
 		{
+			// WebView2 can finish a pending about:blank navigation after the controller
+			// is ready. Only the completion paired with our local interface request may
+			// decide whether startup succeeded or failed.
+			if (!startupNavigationId.HasValue || args.NavigationId != startupNavigationId.Value)
+			{
+				logger.Warn(
+					$"WebView generation {generation}: ignored unrelated startup navigation " +
+					$"completion {args.NavigationId} ({args.WebErrorStatus}).");
+				return;
+			}
 			if (args.IsSuccess)
 				navigationReady.TrySetResult(true);
 			else
@@ -1124,10 +1198,10 @@ internal sealed class CalculatorForm : Form
 					new InvalidOperationException($"The interface could not be loaded ({args.WebErrorStatus})."));
 		}
 
+		core.NavigationStarting += NavigationStarting;
 		core.NavigationCompleted += NavigationCompleted;
 		try
 		{
-			string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current + "-" + UiRevision)}";
 			logger.Info($"WebView generation {generation}: navigating local interface.");
 			core.Navigate(url);
 			await navigationReady.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
@@ -1139,6 +1213,7 @@ internal sealed class CalculatorForm : Form
 		}
 		finally
 		{
+			try { core.NavigationStarting -= NavigationStarting; } catch { }
 			try { core.NavigationCompleted -= NavigationCompleted; } catch { }
 		}
 
@@ -1152,16 +1227,18 @@ internal sealed class CalculatorForm : Form
 
 	private void ConfigureMainWebView(CoreWebView2 core)
 	{
-		core.SetVirtualHostNameToFolderMapping(LocalAppHost, paths.Root, CoreWebView2HostResourceAccessKind.DenyCors);
 		string recipeBookAssets = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
 		if (!Directory.Exists(recipeBookAssets))
 		{
 			throw new DirectoryNotFoundException("The offline Recipe Book assets are missing.");
 		}
-		core.SetVirtualHostNameToFolderMapping(
-			RecipeBookHost,
-			recipeBookAssets,
-			CoreWebView2HostResourceAccessKind.Allow);
+		core.AddWebResourceRequestedFilter(
+			$"https://{LocalAppHost}/*",
+			CoreWebView2WebResourceContext.All);
+		core.AddWebResourceRequestedFilter(
+			$"https://{RecipeBookHost}/*",
+			CoreWebView2WebResourceContext.All);
+		core.WebResourceRequested += OnLocalWebResourceRequested;
 		core.Settings.AreDevToolsEnabled = false;
 		core.Settings.AreDefaultContextMenusEnabled = false;
 		core.Settings.IsStatusBarEnabled = false;
@@ -1180,6 +1257,7 @@ internal sealed class CalculatorForm : Form
 			CoreWebView2? core = target.CoreWebView2;
 			if (core is null)
 				return;
+			core.WebResourceRequested -= OnLocalWebResourceRequested;
 			core.NavigationStarting -= OnMainNavigationStarting;
 			core.NewWindowRequested -= OnMainNewWindowRequested;
 			core.PermissionRequested -= OnMainPermissionRequested;
@@ -1192,6 +1270,138 @@ internal sealed class CalculatorForm : Form
 			// A failed browser process can close the controller before handlers are detached.
 		}
 	}
+
+	private void OnLocalWebResourceRequested(
+		object? sender,
+		CoreWebView2WebResourceRequestedEventArgs args)
+	{
+		if (sender is not CoreWebView2 core)
+			return;
+
+		if (!string.Equals(args.Request.Method, "GET", StringComparison.OrdinalIgnoreCase)
+			&& !string.Equals(args.Request.Method, "HEAD", StringComparison.OrdinalIgnoreCase))
+		{
+			args.Response = core.Environment.CreateWebResourceResponse(
+				Stream.Null,
+				405,
+				"Method Not Allowed",
+				"Allow: GET, HEAD\r\nCache-Control: no-store");
+			return;
+		}
+
+		if (!TryResolveLocalWebResource(args.Request.Uri, out string resourcePath, out bool recipeBook)
+			|| !File.Exists(resourcePath))
+		{
+			args.Response = core.Environment.CreateWebResourceResponse(
+				Stream.Null,
+				404,
+				"Not Found",
+				"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store");
+			return;
+		}
+
+		try
+		{
+			FileInfo resource = new(resourcePath);
+			Stream content = string.Equals(args.Request.Method, "HEAD", StringComparison.OrdinalIgnoreCase)
+				? Stream.Null
+				: new WebViewResponseStream(new FileStream(
+					resourcePath,
+					FileMode.Open,
+					FileAccess.Read,
+					FileShare.ReadWrite | FileShare.Delete,
+					64 * 1024,
+					FileOptions.SequentialScan));
+			string headers = $"Content-Type: {LocalWebResourceContentType(resource.Extension)}\r\n"
+				+ $"Content-Length: {resource.Length}\r\n"
+				+ "Cache-Control: no-cache\r\n"
+				+ "X-Content-Type-Options: nosniff";
+			if (recipeBook)
+				headers += $"\r\nAccess-Control-Allow-Origin: https://{LocalAppHost}\r\nVary: Origin";
+			args.Response = core.Environment.CreateWebResourceResponse(content, 200, "OK", headers);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			logger.Warn($"Local interface resource failed: {resourcePath}: {exception.Message}");
+			args.Response = core.Environment.CreateWebResourceResponse(
+				Stream.Null,
+				500,
+				"Internal Server Error",
+				"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store");
+		}
+	}
+
+	private bool TryResolveLocalWebResource(
+		string requestUri,
+		out string resourcePath,
+		out bool recipeBook)
+	{
+		resourcePath = string.Empty;
+		recipeBook = false;
+		if (!Uri.TryCreate(requestUri, UriKind.Absolute, out Uri? uri)
+			|| uri.Scheme != Uri.UriSchemeHttps)
+		{
+			return false;
+		}
+
+		string root;
+		if (uri.Host.Equals(LocalAppHost, StringComparison.OrdinalIgnoreCase))
+		{
+			root = paths.Root;
+		}
+		else if (uri.Host.Equals(RecipeBookHost, StringComparison.OrdinalIgnoreCase))
+		{
+			root = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
+			recipeBook = true;
+		}
+		else
+		{
+			return false;
+		}
+
+		try
+		{
+			string relativePath = Uri.UnescapeDataString(uri.AbsolutePath)
+				.TrimStart('/')
+				.Replace('/', Path.DirectorySeparatorChar);
+			if (string.IsNullOrWhiteSpace(relativePath) || relativePath.IndexOf('\0') >= 0)
+				return false;
+
+			string fullRoot = Path.GetFullPath(root)
+				.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+			string rootPrefix = fullRoot + Path.DirectorySeparatorChar;
+			string candidate = Path.GetFullPath(Path.Combine(fullRoot, relativePath));
+			if (!candidate.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+				return false;
+
+			resourcePath = candidate;
+			return true;
+		}
+		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+		{
+			return false;
+		}
+	}
+
+	private static string LocalWebResourceContentType(string extension) => extension.ToLowerInvariant() switch
+	{
+		".html" => "text/html; charset=utf-8",
+		".css" => "text/css; charset=utf-8",
+		".js" => "text/javascript; charset=utf-8",
+		".json" => "application/json; charset=utf-8",
+		".svg" => "image/svg+xml",
+		".png" => "image/png",
+		".jpg" or ".jpeg" => "image/jpeg",
+		".webp" => "image/webp",
+		".gif" => "image/gif",
+		".ico" => "image/x-icon",
+		".mp3" => "audio/mpeg",
+		".ttf" => "font/ttf",
+		".otf" => "font/otf",
+		".woff" => "font/woff",
+		".woff2" => "font/woff2",
+		_ => "application/octet-stream"
+	};
 
 	private void OnMainNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs args)
 	{

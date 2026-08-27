@@ -819,6 +819,11 @@ internal static class Program
 		CopyFileIfChanged(htmlSource, paths.HtmlPath);
 		CopyFileIfChanged(cssSource, cssTarget);
 		CopyFileIfChanged(scriptSource, scriptTarget);
+		// The navigation sprite is deliberately shared by every theme. Keep it
+		// content-aware so same-version test builds cannot retain stale glyphs.
+		CopyDirectoryIfPresent(
+			Path.Combine(baseDirectory, "NavigationAssets"),
+			Path.Combine(paths.Root, "NavigationAssets"));
 		CopyDirectoryIfPresent(
 			Path.Combine(baseDirectory, "Assets", "AppIcon"),
 			Path.Combine(paths.Root, "Assets", "AppIcon"));

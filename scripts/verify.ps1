@@ -629,6 +629,25 @@ finally {
 $html = Get-Content -LiteralPath $htmlPath -Raw
 $css = Get-Content -LiteralPath $cssPath -Raw
 $script = Get-Content -LiteralPath $scriptPath -Raw
+$projectSource = Get-Content -LiteralPath $project -Raw
+
+$navigationMarkupMatch = [regex]::Match($html, '(?s)<nav class="appNav"[^>]*>.*?</nav>')
+$expectedNavigationViews = @(
+	"homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView", "settingsView",
+	"playerGuildView", "grindTrackerView", "resetTimersView", "eventsView", "bracketsView", "masteryBracketsView",
+	"recipeBookView", "dehkiaFuelView", "lightstoneSetsView"
+)
+$navigationViews = if ($navigationMarkupMatch.Success) {
+	[regex]::Matches($navigationMarkupMatch.Value, '<button\b[^>]*\bdata-app-view="([^"]+)"') |
+		ForEach-Object { $_.Groups[1].Value }
+} else { @() }
+if (!$navigationMarkupMatch.Success -or
+	($navigationViews -join "|") -ne ($expectedNavigationViews -join "|") -or
+	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 2 -or
+	$navigationMarkupMatch.Value -notmatch '(?s)data-app-view="settingsView".*?<span class="navRowBreak" aria-hidden="true"></span>\s*<button[^>]*data-app-view="playerGuildView"' -or
+	$navigationMarkupMatch.Value -notmatch '(?s)data-app-view="masteryBracketsView".*?<span class="navRowBreak" aria-hidden="true"></span>\s*<button[^>]*data-app-view="recipeBookView"') {
+	throw "The Cartographer navigation must retain its exact 7/6/3 button order."
+}
 
 if ($html -notmatch '(?s)<span class="navRowBreak"[^>]*></span>\s*<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?data-app-view="grindTrackerView"' -or
 	$html -notmatch 'id="playerGuildSearchMode"' -or
@@ -835,10 +854,10 @@ if ($css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.wi
 	throw "The non-custom title bar must keep its window controls in the far-right grid column."
 }
 if ($html -notmatch '<button\s+class="navPinButton"\s+id="navigationPinButton"[^>]+aria-pressed="false"[^>]+aria-label="Keep navigation visible"' -or
-	$css -notmatch '(?s)\.navPinButton\s*\{[^}]*position:\s*absolute;[^}]*right:\s*14px;[^}]*bottom:\s*6px;' -or
+	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton\s*\{[^}]*right:\s*14px!important;[^}]*bottom:\s*6px!important;[^}]*width:\s*23px!important;[^}]*height:\s*23px!important;' -or
 	$css -notmatch '(?s)\.navPinButton:focus-visible\s*\{[^}]*outline:' -or
 	$css -notmatch '(?s)\.navPinButton\[aria-pressed="true"\]::before\s*\{[^}]*mask:' -or
-	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.navFrame,\s*body\[data-style="custom"\]\s+\.navFrame\s*\{[^}]*padding-bottom:\s*36px!important;' -or
+	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*padding:\s*12px\s+12px\s+24px!important;' -or
 	$script -notmatch 'const\s+NAVIGATION_PIN_SETTING="navigationPinned";' -or
 	$script -notmatch 'readSetting\(NAVIGATION_PIN_SETTING,false\)===true' -or
 	$script -notmatch 'persistSetting\(NAVIGATION_PIN_SETTING,navigationPinned\)' -or
@@ -1411,14 +1430,23 @@ if ($html -notmatch '<button class="homeExternalLink" data-open-url="https://www
 	$calculatorSource -notmatch '"www\.blackdesertfoundry\.com"') {
 	throw "The English Labs dashboard link or its native external-host permission is missing."
 }
-if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
-	throw "GrindTracker, MasteryIcons, and DehkiaFuel assets must self-heal before the version-stamp early return."
+if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "NavigationAssets"\),\s*Path\.Combine\(paths\.Root, "NavigationAssets"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
+	throw "NavigationAssets, GrindTracker, MasteryIcons, and DehkiaFuel must self-heal before the version-stamp early return."
 }
-if ($calculatorSource -notmatch 'private const string RecipeBookHost = "recipebook\.bdo\.local";' -or
-	$calculatorSource -notmatch '(?s)SetVirtualHostNameToFolderMapping\(\s*RecipeBookHost,\s*recipeBookAssets,\s*CoreWebView2HostResourceAccessKind\.Allow\)' -or
+if ($projectSource -notmatch '<None Update="NavigationAssets\\\*\*\\\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />') {
+	throw "The shared navigation SVG sprite is not included in build and publish output."
+}
+if ($calculatorSource -notmatch 'private const string LocalAppHost = "app\.bdo\.local";' -or
+	$calculatorSource -notmatch 'private const string RecipeBookHost = "recipebook\.bdo\.local";' -or
+	$calculatorSource -notmatch '(?s)AddWebResourceRequestedFilter\(\s*\$"https://\{LocalAppHost\}/\*",\s*CoreWebView2WebResourceContext\.All\)' -or
+	$calculatorSource -notmatch '(?s)AddWebResourceRequestedFilter\(\s*\$"https://\{RecipeBookHost\}/\*",\s*CoreWebView2WebResourceContext\.All\)' -or
+	$calculatorSource -notmatch 'core\.WebResourceRequested \+= OnLocalWebResourceRequested;' -or
+	$calculatorSource -notmatch '(?s)private bool TryResolveLocalWebResource\(.*?candidate\.StartsWith\(rootPrefix, StringComparison\.OrdinalIgnoreCase\)' -or
+	$calculatorSource -notmatch 'Access-Control-Allow-Origin: https://\{LocalAppHost\}' -or
+	$calculatorSource -match 'SetVirtualHostNameToFolderMapping|--allow-file-access-from-files' -or
 	$programSource -notmatch '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets"\),\s*Path\.Combine\(paths\.Root, "Assets"\),\s*"RecipeBook"\);' -or
 	$programSource -match '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "RecipeBook"\)') {
-	throw "Recipe Book must be served from one installed offline bundle without a duplicate per-user asset copy."
+	throw "Local UI and Recipe Book resources must use the contained HTTPS resource handler without duplicate per-user assets."
 }
 if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore' -or
 	$programSource -match 'AppStateStore' -or
@@ -1761,10 +1789,11 @@ if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px
 	$css -notmatch 'background-position:calc\(100% - 18px\) 50%,calc\(100% - 12px\) 50%,0 0!important') {
 	throw "The dashboard lead-time selector can shrink and clip multi-digit minute labels."
 }
-if ($css -notmatch 'body\[data-style\] \.navFrame \.navButton\{\s*grid-template-columns:36px minmax\(0,1fr\) 36px!important;\s*column-gap:0!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.navButton \.navLabel\{[^}]*grid-column:1 / -1!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.navButton \.navLabel\{[^}]*padding-inline:36px!important;') {
-	throw "Navigation labels can drift away from the button and ornament centerline."
+if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]\{[^}]*grid-template-columns:40px minmax\(0,1fr\)!important;[^}]*height:52px!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navIcon\{[^}]*width:40px!important;[^}]*height:40px!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*grid-column:2!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*justify-content:flex-start!important;') {
+	throw "Cartographer navigation labels can drift away from their shared medallions."
 }
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
@@ -1776,6 +1805,10 @@ $releaseScript = Get-Content -LiteralPath $releaseScriptPath -Raw
 if ($releaseScript -notmatch 'Assets\\Alarm\.mp3' -or
 	$installerSource -notmatch 'Source:\s*"\{#AppFilesDir\}\\\*";[^\r\n]*recursesubdirs') {
 	throw "Release or installer validation no longer requires Alarm.mp3."
+}
+if ($releaseScript -notmatch 'NavigationAssets\\nav-icons\.svg' -or
+	$nativeInstallerBuildScript -notmatch 'NavigationAssets\\nav-icons\.svg') {
+	throw "Application publish and installer validation must require the shared navigation sprite."
 }
 if ($releaseScript -notmatch 'Assets\\RecipeBook\\recipes\.json' -or
 	$releaseScript -notmatch 'Assets\\RecipeBook\\manifest\.json' -or

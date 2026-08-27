@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 import vm from "node:vm";
 
 const scriptPath = process.argv[2];
@@ -48,7 +49,7 @@ for (const style of expectedInterfaceStyles.slice(1)) {
   );
 }
 
-const navigationButtonSelector = String.raw`body\[data-style\]\s+\.navFrame\s+\.appNav\s*>\s*\.navButton`;
+const navigationButtonSelector = String.raw`body\[data-style\]\s+\.navFrame\s+\.appNav\s*>\s*\.navButton\[data-app-view\]`;
 
 function finalNavigationRule(suffix, description) {
   const matches = [...stylesheet.matchAll(new RegExp(
@@ -68,32 +69,35 @@ function finalDeclaration(rule, property, expected, description) {
   ))];
   const value = matches.at(-1)?.[1].trim();
   assert.ok(value, `${description} must explicitly set ${property}.`);
-  assert.match(value, expected, `${description} must keep ${property} free of chevrons and decorative lines.`);
+  assert.match(value, expected, `${description} must retain the Cartographer's Brass ${property} contract.`);
   return value;
 }
 
 const normalNavigationRule = finalNavigationRule("", "Normal navigation buttons");
 for (const [property, value] of [
-  ["border-radius", /^8px\s*!important$/],
+  ["grid-template-columns", /^40px minmax\(0,1fr\)\s*!important$/],
+  ["height", /^52px\s*!important$/],
+  ["border-radius", /^5px\s*!important$/],
   ["clip-path", /^none\s*!important$/],
   ["mask", /^none\s*!important$/],
   ["-webkit-mask", /^none\s*!important$/],
-  ["background-image", /^none\s*!important$/],
-  ["box-shadow", /^none\s*!important$/],
+  ["background-image", /linear-gradient\(/],
+  ["box-shadow", /inset/],
 ]) {
   finalDeclaration(normalNavigationRule, property, value, "Normal navigation buttons");
 }
 finalDeclaration(
   normalNavigationRule,
   "background-color",
-  /var\(--(?:surface2|surface|field-bg|bg0|a1)\)/,
+  /var\(--nav-card-bottom\)/,
   "Normal navigation buttons",
 );
-finalDeclaration(normalNavigationRule, "border", /var\(--(?:a1|border)\)/, "Normal navigation buttons");
-assert.doesNotMatch(
+finalDeclaration(normalNavigationRule, "border", /var\(--nav-accent-deep\)/, "Normal navigation buttons");
+finalDeclaration(normalNavigationRule, "font", /700 15px\/1\.03 Georgia/, "Normal navigation buttons");
+assert.match(
   normalNavigationRule.body,
-  /(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(|--asset-nav(?:-hover|-active)?/,
-  "Normal navigation buttons must not reintroduce striped artwork or decorative gradients.",
+  /overflow\s*:\s*hidden\s*!important/,
+  "Normal navigation buttons must contain their text-safe map artwork.",
 );
 
 for (const [suffix, assetSuffix, description] of [
@@ -101,53 +105,114 @@ for (const [suffix, assetSuffix, description] of [
   ["\\.active", "-active", "Active navigation buttons"],
 ]) {
   const stateRule = finalNavigationRule(suffix, description);
-  finalDeclaration(stateRule, "background-image", /^none\s*!important$/, description);
+  finalDeclaration(stateRule, "background-image", /(?:linear|radial)-gradient\(/, description);
   finalDeclaration(
     stateRule,
     "background-color",
-    /var\(--(?:surface2|surface|field-bg|bg0|a1)\)/,
+    /var\(--nav-(?:card-bottom|accent)\)/,
     description,
   );
-  finalDeclaration(stateRule, "border-color", /var\(--(?:a1|border)\)/, description);
-  assert.doesNotMatch(
-    stateRule.body,
-    /(?:repeating-)?(?:linear|radial|conic)-gradient\s*\(|--asset-nav(?:-hover|-active)?/,
-    `${description} must not reintroduce internal decorative lines.`,
-  );
+  finalDeclaration(stateRule, "border-color", /var\(--nav-accent/, description);
   const previousArtwork = stylesheet.lastIndexOf(`background-image:var(--asset-nav${assetSuffix})`);
   assert.ok(
     previousArtwork < stateRule.index,
-    `${description} must override the earlier chevron-shaped theme artwork.`,
+    `${description} must override the obsolete theme-specific raster plaque.`,
   );
 }
 assert.ok(
   stylesheet.lastIndexOf("background-image:var(--asset-nav)!") < normalNavigationRule.index,
-  "Normal navigation buttons must override the earlier chevron-shaped theme artwork.",
+  "Normal navigation buttons must override the obsolete theme-specific raster plaque.",
 );
 
-const pseudoElementRules = [...stylesheet.matchAll(new RegExp(
-  `${navigationButtonSelector}::before\\s*,\\s*${navigationButtonSelector}::after\\s*\\{([^}]*)\\}`,
-  "g",
-))];
-const pseudoElementRule = pseudoElementRules.at(-1);
-assert.ok(pseudoElementRule, "Decorative pseudo-elements on navigation buttons must be disabled universally.");
-const navigationDecorationRule = { body: pseudoElementRule[1], index: pseudoElementRule.index };
-finalDeclaration(navigationDecorationRule, "content", /^none\s*!important$/, "Navigation button decorations");
-finalDeclaration(navigationDecorationRule, "display", /^none\s*!important$/, "Navigation button decorations");
+const insetRule = finalNavigationRule("::before", "Navigation button inset");
+finalDeclaration(insetRule, "content", /^""\s*!important$/, "Navigation button inset");
+finalDeclaration(insetRule, "display", /^block\s*!important$/, "Navigation button inset");
+finalDeclaration(insetRule, "border", /var\(--nav-accent\)/, "Navigation button inset");
+const mapRule = finalNavigationRule("::after", "Navigation cartography artwork");
+finalDeclaration(mapRule, "content", /^""\s*!important$/, "Navigation cartography artwork");
+finalDeclaration(mapRule, "display", /^block\s*!important$/, "Navigation cartography artwork");
+finalDeclaration(mapRule, "background", /radial-gradient\(/, "Navigation cartography artwork");
+finalDeclaration(mapRule, "mask-image", /linear-gradient\(90deg,transparent 0 64%/, "Navigation cartography artwork");
+finalDeclaration(mapRule, "opacity", /^\.88\s*!important$/, "Navigation cartography artwork");
 assert.ok(
-  navigationDecorationRule.index > normalNavigationRule.index,
-  "Decorative navigation-button pseudo-elements must remain disabled by the final theme override.",
+  mapRule.index > normalNavigationRule.index,
+  "Text-safe cartography must be part of the final shared navigation treatment.",
 );
 
-for (const view of ["marketView", "couponsView", "playerGuildView", "recipeBookView"]) {
-  const iconRules = [...stylesheet.matchAll(new RegExp(
-    `\\.navButton\\[data-app-view="${view}"\\]\\s+\\.navIcon::before\\s*\\{([^}]*)\\}`,
-    "g",
-  ))];
-  assert.ok(
-    iconRules.some((rule) => /(?:^|;)\s*(?:-webkit-)?mask\s*:\s*url\(/.test(rule[1])),
-    `The ${view} navigation icon must retain its existing masked glyph.`,
+const expectedIcons = new Map([
+  ["homeView", "nav-icon-home"],
+  ["calculatorView", "nav-icon-trade-distance"],
+  ["marketView", "nav-icon-market-analytics"],
+  ["portraitView", "nav-icon-portrait-replacer"],
+  ["fontChangerView", "nav-icon-font-changer"],
+  ["couponsView", "nav-icon-coupons"],
+  ["settingsView", "nav-icon-settings"],
+  ["playerGuildView", "nav-icon-player-guild-search"],
+  ["grindTrackerView", "nav-icon-grind-zones"],
+  ["resetTimersView", "nav-icon-timers"],
+  ["eventsView", "nav-icon-events"],
+  ["bracketsView", "nav-icon-brackets"],
+  ["masteryBracketsView", "nav-icon-mastery-brackets"],
+  ["recipeBookView", "nav-icon-recipe-book"],
+  ["dehkiaFuelView", "nav-icon-dehkia-fuel"],
+  ["lightstoneSetsView", "nav-icon-lightstone-sets"],
+]);
+assert.equal(
+  [...markup.matchAll(/<span class="navRowBreak" aria-hidden="true"><\/span>/g)].length,
+  2,
+  "Desktop navigation must retain explicit 7/6/3 row breaks.",
+);
+const navigationSpritePath = path.join(path.dirname(scriptPath), "NavigationAssets", "nav-icons.svg");
+assert.ok(fs.existsSync(navigationSpritePath), "The shared navigation SVG sprite must ship beside the UI resources.");
+const navigationSprite = fs.readFileSync(navigationSpritePath, "utf8");
+for (const [view, iconId] of expectedIcons) {
+  assert.match(
+    markup,
+    new RegExp(`<button\\b(?=[^>]*\\bdata-app-view="${view}")[^>]*>(?:(?!<\\/button>)[\\s\\S])*?<use\\s+href="NavigationAssets/nav-icons\\.svg\\?v=cartographers-brass-20260827#${iconId}"`),
+    `The ${view} button must use its immutable shared vector glyph.`,
   );
+  assert.match(
+    navigationSprite,
+    new RegExp(`<symbol\\s+id="${iconId}"\\s+viewBox="0 0 64 64">`),
+    `The shared sprite must define ${iconId} on the common 64px geometry.`,
+  );
+}
+assert.equal(
+  [...navigationSprite.matchAll(/<symbol\s+id="nav-icon-[^"]+"/g)].length,
+  expectedIcons.size,
+  "The shared sprite must contain exactly the 16 live navigation glyphs.",
+);
+assert.doesNotMatch(navigationSprite, /#[0-9a-f]{3,8}|rgb\(|hsl\(/i, "Navigation glyph geometry must not hardcode theme colors.");
+assert.doesNotMatch(
+  navigationSprite,
+  /\b(?:fill|stroke)="(?!currentColor"|none")[^"]+"/i,
+  "Navigation glyph paint must be limited to currentColor or none so themes cannot alter its inner design.",
+);
+assert.match(stylesheet, /\.navGlyph\{[^}]*color:inherit!important/, "Every navigation glyph must inherit the active theme palette.");
+assert.match(
+  stylesheet,
+  /body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navIcon\{[^}]*width:40px!important;[^}]*height:40px!important;/,
+  "Desktop navigation medallions must use the compact 40px geometry.",
+);
+assert.match(
+  stylesheet,
+  /body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\] \.navGlyph\{[^}]*width:40px!important;[^}]*height:40px!important;/,
+  "Desktop navigation glyphs must use the compact 40px geometry.",
+);
+const narrowNavigationCss = stylesheet.slice(stylesheet.lastIndexOf("@media(max-width:720px){"));
+for (const expected of [
+  /grid-template-columns:36px minmax\(0,1fr\)!important/,
+  /height:48px!important/,
+  /font-size:14px!important/,
+  /\.navGlyph\{width:36px!important;height:36px!important\}/,
+]) {
+  assert.match(narrowNavigationCss, expected, "Narrow-window navigation must remain smaller than the compact desktop geometry.");
+}
+for (const style of expectedInterfaceStyles.slice(1)) {
+  const rules = [...stylesheet.matchAll(new RegExp(`body\\[data-style="${style}"\\]\\s+\\.navFrame\\{([^}]*)\\}`, "g"))];
+  const finalRule = rules.at(-1)?.[1] ?? "";
+  assert.match(finalRule, /--nav-accent:/, `The ${style} theme must provide its Cartographer's Brass color.`);
+  assert.doesNotMatch(finalRule, /(?:width|height|padding|margin|border-radius|grid-template|font)\s*:/, `The ${style} theme may change navigation colors, not geometry.`);
 }
 
 assert.match(

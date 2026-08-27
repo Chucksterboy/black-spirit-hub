@@ -14,6 +14,8 @@ const cssPath=path.join(sourceDirectory,"BlackSpiritHub.Resources.Black_Spirit_H
 const js=fs.readFileSync(jsPath,"utf8");
 const html=fs.readFileSync(htmlPath,"utf8");
 const css=fs.readFileSync(cssPath,"utf8");
+const navigationSpritePath=path.join(sourceDirectory,"NavigationAssets","nav-icons.svg");
+const navigationSprite=fs.readFileSync(navigationSpritePath,"utf8");
 
 const startMarker="/* RECIPE_BOOK_CORE_START */";
 const endMarker="/* RECIPE_BOOK_CORE_END */";
@@ -487,7 +489,8 @@ assert.match(js,/fetch\(`\$\{RECIPE_BOOK_ASSET_ROOT\}recipes\.json`/,"catalog mu
 assert.match(js,/if\(viewId === "recipeBookView"\) initializeRecipeBook\(\)/,"view dispatcher must initialize Recipe Book lazily");
 assert.match(js,/recipeBookView:"Assets\/CinematicBackgrounds\//,"Recipe Book must have a cinematic background hook");
 assert.match(js,/loading="lazy" decoding="async"/,"recipe and ingredient images must load lazily");
-assert.match(css,/data-app-view="recipeBookView"[\s\S]*?mask:/,"navigation must use a book icon");
+assert.match(html,/data-app-view="recipeBookView"[^>]*>(?:(?!<\/button>)[\s\S])*?<use href="NavigationAssets\/nav-icons\.svg\?v=cartographers-brass-20260827#nav-icon-recipe-book"/,"navigation must use the shared book glyph");
+assert.match(navigationSprite,/<symbol id="nav-icon-recipe-book" viewBox="0 0 64 64">/,"the shared navigation sprite must define the book glyph");
 assert.match(css,/\.recipeBookGrid\{[^}]*grid-template-columns:repeat\(3[^}]*align-items:stretch/,"desktop result rows must stretch every card to an equal height");
 assert.match(css,/\.recipeBookCard\{[^}]*width:100%;height:100%[^}]*display:flex;flex-direction:column/,"each Recipe Book card must fill its equal-height grid cell");
 assert.match(css,/\.recipeBookCard>ul\{[^}]*flex:1 1 auto[^}]*align-content:start/,"short ingredient lists must fill their card without stretching individual ingredient rows");

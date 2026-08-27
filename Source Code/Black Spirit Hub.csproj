@@ -21,6 +21,7 @@
     <EmbeddedResource Remove="InstallerSource\**\*" />
     <None Remove="InstallerSource\**\*" />
     <None Update="Assets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="NavigationAssets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="ThemeAssets\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="BlackSpiritHub.Resources.Black_Spirit_Hub.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="BlackSpiritHub.Resources.Black_Spirit_Hub.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -4407,30 +4407,338 @@ body[data-motion="reduced"] .recipeBookItemTooltip{transition:none!important}
 @media(max-width:760px){.grindGuideHead{align-items:flex-start;flex-direction:column}.grindMechanicGrid{grid-template-columns:1fr}.grindRotationGrid{grid-template-columns:1fr}.grindGuideLightbox{padding:10px}.grindGuideLightboxDialog{width:calc(100vw - 20px);max-height:calc(100vh - 20px)}}
 @media(prefers-reduced-motion:reduce){.grindRotationCard{transition:none}.grindRotationCard:hover{transform:none}}
 
-/* Keep every theme's navigation clean while preserving its own accent colors and icons. */
-body[data-style] .navFrame .appNav>.navButton{
-  border:1px solid color-mix(in srgb,var(--a1) 54%,var(--border))!important;
+/* Cartographer's Brass navigation. Geometry and glyph artwork are immutable
+   across interface presets; the theme selectors below change color only. */
+body[data-style] .navFrame{
+  --nav-accent:var(--a1);
+  --nav-accent-bright:color-mix(in srgb,var(--nav-accent) 70%,#fff);
+  --nav-accent-deep:color-mix(in srgb,var(--nav-accent) 58%,#2a1d0b);
+  --nav-panel-top:color-mix(in srgb,var(--bg0) 28%,#151511);
+  --nav-panel-bottom:color-mix(in srgb,var(--bg0) 18%,#070806);
+  --nav-card-top:color-mix(in srgb,var(--surface2) 24%,#1a1915);
+  --nav-card-bottom:color-mix(in srgb,var(--bg0) 18%,#0a0b09);
+  --nav-label:color-mix(in srgb,var(--text) 82%,#f4e5c0);
+  --nav-pattern:color-mix(in srgb,var(--nav-accent) 72%,#9d7a38);
+}
+body[data-style="fantasy"] .navFrame{--nav-accent:#c8a95d;--nav-label:#efe1bf}
+body[data-style="cyber"] .navFrame{--nav-accent:#43d8e8;--nav-label:#dffbff}
+body[data-style="cinematic"] .navFrame{--nav-accent:#b68b55;--nav-label:#eee7dc}
+body[data-style="crystal"] .navFrame{--nav-accent:#9cecf5;--nav-label:#effcff}
+body[data-style="tactical"] .navFrame{--nav-accent:#d9a63b;--nav-label:#edf2cf}
+body[data-style="retro"] .navFrame{--nav-accent:#32cfe0;--nav-label:#c9f7fb}
+body[data-style="abyssal"] .navFrame{--nav-accent:#45cfd1;--nav-label:#d9f5f2}
+body[data-style="royal"] .navFrame{--nav-accent:#d4aa51;--nav-label:#f3e3bd;--nav-card-top:#251013;--nav-card-bottom:#10080a}
+body[data-style="paper"] .navFrame{--nav-accent:#b88747;--nav-label:#f0dfbd;--nav-panel-top:#231d15;--nav-panel-bottom:#0f0d09;--nav-card-top:#2b241b;--nav-card-bottom:#15110d}
+body[data-style="foundry"] .navFrame{--nav-accent:#d98136;--nav-label:#f0dcc3;--nav-card-top:#251a13;--nav-card-bottom:#100c09}
+body[data-style="elven"] .navFrame{--nav-accent:#a9c58f;--nav-label:#e9f0db;--nav-card-top:#14221b;--nav-card-bottom:#09110d}
+body[data-style="void"] .navFrame{--nav-accent:#a978d3;--nav-label:#eee3f7;--nav-card-top:#18111f;--nav-card-bottom:#0b080f}
+body[data-style="caravan"] .navFrame{--nav-accent:#c08a4b;--nav-label:#f1dfbd;--nav-card-top:#2a2118;--nav-card-bottom:#14100c}
+
+body[data-style] .navFrame{
+  box-sizing:border-box!important;
+  width:calc(100% - 8px)!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:4px 4px 14px!important;
+  padding:12px 12px 24px!important;
+  border:2px solid var(--nav-accent-deep)!important;
   border-radius:8px!important;
-  background-color:color-mix(in srgb,var(--surface2) 90%,var(--a1) 10%)!important;
-  background-image:none!important;
+  background:
+    radial-gradient(110% 130% at 50% -35%,color-mix(in srgb,var(--nav-accent) 8%,transparent),transparent 54%),
+    linear-gradient(180deg,var(--nav-panel-top),var(--nav-panel-bottom))!important;
+  box-shadow:
+    inset 0 0 0 2px #050605,
+    inset 0 0 0 4px color-mix(in srgb,var(--nav-accent) 34%,transparent),
+    inset 0 0 38px rgba(0,0,0,.55),
+    0 8px 24px rgba(0,0,0,.38)!important;
+  clip-path:none!important;
+  overflow:visible!important;
+  isolation:isolate!important;
+}
+body[data-style] .navFrame::before{
+  content:""!important;
+  display:block!important;
+  position:absolute!important;
+  inset:7px!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  border:1px solid color-mix(in srgb,var(--nav-accent) 48%,#18140c)!important;
+  border-radius:4px!important;
+  background:none!important;
+  opacity:.9!important;
+}
+body[data-style] .navFrame::after{
+  content:""!important;
+  display:block!important;
+  position:absolute!important;
+  inset:3px!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  border:0!important;
+  border-radius:6px!important;
+  background:
+    linear-gradient(135deg,var(--nav-accent-bright) 0 1px,transparent 1.5px) 0 0/28px 28px no-repeat,
+    linear-gradient(225deg,var(--nav-accent-bright) 0 1px,transparent 1.5px) 100% 0/28px 28px no-repeat,
+    linear-gradient(45deg,var(--nav-accent-bright) 0 1px,transparent 1.5px) 0 100%/28px 28px no-repeat,
+    linear-gradient(315deg,var(--nav-accent-bright) 0 1px,transparent 1.5px) 100% 100%/28px 28px no-repeat!important;
+  opacity:.7!important;
+}
+body[data-style] .navFrame>.appNav{
+  position:relative!important;
+  z-index:2!important;
+  display:flex!important;
+  flex-flow:row wrap!important;
+  align-items:center!important;
+  align-content:center!important;
+  justify-content:center!important;
+  column-gap:7px!important;
+  row-gap:9px!important;
+  width:min(100%,1260px)!important;
+  height:auto!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  background:none!important;
   box-shadow:none!important;
+  overflow:visible!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]{
+  box-sizing:border-box!important;
+  position:relative!important;
+  isolation:isolate!important;
+  display:grid!important;
+  grid-template-columns:40px minmax(0,1fr)!important;
+  grid-template-rows:1fr!important;
+  align-items:center!important;
+  justify-items:center!important;
+  column-gap:0!important;
+  flex:1 1 0!important;
+  min-width:0!important;
+  max-width:none!important;
+  min-height:52px!important;
+  height:52px!important;
+  margin:0!important;
+  padding:4px 8px!important;
+  overflow:hidden!important;
+  color:var(--nav-label)!important;
+  font:700 15px/1.03 Georgia,"Times New Roman",serif!important;
+  letter-spacing:0!important;
+  text-align:center!important;
+  text-transform:none!important;
+  text-shadow:0 1px 2px #000,0 0 10px rgba(0,0,0,.28)!important;
+  border:1px solid var(--nav-accent-deep)!important;
+  border-radius:5px!important;
+  background-color:var(--nav-card-bottom)!important;
+  background-image:
+    linear-gradient(180deg,color-mix(in srgb,var(--nav-accent) 5%,transparent),transparent 42%),
+    linear-gradient(180deg,var(--nav-card-top),var(--nav-card-bottom))!important;
+  background-size:100% 100%!important;
+  background-repeat:no-repeat!important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb,#030403 82%,transparent),
+    inset 0 0 0 3px color-mix(in srgb,var(--nav-accent) 22%,transparent),
+    inset 0 1px color-mix(in srgb,var(--nav-accent-bright) 23%,transparent),
+    0 3px 7px rgba(0,0,0,.48)!important;
   clip-path:none!important;
   -webkit-mask:none!important;
   mask:none!important;
+  filter:none!important;
+  transform:none!important;
+  cursor:pointer!important;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background-color .16s ease!important;
 }
-body[data-style] .navFrame .appNav>.navButton:hover{
-  border-color:color-mix(in srgb,var(--a1) 72%,var(--border))!important;
-  background-color:color-mix(in srgb,var(--surface2) 82%,var(--a1) 18%)!important;
-  background-image:none!important;
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{
+  flex:0 1 auto!important;
+  max-width:none!important;
+  grid-template-columns:40px minmax(0,1fr)!important;
+  gap:6px!important;
+  padding:4px 8px!important;
 }
-body[data-style] .navFrame .appNav>.navButton.active{
-  border-color:color-mix(in srgb,var(--a1) 84%,var(--border))!important;
-  background-color:color-mix(in srgb,var(--surface2) 72%,var(--a1) 28%)!important;
-  background-image:none!important;
+body[data-style] .navFrame .appNav>.navButton[data-app-view="homeView"]{flex-grow:301!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="calculatorView"]{flex-grow:298!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="marketView"]{flex-grow:290!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="portraitView"]{flex-grow:284!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="fontChangerView"]{flex-grow:280!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="couponsView"]{flex-grow:281!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view="settingsView"]{flex-grow:267!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="playerGuildView"]{flex:0 1 clamp(175px,14.4vw,315px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="grindTrackerView"]{flex:0 1 clamp(165px,13.4vw,295px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="resetTimersView"]{flex:0 1 clamp(138px,11.3vw,248px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="eventsView"]{flex:0 1 clamp(142px,11.6vw,255px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="bracketsView"]{flex:0 1 clamp(144px,11.8vw,260px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="masteryBracketsView"]{flex:0 1 clamp(168px,13.7vw,300px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="recipeBookView"]{flex:0 1 clamp(185px,15.5vw,340px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="dehkiaFuelView"]{flex:0 1 clamp(175px,14.8vw,325px)!important}
+body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view="lightstoneSetsView"]{flex:0 1 clamp(205px,17.1vw,375px)!important}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]::before{
+  content:""!important;
+  display:block!important;
+  position:absolute!important;
+  inset:3px!important;
+  z-index:1!important;
+  pointer-events:none!important;
+  border:1px solid color-mix(in srgb,var(--nav-accent) 20%,transparent)!important;
+  border-radius:2px!important;
+  background:
+    radial-gradient(circle at 6px 6px,var(--nav-accent-bright) 0 1.2px,transparent 1.7px),
+    radial-gradient(circle at calc(100% - 6px) 6px,var(--nav-accent-bright) 0 1.2px,transparent 1.7px),
+    radial-gradient(circle at 6px calc(100% - 6px),var(--nav-accent-bright) 0 1.2px,transparent 1.7px),
+    radial-gradient(circle at calc(100% - 6px) calc(100% - 6px),var(--nav-accent-bright) 0 1.2px,transparent 1.7px)!important;
+  opacity:1!important;
 }
-body[data-style] .navFrame .appNav>.navButton::before,
-body[data-style] .navFrame .appNav>.navButton::after{
-  display:none!important;
+body[data-style] .navFrame .appNav>.navButton[data-app-view]::after{
+  content:""!important;
+  display:block!important;
+  position:absolute!important;
+  inset:3px!important;
+  z-index:0!important;
+  pointer-events:none!important;
+  border:0!important;
+  border-radius:2px!important;
+  background:
+    radial-gradient(ellipse at 103% 109%,transparent 0 28%,color-mix(in srgb,var(--nav-pattern) 48%,transparent) 28.6% 29.1%,transparent 29.7% 39%,color-mix(in srgb,var(--nav-pattern) 40%,transparent) 39.5% 40%,transparent 40.6% 50%,color-mix(in srgb,var(--nav-pattern) 34%,transparent) 50.5% 51%,transparent 51.6%),
+    radial-gradient(circle at 92% 18%,transparent 0 12px,color-mix(in srgb,var(--nav-pattern) 44%,transparent) 12.5px 13px,transparent 13.5px 20px,color-mix(in srgb,var(--nav-pattern) 34%,transparent) 20.5px 21px,transparent 21.5px),
+    linear-gradient(28deg,transparent 0 78%,color-mix(in srgb,var(--nav-pattern) 29%,transparent) 78.5% 79%,transparent 79.5%)!important;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0 64%,rgba(0,0,0,.2) 70%,#000 84%)!important;
+  mask-image:linear-gradient(90deg,transparent 0 64%,rgba(0,0,0,.2) 70%,#000 84%)!important;
+  opacity:.88!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]:hover{
+  border-color:color-mix(in srgb,var(--nav-accent-bright) 74%,var(--nav-accent))!important;
+  background-color:color-mix(in srgb,var(--nav-card-bottom) 92%,var(--nav-accent) 8%)!important;
+  background-image:
+    linear-gradient(180deg,color-mix(in srgb,var(--nav-accent) 11%,transparent),transparent 48%),
+    linear-gradient(180deg,var(--nav-card-top),var(--nav-card-bottom))!important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb,#030403 82%,transparent),
+    inset 0 0 0 3px color-mix(in srgb,var(--nav-accent) 31%,transparent),
+    inset 0 1px color-mix(in srgb,var(--nav-accent-bright) 34%,transparent),
+    0 5px 11px rgba(0,0,0,.52),
+    0 0 12px color-mix(in srgb,var(--nav-accent) 13%,transparent)!important;
+  transform:translateY(-1px)!important;
+  filter:none!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view].active{
+  border-color:var(--nav-accent-bright)!important;
+  color:color-mix(in srgb,var(--nav-label) 88%,#fff)!important;
+  background-color:color-mix(in srgb,var(--nav-card-bottom) 86%,var(--nav-accent) 14%)!important;
+  background-image:
+    radial-gradient(circle at 14% 50%,color-mix(in srgb,var(--nav-accent) 15%,transparent),transparent 34%),
+    linear-gradient(180deg,color-mix(in srgb,var(--nav-accent) 10%,transparent),transparent 48%),
+    linear-gradient(180deg,var(--nav-card-top),var(--nav-card-bottom))!important;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb,#030403 82%,transparent),
+    inset 0 0 0 3px color-mix(in srgb,var(--nav-accent) 39%,transparent),
+    inset 0 1px color-mix(in srgb,var(--nav-accent-bright) 46%,transparent),
+    0 4px 10px rgba(0,0,0,.54),
+    0 0 15px color-mix(in srgb,var(--nav-accent) 18%,transparent)!important;
+  transform:none!important;
+  filter:none!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]:focus-visible{
+  outline:2px solid var(--nav-accent-bright)!important;
+  outline-offset:2px!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon{
+  box-sizing:border-box!important;
+  position:relative!important;
+  grid-column:1!important;
+  grid-row:1!important;
+  align-self:center!important;
+  justify-self:start!important;
+  z-index:4!important;
+  width:40px!important;
+  height:40px!important;
+  margin:0!important;
+  padding:0!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:visible!important;
+  color:var(--nav-accent)!important;
+  font-size:0!important;
+  line-height:0!important;
+  border:0!important;
+  border-radius:50%!important;
+  background-color:transparent!important;
+  background-image:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 8%,var(--nav-card-top)) 0 54%,transparent 55%)!important;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.38)!important;
+  clip-path:none!important;
+  -webkit-mask:none!important;
+  mask:none!important;
+  filter:none!important;
+  transform:none!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon::before,
+body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon::after{
   content:none!important;
+  display:none!important;
+  -webkit-mask:none!important;
+  mask:none!important;
+  background:none!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{
+  display:block!important;
+  width:40px!important;
+  height:40px!important;
+  overflow:visible!important;
+  color:inherit!important;
+  fill:none!important;
+  filter:drop-shadow(0 1px 1px #000) drop-shadow(0 0 4px color-mix(in srgb,var(--nav-accent) 18%,transparent))!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]:is(:hover,.active) .navGlyph{
+  color:var(--nav-accent-bright)!important;
+}
+body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{
+  box-sizing:border-box!important;
+  position:relative!important;
+  grid-column:2!important;
+  grid-row:1!important;
+  align-self:stretch!important;
+  justify-self:stretch!important;
+  z-index:3!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  overflow:visible!important;
+  overflow-wrap:normal!important;
+  white-space:normal!important;
+  text-align:left!important;
+  text-overflow:clip!important;
+}
+body[data-style] .navFrame>.navPinButton{
+  right:14px!important;
+  bottom:6px!important;
+  width:23px!important;
+  height:23px!important;
+  border-color:color-mix(in srgb,var(--nav-accent) 60%,#2b261a)!important;
+  border-radius:50%!important;
+  background:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 11%,var(--nav-panel-top)),var(--nav-panel-bottom))!important;
+  color:var(--nav-accent)!important;
+  box-shadow:inset 0 0 0 2px #070806,0 0 8px color-mix(in srgb,var(--nav-accent) 18%,transparent)!important;
+}
+body[data-style] .navFrame>.navPinButton:hover,
+body[data-style] .navFrame>.navPinButton[aria-pressed="true"]{
+  color:var(--nav-accent-bright)!important;
+  border-color:var(--nav-accent-bright)!important;
+  background:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 22%,var(--nav-panel-top)),var(--nav-panel-bottom))!important;
+}
+@media(max-width:1160px){
+  body[data-style] .navFrame>.appNav{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view],
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 168px!important;max-width:168px!important;gap:6px!important}
+  body[data-style] .navFrame .navRowBreak{display:none!important;flex:0 0 0!important;width:0!important}
+}
+@media(max-width:720px){
+  body[data-style] .navFrame{padding-inline:10px!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view],
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;flex-basis:156px!important;max-width:156px!important;height:48px!important;min-height:48px!important;font-size:14px!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
+  body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:36px!important;height:36px!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
 }
 
