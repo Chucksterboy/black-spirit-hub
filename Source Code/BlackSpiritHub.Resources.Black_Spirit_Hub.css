@@ -4441,7 +4441,7 @@ body[data-style] .navFrame{
   height:auto!important;
   min-height:0!important;
   margin:4px auto 14px!important;
-  padding:12px 12px 32px!important;
+  padding:12px!important;
   border:2px solid var(--nav-accent-deep)!important;
   border-radius:8px!important;
   background:
@@ -4689,8 +4689,8 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{
   text-overflow:clip!important;
 }
 body[data-style] .navFrame>.navPinButton{
-  right:14px!important;
-  bottom:6px!important;
+  right:4px!important;
+  bottom:-30px!important;
   width:26px!important;
   height:26px!important;
   border-color:color-mix(in srgb,var(--nav-accent) 60%,#2b261a)!important;

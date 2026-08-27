@@ -273,6 +273,7 @@ const desktopFrameRule = { body: desktopFrameRules.at(-1)?.[1] ?? "" };
 assert.ok(desktopFrameRule.body, "The final desktop navigation frame rule must remain available.");
 finalDeclaration(desktopFrameRule, "width", /^min\(calc\(100% - 8px\),1364px\)\s*!important$/, "Desktop navigation frame");
 finalDeclaration(desktopFrameRule, "margin", /^4px auto 14px\s*!important$/, "Desktop navigation frame");
+finalDeclaration(desktopFrameRule, "padding", /^12px\s*!important$/, "Desktop navigation frame");
 const nonCustomDesktopFrameRules = [...desktopNavigationCss.matchAll(
   /body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame\{([^}]*)\}/g,
 )];
@@ -304,6 +305,8 @@ const navigationLockRule = { body: navigationLockRules.at(-1)?.[1] ?? "" };
 assert.ok(navigationLockRule.body, "The final navigation lock geometry must remain available.");
 finalDeclaration(navigationLockRule, "width", /^26px\s*!important$/, "Navigation lock");
 finalDeclaration(navigationLockRule, "height", /^26px\s*!important$/, "Navigation lock");
+finalDeclaration(navigationLockRule, "right", /^4px\s*!important$/, "Navigation lock");
+finalDeclaration(navigationLockRule, "bottom", /^-30px\s*!important$/, "Navigation lock");
 const navigationLockGlyphRules = [...desktopNavigationCss.matchAll(
   /body\[data-style\] \.navFrame>\.navPinButton::before\{([^}]*)\}/g,
 )];
