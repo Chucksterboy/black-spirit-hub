@@ -1797,18 +1797,25 @@ if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app
 if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
 	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
 }
-if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(150px,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
-	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(150px,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
+if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
+	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
 	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;' -or
 	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;[^}]*padding:12px!important;' -or
 	$css -notmatch '(?s)body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{[^}]*transform:none!important;') {
 	throw "Fullscreen navigation must hug the equal-width rows across every preset without restoring the giant rotated frame ornament."
 }
+$cartographerStart = $css.LastIndexOf("/* Cartographer's Brass navigation.")
+$cartographerCss = if ($cartographerStart -ge 0) { $css.Substring($cartographerStart) } else { "" }
 if ($css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view="homeView"\]\{flex-grow:' -or
 	$css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\.betaNavButton\[data-app-view="[^"]+"\]\{flex:0 1 clamp\(' -or
 	$css -match '--nav-button-width\s*:' -or
-	$css -notmatch '@media\(max-width:1291px\)\{[^}]*body\[data-style\] \.navFrame>\.appNav,[^}]*display:flex!important;[^}]*flex-wrap:nowrap!important;[^}]*overflow-x:auto!important;') {
-	throw "The equal-width 8/8 navigation geometry or its narrow-window scrolling fallback has regressed."
+	$css -notmatch '(?s)@media\(max-width:1291px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*overflow-x:clip!important;[^}]*overflow-y:visible!important' -or
+	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame,[^{]*\{[^}]*width:min\(calc\(100% - 8px\),1028px\)!important;' -or
+	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important;[^}]*width:min\(100%,1000px\)!important;[^}]*overflow-x:clip!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(13\)\{grid-column:2!important\}' -or
+	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*display:flex!important' -or
+	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*overflow-x:(?:auto|scroll)!important') {
+	throw "The equal-width navigation or its responsive two-row and three-row wrapping has regressed."
 }
 if ($css -notmatch 'body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{--nav-label:#f4e5c0\}') {
 	throw "Custom light mode must keep bright, readable navigation labels on the dark plaques."

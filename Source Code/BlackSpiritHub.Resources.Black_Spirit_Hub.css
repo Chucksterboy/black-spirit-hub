@@ -4488,7 +4488,7 @@ body[data-style] .navFrame>.appNav{
   position:relative!important;
   z-index:2!important;
   display:grid!important;
-  grid-template-columns:repeat(8,minmax(150px,1fr))!important;
+  grid-template-columns:repeat(8,minmax(0,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4715,7 +4715,7 @@ body[data-style] .navFrame>.navPinButton::before{
    the stylesheet. Keep every desktop preset on the same centered canvas. */
 body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
   display:grid!important;
-  grid-template-columns:repeat(8,minmax(150px,1fr))!important;
+  grid-template-columns:repeat(8,minmax(0,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4744,17 +4744,31 @@ body[data-style="custom"] .navFrame>.navCrest{
 }
 @media(max-width:1291px){
   body[data-style] .navFrame>.appNav,
-  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:flex!important;flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;align-items:center!important;align-content:center!important;justify-content:center!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,1336px)!important;margin:0 auto!important;padding:0!important;overflow-x:clip!important;overflow-y:visible!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:40px minmax(0,1fr)!important;flex:0 0 160px!important;max-width:160px!important;column-gap:8px!important}
-  body[data-style] .navFrame .navRowBreak{display:none!important;flex:0 0 0!important;width:0!important}
-}
-@media(max-width:720px){
-  body[data-style] .navFrame{padding-inline:10px!important}
-  body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;height:46px!important;min-height:46px!important;font-size:13px!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;width:100%!important;min-width:0!important;max-width:160px!important;height:46px!important;min-height:46px!important;padding:3px 4px!important;column-gap:4px!important;font-size:13px!important;line-height:1!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
   body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:36px!important;height:36px!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
+  body[data-style] .navFrame .navRowBreak{display:none!important;flex:0 0 0!important;width:0!important}
+}
+@media(max-width:1119px){
+  body[data-style] .navFrame,
+  body[data-style]:not([data-style="custom"]) .navFrame{width:min(calc(100% - 8px),1028px)!important;margin:4px auto 14px!important;padding:12px!important}
+  body[data-style] .navFrame>.appNav,
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(6,minmax(0,1fr))!important;column-gap:8px!important;row-gap:8px!important;width:min(100%,1000px)!important;overflow-x:clip!important;overflow-y:visible!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:2!important}
+}
+@media(max-width:720px){
+  body[data-style] .navFrame,
+  body[data-style]:not([data-style="custom"]) .navFrame{width:min(calc(100% - 8px),682px)!important;padding:10px!important}
+  body[data-style] .navFrame>.appNav,
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(4,minmax(0,1fr))!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,658px)!important;overflow-x:clip!important;overflow-y:visible!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:auto!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view],
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:32px minmax(0,1fr)!important;height:44px!important;min-height:44px!important;padding:3px!important;column-gap:4px!important;font-size:12px!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
+  body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:32px!important;height:32px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
 }
 

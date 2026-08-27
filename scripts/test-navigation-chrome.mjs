@@ -228,7 +228,7 @@ const desktopCanvasRule = { body: desktopCanvasRules.at(-1)?.[1] ?? "" };
 assert.ok(desktopCanvasRule.body, "Desktop navigation must retain its final capped canvas rule.");
 for (const [property, value] of [
   ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(8,minmax\(150px,1fr\)\)\s*!important$/],
+  ["grid-template-columns", /^repeat\(8,minmax\(0,1fr\)\)\s*!important$/],
   ["justify-content", /^center\s*!important$/],
   ["column-gap", /^8px\s*!important$/],
   ["width", /^min\(100%,1336px\)\s*!important$/],
@@ -243,7 +243,7 @@ const nonCustomDesktopCanvasRule = { body: nonCustomDesktopCanvasRules.at(-1)?.[
 assert.ok(nonCustomDesktopCanvasRule.body, "Non-Custom themes must override the legacy fullscreen rail.");
 for (const [property, value] of [
   ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(8,minmax\(150px,1fr\)\)\s*!important$/],
+  ["grid-template-columns", /^repeat\(8,minmax\(0,1fr\)\)\s*!important$/],
   ["justify-content", /^center\s*!important$/],
   ["column-gap", /^8px\s*!important$/],
   ["width", /^min\(100%,1336px\)\s*!important$/],
@@ -253,21 +253,23 @@ for (const [property, value] of [
 }
 const compactNavigationCss = stylesheet.slice(compactNavigationBreakpoint);
 for (const expected of [
-  /display:flex!important/,
-  /flex-wrap:nowrap!important/,
-  /justify-content:flex-start!important/,
-  /overflow-x:auto!important/,
-  /overflow-y:hidden!important/,
+  /display:grid!important/,
+  /grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important/,
+  /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/,
+  /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/,
+  /overflow-x:clip!important/,
+  /overflow-y:visible!important/,
   /\.navRowBreak\{display:none!important/,
-  /flex:0 0 160px!important/,
   /max-width:160px!important/,
+  /:nth-child\(13\)\{grid-column:2!important\}/,
 ]) {
-  assert.match(compactNavigationCss, expected, "Compact navigation must retain its horizontal scroller contract.");
+  assert.match(compactNavigationCss, expected, "Compact navigation must retain its responsive wrapping-grid contract.");
 }
+assert.doesNotMatch(compactNavigationCss, /display:flex!important|flex-wrap:nowrap!important|overflow-x:(?:auto|scroll)!important/, "Final navigation breakpoints must wrap instead of scrolling horizontally.");
 assert.equal((8 * 160) + (7 * 8), 1336, "Eight equal buttons and seven gaps must exactly fill the desktop canvas.");
-assert.equal((1292 - 36 - (7 * 8)) / 8, 150, "The last grid viewport must retain 150px equal navigation columns.");
-assert.equal((1336 - 36 - (7 * 8)) / 8, 155.5, "The reported 1336px viewport must fit eight equal columns without scrolling.");
-assert.ok(1291 < 1336, "The compact horizontal scroller must remain inactive at the reported viewport width.");
+assert.equal((1278 - 36 - (7 * 6)) / 8, 150, "The reported 1278px viewport must fit two complete equal navigation rows.");
+assert.equal((6 * 160) + (5 * 8), 1000, "The three-row navigation canvas must cap six equal buttons per row.");
+assert.equal(16 - (2 * 6), 4, "The centered third row must contain the final four navigation buttons.");
 assert.doesNotMatch(desktopNavigationCss, /--nav-button-width\s*:/, "Individual navigation tools must not override the shared width.");
 assert.doesNotMatch(desktopNavigationCss, /flex-grow\s*:|flex\s*:\s*[^;]*clamp\(/, "Legacy row-expansion rules must not return.");
 
@@ -323,10 +325,11 @@ finalDeclaration(navigationLockGlyphRule, "height", /^16px\s*!important$/, "Navi
 
 const narrowNavigationCss = stylesheet.slice(stylesheet.lastIndexOf("@media(max-width:720px){"));
 for (const expected of [
-  /grid-template-columns:36px minmax\(0,1fr\)!important/,
-  /height:46px!important/,
-  /font-size:13px!important/,
-  /\.navGlyph\{width:36px!important;height:36px!important\}/,
+  /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/,
+  /grid-template-columns:32px minmax\(0,1fr\)!important/,
+  /height:44px!important/,
+  /font-size:12px!important/,
+  /\.navGlyph\{width:32px!important;height:32px!important\}/,
 ]) {
   assert.match(narrowNavigationCss, expected, "Narrow-window navigation must remain smaller than the compact desktop geometry.");
 }
