@@ -1795,6 +1795,9 @@ if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app
 	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*justify-content:flex-start!important;') {
 	throw "Cartographer navigation labels can drift away from their shared medallions."
 }
+if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
+	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
+}
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
 	$script -notmatch 'sizeBossScheduleTable\(state\.times\.length\)' -or

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -165,6 +166,11 @@ assert.equal(
 const navigationSpritePath = path.join(path.dirname(scriptPath), "NavigationAssets", "nav-icons.svg");
 assert.ok(fs.existsSync(navigationSpritePath), "The shared navigation SVG sprite must ship beside the UI resources.");
 const navigationSprite = fs.readFileSync(navigationSpritePath, "utf8");
+assert.equal(
+  createHash("sha256").update(navigationSprite.replace(/\r\n/g, "\n")).digest("hex"),
+  "873a9cb686009b4d7906e4561a0edfa6289b661e41c86560b4603b227d9df718",
+  "The approved navigation glyph geometry must remain byte-for-byte identical apart from line endings.",
+);
 for (const [view, iconId] of expectedIcons) {
   assert.match(
     markup,
@@ -214,6 +220,16 @@ for (const style of expectedInterfaceStyles.slice(1)) {
   assert.match(finalRule, /--nav-accent:/, `The ${style} theme must provide its Cartographer's Brass color.`);
   assert.doesNotMatch(finalRule, /(?:width|height|padding|margin|border-radius|grid-template|font)\s*:/, `The ${style} theme may change navigation colors, not geometry.`);
 }
+
+const customOrnamentRules = [...stylesheet.matchAll(
+  /body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{([^}]*)\}/g,
+)];
+assert.ok(customOrnamentRules.length, "The Custom theme must explicitly suppress both legacy center ornaments.");
+assert.match(
+  customOrnamentRules.at(-1)[1],
+  /(?:^|;)\s*visibility\s*:\s*hidden\s*!important\s*(?:;|$)/,
+  "The Custom theme must suppress both legacy center ornaments without collapsing title-bar alignment.",
+);
 
 assert.match(
   source,

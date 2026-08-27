@@ -4727,6 +4727,12 @@ body[data-style] .navFrame>.navPinButton[aria-pressed="true"]{
   border-color:var(--nav-accent-bright)!important;
   background:radial-gradient(circle,color-mix(in srgb,var(--nav-accent) 22%,var(--nav-panel-top)),var(--nav-panel-bottom))!important;
 }
+/* The Custom theme keeps the title-bar grid slot for alignment, but no longer
+   renders the legacy center diamond/orb or the smaller navigation diamond. */
+body[data-style="custom"] .windowTitleBar>.headerCenterCrest,
+body[data-style="custom"] .navFrame>.navCrest{
+  visibility:hidden!important;
+}
 @media(max-width:1160px){
   body[data-style] .navFrame>.appNav{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
