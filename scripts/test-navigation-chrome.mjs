@@ -220,6 +220,12 @@ for (const style of expectedInterfaceStyles.slice(1)) {
   assert.match(finalRule, /--nav-accent:/, `The ${style} theme must provide its Cartographer's Brass color.`);
   assert.doesNotMatch(finalRule, /(?:width|height|padding|margin|border-radius|grid-template|font)\s*:/, `The ${style} theme may change navigation colors, not geometry.`);
 }
+const customNavigationRules = [...stylesheet.matchAll(/body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{([^}]*)\}/g)];
+assert.match(
+  customNavigationRules.at(-1)?.[1] ?? "",
+  /(?:^|;)\s*--nav-label\s*:\s*#f4e5c0\s*(?:;|$)/,
+  "Custom light mode must keep bright, readable navigation labels on the dark plaques.",
+);
 
 const customOrnamentRules = [...stylesheet.matchAll(
   /body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{([^}]*)\}/g,

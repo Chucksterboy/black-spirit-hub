@@ -4420,6 +4420,7 @@ body[data-style] .navFrame{
   --nav-label:color-mix(in srgb,var(--text) 82%,#f4e5c0);
   --nav-pattern:color-mix(in srgb,var(--nav-accent) 72%,#9d7a38);
 }
+body[data-mode="light"][data-style="custom"] .navFrame{--nav-label:#f4e5c0}
 body[data-style="fantasy"] .navFrame{--nav-accent:#c8a95d;--nav-label:#efe1bf}
 body[data-style="cyber"] .navFrame{--nav-accent:#43d8e8;--nav-label:#dffbff}
 body[data-style="cinematic"] .navFrame{--nav-accent:#b68b55;--nav-label:#eee7dc}

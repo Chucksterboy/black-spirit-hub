@@ -1798,6 +1798,9 @@ if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app
 if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
 	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
 }
+if ($css -notmatch 'body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{--nav-label:#f4e5c0\}') {
+	throw "Custom light mode must keep bright, readable navigation labels on the dark plaques."
+}
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
 	$script -notmatch 'sizeBossScheduleTable\(state\.times\.length\)' -or
