@@ -4488,7 +4488,7 @@ body[data-style] .navFrame>.appNav{
   position:relative!important;
   z-index:2!important;
   display:grid!important;
-  grid-template-columns:repeat(8,160px)!important;
+  grid-template-columns:repeat(8,minmax(150px,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4513,6 +4513,8 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   align-items:center!important;
   justify-items:center!important;
   column-gap:8px!important;
+  width:100%!important;
+  justify-self:stretch!important;
   flex:0 0 160px!important;
   min-width:0!important;
   max-width:160px!important;
@@ -4713,7 +4715,7 @@ body[data-style] .navFrame>.navPinButton::before{
    the stylesheet. Keep every desktop preset on the same centered canvas. */
 body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
   display:grid!important;
-  grid-template-columns:repeat(8,160px)!important;
+  grid-template-columns:repeat(8,minmax(150px,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4726,6 +4728,7 @@ body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
 body[data-style]:not([data-style="custom"]) .navFrame{
   width:min(calc(100% - 8px),1364px)!important;
   margin:4px auto 14px!important;
+  padding:12px!important;
 }
 /* Clear the legacy 45-degree transforms before using the Custom navigation
    pseudos as full-frame inset artwork. */
@@ -4739,7 +4742,7 @@ body[data-style="custom"] .windowTitleBar>.headerCenterCrest,
 body[data-style="custom"] .navFrame>.navCrest{
   visibility:hidden!important;
 }
-@media(max-width:1372px){
+@media(max-width:1291px){
   body[data-style] .navFrame>.appNav,
   body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:flex!important;flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
