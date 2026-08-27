@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.56",
-    "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.56/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "611D566D540ADBB542BB2692CF29077D24BB462A73AD96FD884755F7F32F230C",
-    "notes":  "Updates every interface theme with clean rounded navigation buttons, removes decorative lines while preserving theme colors and icons, and makes available-coupon alerts accessible and clickable."
+  "version": "v0.9.57",
+  "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
+  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.57/Black-Spirit-Hub-Installer.exe",
+  "sha256": "61F12C6C195EDAB4BDAF60354CEBE91A200548D996CB7D651E589E3FF1785ADA",
+  "notes": "Introduces the compact Cartographer's Brass navigation with immutable shared vector icons across all 13 themes, removes the legacy Custom-theme center ornaments, tightens desktop and narrow-window sizing, and hardens local WebView2 resource serving for reliable startup and offline Recipe Book loading."
 }
