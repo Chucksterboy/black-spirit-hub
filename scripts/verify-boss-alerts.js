@@ -124,7 +124,7 @@ const extractedCode = [
 	"const collapseLabel={textContent:''};",
 	"const collapseButton={attributes:{},title:'',setAttribute(name,value){this.attributes[name]=value},querySelector(){return collapseLabel}};",
 	"const collapsePanel={classList:{values:new Set(),toggle(name,force){if(force)this.values.add(name);else this.values.delete(name)}}};",
-	"const collapseContent={hidden:false};",
+	"const collapseContent={hidden:false,inert:false,attributes:{},setAttribute(name,value){this.attributes[name]=value}};",
 	"const volumeInput={value:'50',attributes:{},style:{values:{},setProperty(name,value){this.values[name]=value}},setAttribute(name,value){this.attributes[name]=value}};",
 	"const volumeValue={textContent:'50%'};",
 	"const voiceSelect={disabled:true,value:'',options:[],selectedOptions:[],replaceChildren(...items){this.options=[...items]},append(item){this.options.push(item)}};",
@@ -174,7 +174,7 @@ const extractedCode = [
   extractFunction("bossTestTtsText"),
   extractFunction("runBossTtsTest"),
   extractFunction("runBossAlarmTest"),
-  "globalThis.alertTests={normalizedNotificationAudioSettings,saveNotificationAudioSettings,normalizedHomeSettings,applyBossNotifyCollapse,applyNotificationAudioSettings,populateEnglishTtsVoices,initializeTtsVoiceSelector,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,bossTestTtsText,runBossTtsTest,runBossAlarmTest,setSaved:value=>{savedHomeSettings=value},setAudioSaved:value=>{savedNotificationAudioSettings=value},getAudioSaved:()=>JSON.parse(JSON.stringify(savedNotificationAudioSettings)),setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},setBridgeResponse:(command,value)=>{bridgeResponses.set(command,value)},resetVoiceLoader:()=>{ttsVoiceLoadPromise=null},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings,getTestTtsButton:()=>testTtsButton,getTestAlarmButton:()=>testAlarmButton,getAddVoicesState:()=>({disabled:addVoicesButton.disabled,text:addVoicesButton.textContent,footer:bossFooter.textContent,footerState:bossFooter.dataset.state}),clickAddVoices:()=>addVoicesButton.listeners.click?.(),getCollapseState:()=>({collapsed:collapsePanel.classList.values.has('isCollapsed'),hidden:collapseContent.hidden,expanded:collapseButton.attributes['aria-expanded'],title:collapseButton.title,label:collapseLabel.textContent}),getVolumeState:()=>({value:volumeInput.value,text:volumeValue.textContent,aria:volumeInput.attributes['aria-valuetext'],fill:volumeInput.style.values['--boss-volume']}),getVoiceState:()=>({disabled:voiceSelect.disabled,value:voiceSelect.value,options:voiceSelect.options.map(option=>({value:option.value,text:option.textContent}))})};"
+  "globalThis.alertTests={normalizedNotificationAudioSettings,saveNotificationAudioSettings,normalizedHomeSettings,applyBossNotifyCollapse,applyNotificationAudioSettings,populateEnglishTtsVoices,initializeTtsVoiceSelector,alertStage,nextAlertableBossSpawn,sendHomeAlert,persistDeliveredHomeAlert,migrateLegacyHomeAlert,checkBossNotifications,checkGuildBossNotifications,bossTestTtsText,runBossTtsTest,runBossAlarmTest,setSaved:value=>{savedHomeSettings=value},setAudioSaved:value=>{savedNotificationAudioSettings=value},getAudioSaved:()=>JSON.parse(JSON.stringify(savedNotificationAudioSettings)),setSpawns:value=>{scheduleSpawns=value},setGuildTarget:value=>{guildTargetValue=value},setFailures:value=>{bridgeFailures=new Set(value)},setBridgeResponse:(command,value)=>{bridgeResponses.set(command,value)},resetVoiceLoader:()=>{ttsVoiceLoadPromise=null},resetCalls:()=>{bridgeCalls=[];bridgePayloads=[]},getCalls:()=>bridgeCalls.slice(),getPayloads:()=>bridgePayloads.slice(),getSavedDelivery:()=>savedDeliverySettings,getTestTtsButton:()=>testTtsButton,getTestAlarmButton:()=>testAlarmButton,getAddVoicesState:()=>({disabled:addVoicesButton.disabled,text:addVoicesButton.textContent,footer:bossFooter.textContent,footerState:bossFooter.dataset.state}),clickAddVoices:()=>addVoicesButton.listeners.click?.(),getCollapseState:()=>({collapsed:collapsePanel.classList.values.has('isCollapsed'),hidden:collapseContent.hidden,inert:collapseContent.inert,ariaHidden:collapseContent.attributes['aria-hidden'],expanded:collapseButton.attributes['aria-expanded'],title:collapseButton.title,label:collapseLabel.textContent}),getVolumeState:()=>({value:volumeInput.value,text:volumeValue.textContent,aria:volumeInput.attributes['aria-valuetext'],fill:volumeInput.style.values['--boss-volume']}),getVoiceState:()=>({disabled:voiceSelect.disabled,value:voiceSelect.value,options:voiceSelect.options.map(option=>({value:option.value,text:option.textContent}))})};"
 ].join("\n");
 
 const context = { console:{ debug(){}, warn(){}, log(){}, error(){} } };
@@ -223,7 +223,26 @@ if (!/^<button\b/i.test(collapseButtonTag)
   || !/\bbackground\s*:/.test(collapseButtonCss)) {
   throw new Error("Boss Notifications must use a boxed disclosure button with correct expanded-state semantics.");
 }
+const switchKnobCss = appCss.match(/^\s*\.slider:before\s*\{([^}]*)\}/im)?.[1] || "";
+const checkedSwitchKnobCss = appCss.match(/^\s*\.switch input:checked \+ \.slider:before\s*\{([^}]*)\}/im)?.[1] || "";
+if (!/\btop\s*:\s*50%/i.test(switchKnobCss)
+  || !/\btransform\s*:\s*translateY\(\s*-50%\s*\)/i.test(switchKnobCss)
+  || !/\btransform\s*:\s*translate\(\s*22px\s*,\s*-50%\s*\)/i.test(checkedSwitchKnobCss)) {
+  throw new Error("Toggle knobs must remain vertically centered in both off and on states.");
+}
 openingTagWithId("bossNotifyContent");
+const collapsePanelCss = appCss.match(/^\s*\.bossNotifyPanel\s*\{([^}]*)\}/im)?.[1] || "";
+const collapseContentCss = appCss.match(/^\s*\.bossNotifyContent\s*\{([^}]*)\}/im)?.[1] || "";
+const collapsedPanelCss = appCss.match(/^\s*\.bossNotifyPanel\.isCollapsed\s*\{([^}]*)\}/im)?.[1] || "";
+if (!/\bdisplay\s*:\s*grid\b/i.test(collapsePanelCss)
+  || !/\bgrid-template-rows\s*:\s*auto\s+1fr\b/i.test(collapsePanelCss)
+  || !/\btransition\s*:[^;}]*grid-template-rows\b/i.test(collapsePanelCss)
+  || !/\bmin-height\s*:\s*0\b/i.test(collapseContentCss)
+  || !/\boverflow\s*:\s*hidden\b/i.test(collapseContentCss)
+  || !/\bgrid-template-rows\s*:\s*auto\s+0fr\b/i.test(collapsedPanelCss)
+  || /\bmax-height\s*:/.test(collapseContentCss)) {
+  throw new Error("Boss Notifications must animate its dynamic height without a fixed max-height.");
+}
 if (!/getElementById\(["']bossNotificationVolume["']\)/.test(appScript)
   || !/getElementById\(["']bossNotificationVolumeValue["']\)/.test(appScript)
   || !/getElementById\(["']bossTtsVoice["']\)/.test(appScript)
@@ -273,16 +292,24 @@ if (tests.normalizedHomeSettings().notificationsCollapsed !== false) {
 
 tests.applyBossNotifyCollapse(true);
 let collapseState = tests.getCollapseState();
-if (!collapseState.collapsed || !collapseState.hidden || collapseState.expanded !== "false"
+if (!collapseState.collapsed || collapseState.hidden || !collapseState.inert || collapseState.ariaHidden !== "true" || collapseState.expanded !== "false"
   || collapseState.title !== "Expand boss notifications" || collapseState.label !== collapseState.title) {
   throw new Error(`Collapsed Boss Notifications state is inaccessible or incomplete: ${JSON.stringify(collapseState)}`);
 }
 tests.applyBossNotifyCollapse(false);
 collapseState = tests.getCollapseState();
-if (collapseState.collapsed || collapseState.hidden || collapseState.expanded !== "true"
+if (collapseState.collapsed || collapseState.hidden || collapseState.inert || collapseState.ariaHidden !== "false" || collapseState.expanded !== "true"
   || collapseState.title !== "Collapse boss notifications" || collapseState.label !== collapseState.title) {
   throw new Error(`Expanded Boss Notifications state is inaccessible or incomplete: ${JSON.stringify(collapseState)}`);
 }
+tests.applyBossNotifyCollapse(true);
+tests.applyBossNotifyCollapse(false);
+tests.applyBossNotifyCollapse(true);
+collapseState = tests.getCollapseState();
+if (!collapseState.collapsed || !collapseState.inert || collapseState.ariaHidden !== "true" || collapseState.expanded !== "false") {
+  throw new Error(`Rapid Boss Notifications reversals did not settle on the latest state: ${JSON.stringify(collapseState)}`);
+}
+tests.applyBossNotifyCollapse(false);
 
 tests.applyNotificationAudioSettings({ volumePercent:0, voiceId:"" });
 let volumeState = tests.getVolumeState();
