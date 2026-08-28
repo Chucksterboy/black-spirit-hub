@@ -1,7 +1,7 @@
 {
-  "version": "v0.9.58",
-  "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.58/Black-Spirit-Hub-Installer.exe",
-  "sha256": "6C4F0C67848CB59EA87F3218951567331E7B5E0D257AD54396333A668132468C",
-  "notes": "Improves the Cartographer's Brass navigation with equal-sized buttons, responsive two- and three-row layouts at narrower window sizes, removes horizontal scrolling, tightens the navigation frame, and positions the lock control outside the frame."
+    "version":  "v0.9.59",
+    "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.59/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "A76C27280695B5AFFE23F968809762B204679BD3BBDF0BB6BA32C3CF56DE5A20",
+    "notes":  "Adds persistent notification volume and selectable English Windows TTS voice controls for boss and Node War alerts, includes alarm and speech test actions plus direct access to Windows Speech settings, and polishes the smoothly collapsible notification panel and centered toggle alignment."
 }
