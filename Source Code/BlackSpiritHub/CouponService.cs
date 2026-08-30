@@ -59,6 +59,7 @@ internal sealed class CouponService : IDisposable
 	private readonly BdoCodexItemIconResolver itemIconResolver;
 	private readonly Func<CancellationToken, Task<string>>? garmothPayloadLoader;
 	private readonly SemaphoreSlim refreshGate = new(1, 1);
+	private readonly SemaphoreSlim redemptionGate = new(1, 1);
 	private readonly Dictionary<string, (DateTime LastWriteUtc, long Length, string DataUrl)> iconDataCache = new(StringComparer.OrdinalIgnoreCase);
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -135,6 +136,31 @@ internal sealed class CouponService : IDisposable
 	{
 		await WriteJsonAsync(paths.CouponSettingsPath, settings, cancellationToken);
 		return await BuildDashboardAsync("CACHED", null, cancellationToken);
+	}
+
+	public async Task<object> SaveRedemptionsAsync(
+		IEnumerable<string> redeemedCodes,
+		CancellationToken cancellationToken)
+	{
+		await redemptionGate.WaitAsync(cancellationToken);
+		try
+		{
+			List<string> normalizedCodes = NormalizeRedeemedCodes(redeemedCodes);
+			CouponRedemptionState state = new(
+				SchemaVersion: 1,
+				UpdatedUtc: DateTimeOffset.UtcNow,
+				RedeemedCodes: normalizedCodes);
+			await WriteJsonAsync(paths.CouponRedemptionsPath, state, cancellationToken);
+			return new
+			{
+				saved = true,
+				redeemedCodes = normalizedCodes
+			};
+		}
+		finally
+		{
+			redemptionGate.Release();
+		}
 	}
 
 	public async Task<object> RefreshAsync(CancellationToken cancellationToken)
@@ -428,6 +454,15 @@ internal sealed class CouponService : IDisposable
 			?? new CouponCache(DateTimeOffset.UtcNow, "Manual", [], error);
 		CouponSettings settings = await ReadJsonAsync<CouponSettings>(paths.CouponSettingsPath, cancellationToken)
 			?? new CouponSettings(true, true, "", "all");
+		CouponRedemptionState? redemptionState = await ReadRedemptionStateAsync(cancellationToken);
+		bool redemptionStateExists = redemptionState is
+		{
+			SchemaVersion: 1,
+			RedeemedCodes: not null
+		};
+		List<string> redeemedCodes = redemptionStateExists
+			? NormalizeRedeemedCodes(redemptionState!.RedeemedCodes)
+			: [];
 		bool isStale = DateTimeOffset.UtcNow - cache.LastRefreshed > TimeSpan.FromHours(6);
 		int cacheAgeMinutes = Math.Max(0, (int)Math.Round((DateTimeOffset.UtcNow - cache.LastRefreshed).TotalMinutes));
 		// Coupon entries from structured feeds and the local cache are authoritative.
@@ -463,6 +498,8 @@ internal sealed class CouponService : IDisposable
 			refreshDebug,
 			regionScope = "CONSOLE EXCLUDED",
 			settings,
+			redemptionStateExists,
+			redeemedCodes,
 			coupons,
 			availableCount = coupons.Count(x => !x.IsExpired),
 			expiredCount = coupons.Count(x => x.IsExpired),
@@ -498,6 +535,33 @@ internal sealed class CouponService : IDisposable
 				.Where(char.IsLetterOrDigit)
 				.Select(char.ToUpperInvariant)
 				.ToArray());
+	}
+
+	internal static List<string> NormalizeRedeemedCodes(IEnumerable<string>? redeemedCodes)
+	{
+		return (redeemedCodes ?? [])
+			.Select(CanonicalCouponCode)
+			.Where(code => code.Length is > 0 and <= 128)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
+			.Take(4096)
+			.ToList();
+	}
+
+	private async Task<CouponRedemptionState?> ReadRedemptionStateAsync(
+		CancellationToken cancellationToken)
+	{
+		await redemptionGate.WaitAsync(cancellationToken);
+		try
+		{
+			return await ReadJsonAsync<CouponRedemptionState>(
+				paths.CouponRedemptionsPath,
+				cancellationToken);
+		}
+		finally
+		{
+			redemptionGate.Release();
+		}
 	}
 
 	private static string DisplayCouponCode(string value)
@@ -1443,6 +1507,7 @@ internal sealed class CouponService : IDisposable
 }
 
 internal sealed record CouponSettings(bool ShowAvailableOnly, bool ShowExpired, string Search, string Status);
+internal sealed record CouponRedemptionState(int SchemaVersion, DateTimeOffset UpdatedUtc, List<string> RedeemedCodes);
 internal sealed record CouponReward(string ItemName, int Quantity, string IconUrl, string IconFileName)
 {
 	public string IconSource { get; init; } = "";

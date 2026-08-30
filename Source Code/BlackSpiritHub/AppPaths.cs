@@ -19,6 +19,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		"coupons_cache.json",
 		"coupon_item_icons.json",
 		"coupon_settings.json",
+		"coupon_redemptions.json",
 		"events_cache.json",
 		"events_cache.backup.json",
 		"boss_schedule_cache.json",
@@ -34,6 +35,8 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	public string CouponsCachePath => Path.Combine(Root, "coupons_cache.json");
 
 	public string CouponSettingsPath => Path.Combine(Root, "coupon_settings.json");
+
+	public string CouponRedemptionsPath => Path.Combine(Root, "coupon_redemptions.json");
 
 	public string CouponItemIconsPath => Path.Combine(Root, "coupon_item_icons.json");
 

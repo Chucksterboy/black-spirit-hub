@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "notification-panel-motion-20260828a";
+	private const string UiRevision = "coupon-redemptions-20260830a";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -2144,6 +2144,21 @@ internal sealed class CalculatorForm : Form
 			CouponSettings settings = JsonSerializer.Deserialize<CouponSettings>(payload.GetRawText(), JsonOptions)
 				?? new CouponSettings(true, true, "", "all");
 			return await couponService.SaveSettingsAsync(settings, cancellationToken);
+		}
+		case "saveCouponRedemptions":
+		{
+			if (!payload.TryGetProperty("redeemedCodes", out JsonElement redeemedCodesValue)
+				|| redeemedCodesValue.ValueKind != JsonValueKind.Array)
+			{
+				throw new InvalidDataException("Coupon redemption data is invalid.");
+			}
+			List<string> redeemedCodes = redeemedCodesValue
+				.EnumerateArray()
+				.Where(value => value.ValueKind == JsonValueKind.String)
+				.Select(value => value.GetString() ?? string.Empty)
+				.Take(4096)
+				.ToList();
+			return await couponService.SaveRedemptionsAsync(redeemedCodes, cancellationToken);
 		}
 		case "setCouponBadgeCount":
 		{

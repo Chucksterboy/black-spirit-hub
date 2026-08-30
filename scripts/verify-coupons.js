@@ -38,7 +38,7 @@ const extractedCode = [
   "function couponIsRedeemed(){return false}",
   "function couponExpiryText(){return 'No expiry listed'}",
   extractFunction("couponEscape", "couponCodeKey"),
-  extractFunction("couponCodeKey", "couponRedeemedMap"),
+  extractFunction("couponCodeKey", "couponNormalizeRedeemedMap"),
   extractFunction("couponRewardListHtml", "couponExpiryText"),
   extractFunction("showCouponCopyFeedback", "renderCouponDetail"),
   extractFunction("renderCouponDetail", "initializeCoupons"),
@@ -58,6 +58,147 @@ const context = {
 vm.createContext(context);
 vm.runInContext(extractedCode, context);
 const tests = context.couponTests;
+
+const redemptionStart = appScript.indexOf("function couponCodeKey(");
+const redemptionEnd = appScript.indexOf("\nfunction couponUnreadNewCodes(", redemptionStart);
+if (redemptionStart < 0 || redemptionEnd < 0) {
+  throw new Error("Could not extract coupon redemption persistence from the application script.");
+}
+
+class ImmediatePromise {
+  catch() { return this; }
+  then(callback) {
+    const result = callback();
+    return result instanceof ImmediatePromise ? result : this;
+  }
+}
+
+function createCouponRedemptionHarness(legacyState,pendingState=null) {
+  const savedPayloads = [];
+  const persisted = [];
+  const flushed = [];
+  let clearedNewCode = "";
+  const redemptionContext = {
+    Promise:{resolve:() => new ImmediatePromise()},
+    readSetting:key => key === "couponRedeemed"
+      ? legacyState
+      : key === "couponRedemptionPending" ? pendingState : {},
+    persistSetting:(key,value) => persisted.push({key,value:JSON.parse(JSON.stringify(value))}),
+    flushSetting:key => flushed.push(key),
+    bridgeCall:(command,payload) => {
+      savedPayloads.push({command,payload:JSON.parse(JSON.stringify(payload))});
+      return new ImmediatePromise();
+    },
+    couponClearNewCode:key => { clearedNewCode = key; },
+    NotificationService:{ShowWarning() { throw new Error("A successful redemption save showed a warning."); }},
+    console:{warn() {}}
+  };
+  vm.createContext(redemptionContext);
+  vm.runInContext([
+    appScript.slice(redemptionStart,redemptionEnd),
+    extractFunction("setCouponRedeemed", "couponRedeemButton"),
+    "globalThis.redemptionTests={couponRedeemedMap,couponRedeemedCodes,couponInitializeRedemptionState,setCouponRedeemed};"
+  ].join("\n"),redemptionContext);
+  return {
+    ...redemptionContext.redemptionTests,
+    savedPayloads,
+    persisted,
+    flushed,
+    get clearedNewCode() { return clearedNewCode; }
+  };
+}
+
+const nativeRedemptionHarness = createCouponRedemptionHarness({"STALE-LOCAL":true});
+nativeRedemptionHarness.couponInitializeRedemptionState({
+  redemptionStateExists:true,
+  redeemedCodes:[" native-code ","NATIVE-CODE",null,42]
+});
+if (JSON.stringify(nativeRedemptionHarness.couponRedeemedCodes()) !== JSON.stringify(["NATIVECODE"])
+  || nativeRedemptionHarness.savedPayloads.length !== 0
+  || nativeRedemptionHarness.persisted.at(-1)?.key !== "couponRedeemed"
+  || nativeRedemptionHarness.flushed.at(-1) !== "couponRedeemed") {
+  throw new Error("Native coupon redemption state must replace stale browser-only state on startup.");
+}
+
+nativeRedemptionHarness.setCouponRedeemed("native-code",false);
+nativeRedemptionHarness.setCouponRedeemed(" new-code ",true);
+if (JSON.stringify(nativeRedemptionHarness.couponRedeemedCodes()) !== JSON.stringify(["NEWCODE"])
+  || nativeRedemptionHarness.savedPayloads.length !== 2
+  || nativeRedemptionHarness.savedPayloads.some(save => save.command !== "saveCouponRedemptions")
+  || JSON.stringify(nativeRedemptionHarness.savedPayloads[0].payload.redeemedCodes) !== "[]"
+  || JSON.stringify(nativeRedemptionHarness.savedPayloads[1].payload.redeemedCodes) !== JSON.stringify(["NEWCODE"])
+  || nativeRedemptionHarness.clearedNewCode !== "NEWCODE") {
+  throw new Error("Redeem and undo must immediately save a canonical update-safe snapshot.");
+}
+
+const legacyRedemptionHarness = createCouponRedemptionHarness({
+  " legacy-code ":true,
+  "LEGACYCODE":true,
+  ignored:false
+});
+legacyRedemptionHarness.couponInitializeRedemptionState({
+  redemptionStateExists:false,
+  redeemedCodes:[]
+});
+if (JSON.stringify(legacyRedemptionHarness.couponRedeemedCodes()) !== JSON.stringify(["LEGACYCODE"])
+  || legacyRedemptionHarness.savedPayloads.length !== 1
+  || JSON.stringify(legacyRedemptionHarness.savedPayloads[0].payload.redeemedCodes) !== JSON.stringify(["LEGACYCODE"])) {
+  throw new Error("Existing browser-only coupon redemptions must migrate once into durable app data.");
+}
+
+const interruptedUndoHarness = createCouponRedemptionHarness(
+  {"NATIVE-CODE":true},
+  {schemaVersion:1,redeemedCodes:[]});
+interruptedUndoHarness.couponInitializeRedemptionState({
+  redemptionStateExists:true,
+  redeemedCodes:["NATIVE-CODE"]
+});
+if (interruptedUndoHarness.couponRedeemedCodes().length !== 0
+  || interruptedUndoHarness.savedPayloads.length !== 1
+  || JSON.stringify(interruptedUndoHarness.savedPayloads[0].payload.redeemedCodes) !== "[]") {
+  throw new Error("An interrupted native save must retry the latest browser snapshot, including an empty undo state.");
+}
+
+async function verifyCouponRedemptionGenerationRace() {
+  const persisted = [];
+  const deferredSaves = [];
+  const raceContext = {
+    readSetting:key => key === "couponRedeemed" ? {} : null,
+    persistSetting:(key,value) => persisted.push({key,value:JSON.parse(JSON.stringify(value))}),
+    flushSetting() {},
+    bridgeCall:(command,payload) => new Promise(resolve => {
+      deferredSaves.push({command,payload:JSON.parse(JSON.stringify(payload)),resolve});
+    }),
+    couponClearNewCode() {},
+    NotificationService:{ShowWarning() {}},
+    console:{warn() {}}
+  };
+  vm.createContext(raceContext);
+  vm.runInContext([
+    appScript.slice(redemptionStart,redemptionEnd),
+    extractFunction("setCouponRedeemed", "couponRedeemButton"),
+    "globalThis.redemptionRace={couponInitializeRedemptionState,setCouponRedeemed};"
+  ].join("\n"),raceContext);
+  raceContext.redemptionRace.couponInitializeRedemptionState({
+    redemptionStateExists:true,
+    redeemedCodes:[]
+  });
+  raceContext.redemptionRace.setCouponRedeemed("A",true);
+  for (let index = 0; index < 4; index++) await Promise.resolve();
+  if (deferredSaves.length !== 1) {
+    throw new Error("The first durable coupon save did not start.");
+  }
+
+  raceContext.redemptionRace.setCouponRedeemed("B",true);
+  raceContext.redemptionRace.setCouponRedeemed("B",false);
+  deferredSaves[0].resolve({saved:true});
+  for (let index = 0; index < 6; index++) await Promise.resolve();
+  if (deferredSaves.length !== 2
+    || persisted.some(entry => entry.key === "couponRedemptionPending" && entry.value === null)
+    || JSON.stringify(persisted.at(-1)?.value?.redeemedCodes) !== JSON.stringify(["A"])) {
+    throw new Error("An older A→B→A save completion must not clear the latest pending coupon snapshot.");
+  }
+}
 
 const fixedNow = Date.parse("2026-08-24T23:59:00.000Z");
 const NativeDate = Date;
@@ -385,4 +526,9 @@ if (!/position:relative!important/.test(copyLargeRule)
   throw new Error("Coupon copy success feedback lost its smooth in-button transition or success-only trigger.");
 }
 
-console.log("Coupon JavaScript verification passed.");
+verifyCouponRedemptionGenerationRace()
+  .then(() => console.log("Coupon JavaScript verification passed."))
+  .catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+  });

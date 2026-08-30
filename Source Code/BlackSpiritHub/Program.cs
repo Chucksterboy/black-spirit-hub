@@ -426,6 +426,7 @@ internal static class Program
 			string currentRoot = Path.Combine(root, "current");
 			Directory.CreateDirectory(Path.Combine(previousRoot, "logs"));
 			File.WriteAllText(Path.Combine(previousRoot, "grind-sessions.json"), "[{\"spotId\":\"test\"}]");
+			File.WriteAllText(Path.Combine(previousRoot, "coupon_redemptions.json"), "{\"schemaVersion\":1,\"redeemedCodes\":[\"KEEPME\"]}");
 			string previousLogName = string.Concat("bdo", "-multi", "-tool.log");
 			File.WriteAllText(Path.Combine(previousRoot, "logs", previousLogName), "previous log");
 			string previousRotatedLogName = previousLogName + ".1";
@@ -438,6 +439,7 @@ internal static class Program
 			AppPaths.MigratePreviousProductDataForTest(previousRoot, currentRoot);
 			if (Directory.Exists(previousRoot)
 				|| !File.Exists(Path.Combine(currentRoot, "grind-sessions.json"))
+				|| !File.Exists(Path.Combine(currentRoot, "coupon_redemptions.json"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log.1"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub-native.log"))
@@ -1842,6 +1844,77 @@ WHERE region='eu' AND item_id IN ($sparse,$dense,$zero);";
 
 			AppPaths statePaths = AppPaths.CreateAt(testStateRoot);
 			statePaths.EnsureDirectories();
+			using (CouponService redemptionService = new(statePaths, logger))
+			{
+				JsonElement initialRedemptionDashboard = JsonSerializer.SerializeToElement(
+					await redemptionService.InitializeAsync(CancellationToken.None));
+				if (initialRedemptionDashboard.GetProperty("redemptionStateExists").GetBoolean()
+					|| initialRedemptionDashboard.GetProperty("redeemedCodes").GetArrayLength() != 0
+					|| File.Exists(statePaths.CouponRedemptionsPath))
+				{
+					return 284;
+				}
+
+				await redemptionService.SaveRedemptionsAsync(
+					[" second-code ", "SECOND-CODE", " first-code "],
+					CancellationToken.None);
+				await redemptionService.SaveSettingsAsync(
+					new CouponSettings(false, true, "saved filter", "expired"),
+					CancellationToken.None);
+			}
+
+			using (CouponService reloadedRedemptionService = new(statePaths, logger))
+			{
+				JsonElement reloadedRedemptionDashboard = JsonSerializer.SerializeToElement(
+					await reloadedRedemptionService.InitializeAsync(CancellationToken.None));
+				string[] reloadedCodes = reloadedRedemptionDashboard
+					.GetProperty("redeemedCodes")
+					.EnumerateArray()
+					.Select(value => value.GetString() ?? string.Empty)
+					.ToArray();
+				if (!reloadedRedemptionDashboard.GetProperty("redemptionStateExists").GetBoolean()
+					|| !reloadedCodes.SequenceEqual(
+						["FIRSTCODE", "SECONDCODE"],
+						StringComparer.OrdinalIgnoreCase))
+				{
+					return 285;
+				}
+
+				await reloadedRedemptionService.SaveRedemptionsAsync(
+					["second-code"],
+					CancellationToken.None);
+			}
+
+			using (CouponService undoReloadService = new(statePaths, logger))
+			{
+				JsonElement undoDashboard = JsonSerializer.SerializeToElement(
+					await undoReloadService.InitializeAsync(CancellationToken.None));
+				string[] undoCodes = undoDashboard
+					.GetProperty("redeemedCodes")
+					.EnumerateArray()
+					.Select(value => value.GetString() ?? string.Empty)
+					.ToArray();
+				if (!undoCodes.SequenceEqual(["SECONDCODE"], StringComparer.OrdinalIgnoreCase))
+				{
+					return 286;
+				}
+			}
+
+			await File.WriteAllTextAsync(
+				statePaths.CouponRedemptionsPath,
+				"{}",
+				CancellationToken.None);
+			using (CouponService invalidRedemptionService = new(statePaths, logger))
+			{
+				JsonElement invalidDashboard = JsonSerializer.SerializeToElement(
+					await invalidRedemptionService.InitializeAsync(CancellationToken.None));
+				if (invalidDashboard.GetProperty("redemptionStateExists").GetBoolean()
+					|| invalidDashboard.GetProperty("redeemedCodes").GetArrayLength() != 0)
+				{
+					return 287;
+				}
+			}
+			File.Delete(statePaths.CouponRedemptionsPath);
 			const string couponFeedJson = """
 				{
 				  "coupons": [
