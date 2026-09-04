@@ -11,11 +11,24 @@ const sourceDirectory=path.join(repositoryRoot,"Source Code");
 const jsPath=path.join(sourceDirectory,"BlackSpiritHub.Resources.Black_Spirit_Hub.js");
 const htmlPath=path.join(sourceDirectory,"BlackSpiritHub.Resources.Black_Spirit_Hub.html");
 const cssPath=path.join(sourceDirectory,"BlackSpiritHub.Resources.Black_Spirit_Hub.css");
+const builderPath=path.join(scriptDirectory,"build-recipe-book-data.mjs");
 const js=fs.readFileSync(jsPath,"utf8");
 const html=fs.readFileSync(htmlPath,"utf8");
 const css=fs.readFileSync(cssPath,"utf8");
+const builder=fs.readFileSync(builderPath,"utf8");
 const navigationSpritePath=path.join(sourceDirectory,"NavigationAssets","nav-icons.svg");
 const navigationSprite=fs.readFileSync(navigationSpritePath,"utf8");
+
+const officialPatchUrl="https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US";
+const officialPatchRetiredIds=[
+  4924,5303,5304,5305,5306,12318,12319,12320,12329,15276,15277,15278,
+  44332,45122,45123,45297,45299,45301,45333,45335,45336,45337,45338,45339,
+  45341,45342,45343,45344,45345,768154,768155,1000462
+];
+const retiredSetBody=builder.match(/const OFFICIAL_PATCH_RETIRED_ITEM_IDS = new Set\(\[([\s\S]*?)\]\);/)?.[1]||"";
+const builderOfficialPatchRetiredIds=[...retiredSetBody.matchAll(/\b\d+\b/g)].map(match=>Number(match[0]));
+assert.deepEqual(builderOfficialPatchRetiredIds,officialPatchRetiredIds,"the official patch retired-item filter must match the reviewed September 3 removal list exactly");
+assert.ok(!builderOfficialPatchRetiredIds.includes(45334)&&!builderOfficialPatchRetiredIds.includes(45340),"active base Sharp Spirit Stone client identities must not be over-filtered");
 
 const startMarker="/* RECIPE_BOOK_CORE_START */";
 const endMarker="/* RECIPE_BOOK_CORE_END */";
@@ -316,6 +329,11 @@ assert.equal(core.recipeBookFilterRecipes(prepared,{mode:"name",type:"COOK"}).ma
 assert.throws(()=>core.recipeBookPrepareData({...fixture,schemaVersion:2}),/schemaVersion must be 1/);
 assert.throws(()=>core.recipeBookPrepareData({...fixture,recipes:[{id:"bad",outputId:"404",type:"COOK",inputs:[{itemId:"5",count:1}]}]}),/outputId does not reference an item/);
 assert.throws(()=>core.recipeBookPrepareData({...fixture,recipes:[{id:"bad",outputId:"1",type:"COOK",inputs:[{itemId:"5",count:0}]}]}),/count must be greater than zero/);
+const rangedFixture=core.recipeBookPrepareData({...fixture,recipes:fixture.recipes.map((recipe,index)=>index?recipe:{...recipe,outputQuantityMin:10,outputQuantityMax:18,outputQuantityNote:"Varies with Processing Mastery",officialSource:officialPatchUrl})});
+const rangedFixtureRecipe=rangedFixture.recipes.find(recipe=>recipe.id==="cook-beer");
+assert.deepEqual({min:rangedFixtureRecipe.outputQuantityMin,max:rangedFixtureRecipe.outputQuantityMax,note:rangedFixtureRecipe.outputQuantityNote,source:rangedFixtureRecipe.officialSource},{min:10,max:18,note:"Varies with Processing Mastery",source:officialPatchUrl},"variable output ranges and official provenance must survive catalog preparation");
+assert.throws(()=>core.recipeBookPrepareData({...fixture,recipes:[{...fixture.recipes[0],outputQuantityMin:18,outputQuantityMax:10},...fixture.recipes.slice(1)]}),/outputQuantityMax must be a whole number no smaller than outputQuantityMin/);
+assert.throws(()=>core.recipeBookPrepareData({...fixture,recipes:[{...fixture.recipes[0],officialSource:"http://example.invalid/patch"},...fixture.recipes.slice(1)]}),/officialSource must be an HTTPS URL/);
 
 const bundledDataPath=path.join(sourceDirectory,"Assets","RecipeBook","recipes.json");
 if(fs.existsSync(bundledDataPath)){
@@ -333,6 +351,9 @@ if(fs.existsSync(bundledDataPath)){
   const manifest=JSON.parse(manifestBytes.toString("utf8"));
   const filterReport=JSON.parse(filterReportBytes.toString("utf8"));
   const bundled=core.recipeBookPrepareData(payload);
+  const recipesForOutput=outputId=>payload.recipes.filter(recipe=>Number(recipe.outputId)===Number(outputId));
+  const recipesUsingItem=itemId=>payload.recipes.filter(recipe=>recipe.inputs.some(input=>Number(input.itemId)===Number(itemId)));
+  const sortedInputPairs=recipe=>recipe.inputs.map(input=>[Number(input.itemId),input.count]).sort((left,right)=>left[0]-right[0]||left[1]-right[1]);
   assert.equal(fs.readFileSync(bundleIdPath,"utf8").trim(),digest(manifestBytes),"bundle marker must hash the exact manifest bytes");
   assert.equal(manifest.dataset.path,"recipes.json");
   assert.equal(manifest.dataset.bytes,datasetBytes.length);
@@ -342,12 +363,17 @@ if(fs.existsSync(bundledDataPath)){
   assert.equal(manifest.filterReport.sha256,digest(filterReportBytes));
   assert.equal(payload.counts.recipes,payload.recipes.length,"dataset recipe count must be exact");
   assert.equal(payload.counts.items,Object.keys(payload.items).length,"dataset item count must be exact");
-  assert.equal(payload.counts.rawRecipes,payload.counts.recipes+payload.counts.excludedRecipes,"every extracted recipe must be kept or reported as excluded");
+  assert.equal(payload.counts.rawRecipes+payload.counts.officialPatchRecipeOverrides,payload.counts.recipes+payload.counts.excludedRecipes,"every extracted recipe and official patch override must be kept or reported as excluded");
   assert.equal(filterReport.counts.rawRecipes,payload.counts.rawRecipes,"filter report and runtime dataset must describe the same source snapshot");
+  assert.equal(filterReport.counts.officialPatchRecipeOverrides,payload.counts.officialPatchRecipeOverrides,"filter report and runtime dataset must describe the same official recipe overlay");
   assert.deepEqual(filterReport.counts.exclusions,payload.counts.exclusions,"filter report exclusion totals must match the runtime dataset");
-  assert.equal(bundled.recipes.length,9854,"the reviewed client snapshot recipe count changed unexpectedly");
-  assert.equal(Object.keys(bundled.items).length,7125,"the reviewed client snapshot plus 25 curated group-only material identities changed unexpectedly");
-  assert.equal(bundled.resourceItems.length,4199,"the reviewed snapshot plus curated and derived substitution-member identities changed unexpectedly");
+  assert.equal(payload.counts.rawRecipes,13525,"the reviewed September 3 extractor recipe count changed unexpectedly");
+  assert.equal(payload.counts.officialPatchRecipeOverrides,4,"the reviewed patch must contribute Elion's Tear plus three variable-yield Spirit Stone recipes");
+  assert.equal(payload.counts.excludedRecipes,3316,"the reviewed September 3 exclusion count changed unexpectedly");
+  assert.equal(payload.counts.items,7626,"the reviewed September 3 referenced-item count changed unexpectedly");
+  assert.equal(bundled.recipes.length,10213,"the reviewed September 3 client snapshot recipe count changed unexpectedly");
+  assert.equal(Object.keys(bundled.items).length,7651,"the reviewed client snapshot plus 25 curated group-only material identities changed unexpectedly");
+  assert.equal(bundled.resourceItems.length,4711,"the reviewed snapshot plus curated and derived substitution-member identities changed unexpectedly");
   const bundledFishGroup=bundled.substitutionGroupLookup.fish,bundledFreshFish=bundledFishGroup?.members.filter(member=>member.tier.startsWith("fresh-"))||[],bundledDriedFish=bundledFishGroup?.members.filter(member=>member.tier==="dried")||[];
   assert.ok(bundledFishGroup,"The installed-client snapshot must derive a generic Fish Group from its exact Drying mappings");
   assert.equal(bundledFishGroup.members.length,359,"The reviewed snapshot must expose all 180 fresh Fish identities and 179 unique dried outputs");
@@ -376,21 +402,127 @@ if(fs.existsSync(bundledDataPath)){
   assert.equal(core.recipeBookFilterRecipes(bundled,{query:"Wolf's Blood",mode:"ingredient"}).length,36,"Wolf's Blood must resolve to every current Wolf Blood recipe in the reviewed snapshot");
   assert.equal(payload.source.kind,"installed-black-desert-client","recipe facts must come from the installed game client");
   assert.equal(payload.source.locale,"en","the bundled catalog must use English client names");
+  assert.equal(payload.generatedAtUtc,"2026-09-03T14:41:47.192Z","the reviewed bundle must retain the exact September 3 client snapshot time");
+  assert.deepEqual(payload.source.extractor,{
+    repository:"https://github.com/iDevelopThings/bdo-data-extractor",
+    version:"v0.1.9",
+    commit:"5bf11bd7bc60dcbb6126be34bf3d76633abdd8b2",
+    compatibility:"2026-09 client item layout"
+  },"the catalog must retain reproducible extractor provenance for the current client layout");
+  assert.deepEqual(payload.source.officialPatch,{
+    publisher:"Pearl Abyss",
+    title:"Patch Notes - September 3, 2026",
+    publishedDate:"2026-09-03",
+    url:officialPatchUrl
+  },"official recipe overlays must cite the exact NA/EU patch used for review");
+  assert.equal(payload.source.files.itemsSha256,"c9fcc68a1ee64e32efac814dae9189bd1e1adb0636866622b85a4b205774caf0","item facts must come from the reviewed September 3 extraction");
+  assert.equal(payload.source.files.recipesSha256,"24d62be02237c70cfc8ef9ad8cb3b950e784316430fd97b30aafe9fcb8ae55ac","recipe facts must come from the reviewed September 3 extraction");
+  assert.equal(payload.source.files.archive.sha256,"8ed5ad63993ed499120ff9509fbc644d3da58ea36c383bd04daa319e6ead11c9","the installed archive provenance must remain reproducible");
+  assert.equal(payload.source.files.localization.sha256,"4d4874f7b9bfd1e9708ecf4bda62bf4f4fcd9afb1c2e36228ab0253318d59438","the installed English localization provenance must remain reproducible");
   assert.equal(payload.filters.excludesEventPrefixedItems,true);
   assert.equal(payload.filters.excludesRetiredGhostItems,true);
   assert.equal(payload.filters.excludesLegacyImperialBoxes,true);
   assert.equal(payload.filters.excludesClientRetiredItems,true);
+  assert.equal(payload.filters.excludesOfficialPatchRetiredItems,true);
   assert.equal(payload.filters.excludesClientUnavailableItems,true);
   assert.ok((payload.counts.exclusions["event-or-retired-output"]||0)>0,"event/retired outputs must be actively excluded");
   assert.ok((payload.counts.exclusions["retired-output-ghost"]||0)>0,"retired ghost outputs must be actively excluded");
   assert.equal(payload.counts.exclusions["legacy-imperial-box"],50,"all raw pre-rework Imperial box rows must be intentionally classified");
   assert.ok(payload.counts.exclusions["client-retired-output"]>0&&payload.counts.exclusions["client-retired-ingredient"]>0,"client-retired materials must be excluded as outputs and ingredients");
   assert.ok(payload.counts.exclusions["client-unavailable-output"]>0&&payload.counts.exclusions["client-unavailable-ingredient"]>0,"unavailable fossil recipes must be excluded as outputs and ingredients");
+
+  const elionRecipes=recipesForOutput(17566);
+  assert.equal(payload.items["17566"]?.name,"Elion's Tear","Elion's Tear must remain discoverable by its current client name");
+  assert.equal(elionRecipes.length,1,"the retired Mystical Spirit Powder formula must be replaced by one current Elion's Tear formula");
+  assert.equal(elionRecipes[0].type,"SIMPLE_ALCHEMY");
+  assert.deepEqual(sortedInputPairs(elionRecipes[0]),[[8042,1],[721002,50]],"Elion's Tear must use Tears of War x1 and Ancient Spirit Dust x50");
+  assert.equal(elionRecipes[0].officialSource,officialPatchUrl,"the Elion's Tear overlay must retain its official source");
+
+  const shardRecipes=recipesForOutput(44336);
+  assert.equal(payload.items["44336"]?.name,"Alchemy Stone Shard");
+  assert.equal(shardRecipes.length,3,"only the three current blue Spirit Stones should produce Alchemy Stone Shards");
+  assert.deepEqual(shardRecipes.map(recipe=>Number(recipe.inputs[0]?.itemId)).sort((left,right)=>left-right),[45298,45300,45302],"Destruction, Guardian, and Life Spirit Stones must each have a shard recipe");
+  for(const recipe of shardRecipes){
+    assert.equal(recipe.type,"GRIND","Spirit Stones must be ground into Alchemy Stone Shards");
+    assert.equal(recipe.inputs.length,1,"each shard formula must consume exactly one Spirit Stone identity");
+    assert.equal(recipe.inputs[0].count,1,"each shard formula must consume one Spirit Stone");
+    assert.equal(recipe.outputQuantityMin,10,"Spirit Stone grinding must retain the official minimum yield");
+    assert.equal(recipe.outputQuantityMax,18,"Spirit Stone grinding must retain the official maximum yield");
+    assert.equal(recipe.outputQuantityNote,"Varies with Processing Mastery");
+    assert.equal(recipe.officialSource,officialPatchUrl);
+  }
+
+  for(const [outputId,energyId] of [[56185,56191],[56186,56192],[56187,56193],[56188,56194]]){
+    const breathRecipes=recipesForOutput(outputId);
+    assert.equal(payload.items[String(outputId)]?.name,"Breath of All Creations");
+    assert.equal(breathRecipes.length,1,`Breath of All Creations ${outputId} must have one current formula`);
+    assert.equal(breathRecipes[0].type,"SIMPLE_ALCHEMY");
+    assert.deepEqual(sortedInputPairs(breathRecipes[0]),[[6603,20],[energyId,1],[721002,10]].sort((left,right)=>left[0]-right[0]),"Breath of All Creations must use Energy x1, Oil of Fortitude x20, and Ancient Spirit Dust x10");
+    assert.ok(!breathRecipes[0].inputs.some(input=>Number(input.itemId)===4924),"Mystical Spirit Powder must not remain in a Breath of All Creations formula");
+  }
+
+  for(const [heartId,heartName,blueStoneId,blueStoneName] of [
+    [45503,"Khan's Heart: Destruction",45298,"Destruction Spirit Stone"],
+    [45513,"Khan's Heart: Protection",45300,"Guardian Spirit Stone"],
+    [45514,"Khan's Heart: Life",45302,"Life Spirit Stone"]
+  ]){
+    assert.equal(payload.items[String(blueStoneId)]?.name,blueStoneName);
+    assert.equal(payload.items[String(blueStoneId)]?.grade,2,`${blueStoneName} must be the current blue-grade identity`);
+    const heartRecipes=recipesForOutput(heartId);
+    assert.equal(payload.items[String(heartId)]?.name,heartName);
+    assert.equal(heartRecipes.filter(recipe=>recipe.inputs.some(input=>Number(input.itemId)===blueStoneId)).length,2,`${heartName} must retain both current formulas that use its blue Spirit Stone`);
+  }
+
+  assert.equal(payload.items["821469"]?.name,"Evergreen Shard");
+  assert.equal(payload.items["933601"]?.name,"Evergreen Orb");
+  const evergreenShardRecipes=recipesForOutput(821469),evergreenOrbRecipes=recipesForOutput(933601);
+  assert.equal(evergreenShardRecipes.length,2,"Evergreen Shard must support its Heating formula and Orb conversion");
+  const evergreenHeating=evergreenShardRecipes.find(recipe=>recipe.type==="HEAT");
+  const evergreenFromOrb=evergreenShardRecipes.find(recipe=>recipe.type==="SIMPLE_ALCHEMY");
+  assert.ok(evergreenHeating&&evergreenFromOrb,"both Evergreen Shard processing methods must be present");
+  assert.deepEqual(sortedInputPairs(evergreenHeating),[[5960,30],[766108,500],[820979,1]].sort((left,right)=>left[0]-right[0]),"Evergreen Shard Heating must use Trace of Nature x30, Magical Lightstone Crystal x500, and Essence of Dawn x1");
+  assert.deepEqual(sortedInputPairs(evergreenFromOrb),[[933601,1]],"an unenhanced Evergreen Orb must convert back to one Evergreen Shard");
+  assert.equal(evergreenOrbRecipes.length,1,"Evergreen Orb must have one Simple Alchemy formula");
+  assert.equal(evergreenOrbRecipes[0].type,"SIMPLE_ALCHEMY");
+  assert.deepEqual(sortedInputPairs(evergreenOrbRecipes[0]),[[821469,1]],"one Evergreen Shard must produce one Evergreen Orb");
+
+  const knotDefinitions=[
+    [860358,"Bear Necessities Knot"],[860359,"Agris Knot"],[860360,"Pavilla Knot"],
+    [860361,"Venecil (Karki) Knot"],[860362,"Canape Knot"],[860363,"Venia Knot"]
+  ];
+  assert.equal(payload.items["860357"]?.name,"Merv's Silver Needle");
+  assert.equal(recipesUsingItem(860357).length,192,"the client snapshot must retain all 32 class formulas for each of the six functional-costume Knots");
+  for(const [knotId,knotName] of knotDefinitions){
+    const knotRecipes=recipesForOutput(knotId);
+    assert.equal(payload.items[String(knotId)]?.name,knotName);
+    assert.equal(knotRecipes.length,32,`${knotName} must retain one formula for every current class identity`);
+    assert.ok(knotRecipes.every(recipe=>recipe.type==="CRAFT"&&recipe.inputs.some(input=>Number(input.itemId)===860357&&input.count===1)),`${knotName} formulas must use Merv's Silver Needle x1`);
+  }
+
+  const seafoodCron=payload.items["9691"];
+  assert.equal(seafoodCron?.name,"Seafood Cron Meal");
+  assert.match(seafoodCron.description,/Weight Limit \+250 LT/,"Seafood Cron Meal must show its increased Weight Limit");
+  assert.doesNotMatch(seafoodCron.description,/Weight Limit \+100 LT/,"the pre-patch Seafood Cron Meal Weight Limit must not remain");
+
+  const greatOceanOil=payload.items["9727"];
+  assert.equal(greatOceanOil?.name,"Great Ocean Oil","Blue Whale Oil must use its current renamed identity");
+  assert.equal(Object.values(payload.items).filter(item=>item.name==="Blue Whale Oil").length,0,"the retired Blue Whale Oil name must not remain in the catalog");
+  assert.match(greatOceanOil.description,/Defeat sea monsters or Khan/i,"Great Ocean Oil must mention its current Khan source");
+  assert.match(greatOceanOil.description,/World Boss Vell Reward Bundle/i,"Great Ocean Oil must mention its current Vell source");
+  assert.equal(recipesUsingItem(9727).length,9,"all reviewed Great Ocean Oil ingredient formulas must remain discoverable");
+
+  const functionalKnotIds=new Set(knotDefinitions.map(([id])=>id));
+  const blankDescriptionItems=Object.entries(payload.items).filter(([,item])=>!item.description.trim());
+  assert.equal(blankDescriptionItems.length,359,"only the reviewed functional-costume inputs may lack client description text");
   const retiredName=/^\[(?:event|gm|test|unused|expired|removed|deprecated)\]|\b(?:obsolete|deprecated|dummy item|test item|unused item|removed item|expired item|do not use)\b/i;
   for(const [id,item] of Object.entries(payload.items)){
     assert.doesNotMatch(item.name,retiredName,`retired/event item leaked into the runtime catalog: ${id} ${item.name}`);
     assert.equal(typeof item.description,"string",`item ${id} must include a local client description`);
-    assert.ok(item.description.trim(),`item ${id} has an empty client description`);
+    if(!item.description.trim()){
+      assert.match(item.name,/^\[[^\]]+\] (?:Bear Necessities|Agris|Pavilla|Venecil|Karki|Canape|Venia)\b/,`blank client description is only allowed for a functional-costume Knot ingredient: ${id} ${item.name}`);
+      const itemUses=recipesUsingItem(id);
+      assert.ok(itemUses.length>0&&itemUses.every(recipe=>functionalKnotIds.has(Number(recipe.outputId))),`blank-description item ${id} must be used only by a functional-costume Knot formula`);
+    }
     assert.doesNotMatch(item.description,/<PA(?:Color0x[0-9a-f]+|OldColor)>/i,`item ${id} leaked client color markup`);
     assert.doesNotMatch(item.description,/\{TextBind:[^}]+\}/i,`item ${id} leaked an internal client text placeholder`);
     assert.equal(Object.hasOwn(item,"sourceIcon"),false,"client archive paths must not leak into the runtime dataset");
@@ -405,38 +537,65 @@ if(fs.existsSync(bundledDataPath)){
     5201,5202,5203,5204,5207,5208,5209,5210,5211,5212,5213,5214,5215,5216,5217,
     5951,5952,5953,5954,5955,5956,5957,5958,5959,5961,5962,5963,16002,16005,757130
   ]);
+  const officialPatchRetiredIdSet=new Set(officialPatchRetiredIds);
   const referencedItems=new Set(),signatures=new Set();
   for(const recipe of payload.recipes){
     assert.ok(!legacyImperialIds.has(Number(recipe.outputId)),`legacy Imperial box leaked into the catalog: ${recipe.outputId}`);
     assert.ok(!clientRetiredIds.has(Number(recipe.outputId)),`retired client output leaked into the catalog: ${recipe.outputId}`);
+    assert.ok(!officialPatchRetiredIdSet.has(Number(recipe.outputId)),`September 3 retired output leaked into the catalog: ${recipe.outputId}`);
     referencedItems.add(String(recipe.outputId));
     const ingredients=recipe.inputs.map(input=>{
       assert.ok(!clientRetiredIds.has(Number(input.itemId)),`retired client ingredient leaked into the catalog: ${input.itemId}`);
+      assert.ok(!officialPatchRetiredIdSet.has(Number(input.itemId)),`September 3 retired ingredient leaked into the catalog: ${input.itemId}`);
       referencedItems.add(String(input.itemId));
       return `${input.enhancement||0}:${input.itemId}x${input.count}`;
     }).sort();
-    const signature=[`${recipe.outputEnhancement||0}:${recipe.outputId}`,recipe.type,recipe.station||"",...ingredients].join("|");
+    const outputRange=recipe.outputQuantityMin||recipe.outputQuantityMax?`yield:${recipe.outputQuantityMin||1}-${recipe.outputQuantityMax||recipe.outputQuantityMin||1}`:"";
+    const signature=[`${recipe.outputEnhancement||0}:${recipe.outputId}`,recipe.type,recipe.station||"",outputRange,...ingredients].join("|");
     assert.ok(!signatures.has(signature),`duplicate recipe leaked into the catalog: ${recipe.id}`);
     signatures.add(signature);
   }
   for(const id of legacyImperialIds)assert.equal(Object.hasOwn(payload.items,String(id)),false,`legacy Imperial item ${id} must not be packaged`);
   for(const id of clientRetiredIds)assert.equal(Object.hasOwn(payload.items,String(id)),false,`retired/unavailable item ${id} must not be packaged`);
+  for(const id of officialPatchRetiredIdSet)assert.equal(Object.hasOwn(payload.items,String(id)),false,`September 3 retired item ${id} must not be packaged`);
   for(const id of [5205,5206,5960])assert.ok(Object.hasOwn(payload.items,String(id)),`current simplified replacement item ${id} must remain packaged`);
   for(const id of [9851,9852,9853,9854,9855,9856,9866,9867,9868,9869,9870,9871])assert.ok(payload.recipes.some(recipe=>Number(recipe.outputId)===id),`current Imperial box ${id} must retain recipes`);
   assert.ok(payload.recipes.some(recipe=>Number(recipe.outputId)===5868),"the active Professional's Satisfying Dinner Meal recipe must remain");
   assert.deepEqual([...referencedItems].sort((a,b)=>Number(a)-Number(b)),Object.keys(payload.items).sort((a,b)=>Number(a)-Number(b)),"runtime items must be exactly the recipe-reference union");
   assert.equal(manifest.icons.itemAliases,Object.keys(payload.items).length);
+  assert.equal(manifest.icons.itemAliases,7626,"every reviewed runtime item must resolve to a cached icon or an explicit fallback");
+  assert.equal(manifest.icons.clientSourceFiles,4362,"the reviewed client icon-source count changed unexpectedly");
   assert.equal(manifest.icons.fallbackItems.length,payload.counts.fallbackIcons);
   assert.equal(manifest.icons.uniqueFiles,payload.counts.uniqueIcons+1,"the manifest must contain all WebPs plus the SVG fallback");
-  assert.equal(payload.counts.uniqueIcons,3897,"the reviewed content-deduplicated icon count changed unexpectedly");
-  assert.equal(payload.counts.fallbackIcons,6,"only the six known client preview-art collisions may use the fallback");
+  assert.equal(payload.counts.uniqueIcons,3987,"the reviewed lossless content-deduplicated icon count changed unexpectedly");
+  assert.equal(payload.counts.fallbackIcons,31,"only the reviewed missing or non-square client artwork may use the fallback");
+  assert.equal(manifest.icons.uniqueFiles,3988,"the reviewed bundle must contain 3,987 lossless WebPs plus the SVG fallback");
+  assert.equal(manifest.icons.bytes,16840406,"the reviewed native lossless icon payload changed unexpectedly");
   assert.equal(manifest.icons.encoding,"lossless","cached client icons must not be degraded by lossy WebP compression");
-  assert.deepEqual(manifest.icons.fallbackItems.map(item=>item.id).sort((a,b)=>a-b),[14019,14020,14022,16901,16902,56001],"only the reviewed non-square client preview assets may use the fallback");
-  assert.ok(manifest.icons.fallbackItems.every(item=>item.reason==="non-square-client-artwork"),"preview-art fallbacks must be explicitly classified");
+  const expectedFallbackIds=[2018,2020,2110,2218,2220,2318,2320,2710,4017,4098,14019,14020,14022,16901,16902,25623,25624,25625,27993,28066,28245,28246,28247,28248,28249,28250,28251,28252,28253,28346,56001];
+  const nonSquareFallbackIds=new Set([4017,4098,14019,14020,14022,16901,16902,56001]);
+  assert.deepEqual(manifest.icons.fallbackItems.map(item=>item.id).sort((a,b)=>a-b),expectedFallbackIds,"only the reviewed missing or non-square client artwork may use the fallback");
+  for(const item of manifest.icons.fallbackItems){
+    assert.equal(item.reason,nonSquareFallbackIds.has(item.id)?"non-square-client-artwork":"missing-client-artwork",`fallback reason changed for item ${item.id}`);
+  }
   for(const item of manifest.icons.fallbackItems)assert.equal(payload.items[String(item.id)]?.icon,"icons/item-fallback.svg",`fallback item ${item.id} must not retain non-square preview artwork`);
   assert.ok(manifest.icons.clientSourceFiles>=payload.counts.uniqueIcons,"client-path deduplication cannot create extra physical icons");
   const manifestedPaths=new Set();
   const bundleRootPrefix=`${path.resolve(bundleRoot)}${path.sep}`;
+  const webpChunkTypes=bytes=>{
+    assert.ok(bytes.length>=20,"WebP artwork must contain a complete RIFF chunk");
+    assert.equal(bytes.readUInt32LE(4)+8,bytes.length,"WebP RIFF size must cover the exact cached file");
+    const chunks=[];
+    let offset=12;
+    while(offset+8<=bytes.length){
+      const type=bytes.subarray(offset,offset+4).toString("ascii"),size=bytes.readUInt32LE(offset+4),end=offset+8+size;
+      assert.ok(end<=bytes.length,`WebP ${type} chunk extends past its RIFF container`);
+      chunks.push(type);
+      offset=end+(size%2);
+    }
+    assert.equal(offset,bytes.length,"WebP RIFF chunks must consume the exact cached file");
+    return chunks;
+  };
   for(const entry of manifest.icons.files){
     assert.match(entry.path,/^icons\/(?:items\/[a-f0-9]{64}\.webp|item-fallback\.svg)$/,"manifest icon paths must be content-addressed or the fixed fallback");
     assert.ok(!manifestedPaths.has(entry.path),`duplicate manifest icon path: ${entry.path}`);
@@ -450,6 +609,9 @@ if(fs.existsSync(bundledDataPath)){
       assert.equal(bytes.subarray(0,4).toString("ascii"),"RIFF",`icon is not RIFF WebP: ${entry.path}`);
       assert.equal(bytes.subarray(8,12).toString("ascii"),"WEBP",`icon is not WebP: ${entry.path}`);
       assert.equal(entry.encoding,"lossless",`icon must retain lossless client artwork: ${entry.path}`);
+      const chunks=webpChunkTypes(bytes);
+      assert.ok(chunks.includes("VP8L"),`icon must contain a lossless VP8L payload: ${entry.path}`);
+      assert.ok(!chunks.includes("VP8 "),`icon must not contain a lossy VP8 payload: ${entry.path}`);
       assert.ok(entry.width>0&&entry.width===entry.height,`item artwork must be a square native icon, not preview art: ${entry.path}`);
     }
   }
@@ -458,7 +620,9 @@ if(fs.existsSync(bundledDataPath)){
   for(const [id,item] of Object.entries(payload.items))assert.ok(manifestedPaths.has(item.icon),`item ${id} references an unmanifested icon`);
   const notice=fs.readFileSync(noticePath,"utf8");
   assert.match(notice,/unofficial and is not affiliated with or endorsed by Pearl Abyss/i);
-  assert.match(notice,/English item names and descriptions/i,"bundle notice must identify locally extracted item descriptions");
+  assert.match(notice,/official Pearl Abyss September 3, 2026 patch overlay/i,"bundle notice must distinguish the cited official overlay from installed-client facts");
+  assert.match(notice,/English item names, descriptions, and item icons/i,"bundle notice must identify locally extracted item metadata and artwork");
+  assert.match(notice,/lossless WebP at its native client dimensions/i,"bundle notice must identify the cached artwork encoding and sizing policy");
   assert.match(notice,/No BDO Codex, BDOlytics, or Black Desert Foundry editorial content or artwork is bundled\./);
 }
 
@@ -505,6 +669,9 @@ assert.match(css,/\.recipeBookModeToggle span\{[^}]*width:100%;height:100%/,"sel
 assert.match(css,/\.recipeBookSearchButton\{[^}]*height:var\(--recipe-book-control-height\)/,"Search button must match the search field height");
 assert.match(css,/\.recipeBookFilterField\{[^}]*height:var\(--recipe-book-control-height\)/,"category selector must align with the shared control row");
 assert.match(js,/counts\.uniqueIcons[\s\S]*?cached images/,"catalog status must report physical cached images rather than item aliases");
+assert.match(js,/function recipeBookOutputYieldLabel\(recipe\)[\s\S]*?Yields \$\{amount\}/,"variable recipe yields must have a dedicated display formatter");
+assert.match(js,/recipeBookCardMarkup\(recipe,tokens\)[\s\S]*?yieldLabel=recipeBookOutputYieldLabel\(recipe\)[\s\S]*?\$\{yieldLabel\?` · \$\{escapeHtml\(yieldLabel\)\}`:""\}/,"catalog cards must display variable recipe yields");
+assert.match(js,/recipeBookCraftableCardMarkup\(entry\)[\s\S]*?yieldLabel=recipeBookOutputYieldLabel\(recipe\)[\s\S]*?\$\{yieldLabel\?` · \$\{escapeHtml\(yieldLabel\)\}`:""\}/,"craftable cards must display variable recipe yields");
 assert.match(js,/persistSetting\(RECIPE_BOOK_RESOURCES_SETTING/,"My Resources must persist locally");
 assert.match(js,/persistSetting\(RECIPE_BOOK_CRAFT_PLANS_SETTING/,"craft planner choices must persist locally");
 assert.match(js,/aria-activedescendant/,"resource autocomplete must expose its keyboard-highlighted option");

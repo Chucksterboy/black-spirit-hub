@@ -4994,7 +4994,7 @@ VALUES(880001,'eu',$expired,2030000000,17,1,'bulk-sales');";
 			return 263;
 		}
 
-		const string khanScaleIcon = "icons/items/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831.webp";
+		const string khanScaleIcon = "icons/items/4b6f7809e85da0f7e673070d85a49da0a38b3ba24d5dd90d587019bd999b7b81.webp";
 		using RecipeBookScreenshotService screenshotService = new(AppContext.BaseDirectory);
 		IReadOnlyList<RecipeBookScreenshotIconCandidate> khanScaleMatches =
 			screenshotService.MatchBundledAtlasTileColorForSmoke(khanScaleIcon);

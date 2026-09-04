@@ -155,7 +155,7 @@ const innerEdaniaFixtures = [
   ["Magaia Temple", 919, 410, 490, "1", 17, [2340, 840], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
   ["Aresion Temple", 920, 415, 495, "1", 24, [2455, 850], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
   ["Scales of Judgment", 921, 415, 500, "3", 24, [2455, 860], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
-  ["Event Horizon", 922, 420, 505, "1", 27, [2570, 870], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"]
+  ["Event Horizon", 922, 420, 505, "1", 35, [2570, 870], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"]
 ];
 for (const [name, id, ap, dp, players, expectedDropCount, maxCaps, expectedCcs, expectedCrystal] of innerEdaniaFixtures) {
   const zone = spot(name);
@@ -168,6 +168,21 @@ for (const [name, id, ap, dp, players, expectedDropCount, maxCaps, expectedCcs, 
   assert.deepStrictEqual(Array.from(spotCcs(zone)), expectedCcs, `${name} has the wrong live-client resistance family.`);
   assert.deepStrictEqual(Array.from(maxCapOverrides[normalizeName(name)]), maxCaps, `${name} has the wrong total AP/DP cap.`);
   assert.deepStrictEqual(Array.from(recommendations(zone), group => group.primary.name), [expectedCrystal], `${name} recommends the wrong resistance crystal.`);
+}
+const eventHorizon = spot("Event Horizon");
+const patch10550EventHorizonDrops = new Map([
+  ["821341", "Crimson Primordial Luster - Sovereign"],
+  ["821342", "Violet Primordial Luster - Sovereign"],
+  ["821343", "Violet Primordial Luster - Edana"],
+  ["767337", "Refined Origin of Hunger"],
+  ["767338", "Refined Essence of Devouring"],
+  ["16001", "Black Stone"],
+  ["721002", "Ancient Spirit Dust"],
+  ["721003", "Caphras Stone"]
+]);
+for (const [itemId, itemName] of patch10550EventHorizonDrops) {
+  const matches = eventHorizon.drops.filter(drop => String(drop.id) === itemId && drop.name === itemName);
+  assert.strictEqual(matches.length, 1, `Event Horizon must contain exactly one ${itemName} (${itemId}) drop.`);
 }
 for (const name of ["Bashim Base", "Desert Naga Temple", "Traitor's Graveyard"]) {
   assert.strictEqual(recommendations(spot(name)).length, 0, `${name} should use the neutral state.`);

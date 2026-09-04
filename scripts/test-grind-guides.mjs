@@ -100,6 +100,32 @@ assert.match(mechanicText(907),/Star Debris|chain/i);
 assert.match(mechanicText(908),/Sycraia Memory|Tower of Restoration/i);
 assert.match(mechanicText(916),/first Golem attack|Stalagmite/i);
 
+const patch10550Url="https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US";
+for(const id of [919,922]){
+  assert.equal(guides[String(id)].source.url,patch10550Url,`Guide ${id} must cite the exact September 3 patch notes`);
+  assert.equal(guides[String(id)].source.updated,"2026-09-03",`Guide ${id} must carry the patch date`);
+}
+assert.match(mechanicText(919),/Unbroken Oath[^.]*first|first[^.]*Unbroken Oath/i,"Magaia must explain that Unbroken Oath is now the first battle");
+assert.match(mechanicText(919),/Priest of the End[^.]*third|third[^.]*Priest of the End/i,"Magaia must explain that the Priest of the End is now the third battle");
+assert.match(mechanicText(922),/Despair-Consumed Edanas[^.]*disappear|disappear[^.]*Despair-Consumed Edanas/i,"Event Horizon must explain the Ibedor disappearance change");
+
+const eventHorizon=spotById.get("922");
+assert.equal(eventHorizon.drops.length,35,"Event Horizon must expose all 35 official drops after patch 10550");
+const patch10550Drops=[
+  ["821341","Crimson Primordial Luster - Sovereign"],
+  ["821342","Violet Primordial Luster - Sovereign"],
+  ["821343","Violet Primordial Luster - Edana"],
+  ["767337","Refined Origin of Hunger"],
+  ["767338","Refined Essence of Devouring"],
+  ["16001","Black Stone"],
+  ["721002","Ancient Spirit Dust"],
+  ["721003","Caphras Stone"]
+];
+for(const [itemId,itemName] of patch10550Drops){
+  const matchingDrops=eventHorizon.drops.filter(drop=>String(drop.id)===itemId&&drop.name===itemName);
+  assert.equal(matchingDrops.length,1,`Event Horizon must include exactly one ${itemName} (${itemId}) drop`);
+}
+
 const html=read("BlackSpiritHub.Resources.Black_Spirit_Hub.html");
 const css=read("BlackSpiritHub.Resources.Black_Spirit_Hub.css");
 const js=read("BlackSpiritHub.Resources.Black_Spirit_Hub.js");

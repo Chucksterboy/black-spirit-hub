@@ -3515,6 +3515,7 @@ body[data-style] .navFrame .navButton.betaNavButton{flex:0 1 205px!important;max
 .lightstoneTypeSwitch button{height:36px;padding:0 15px;border:1px solid color-mix(in srgb,var(--a1) 30%,var(--border));border-radius:7px;background:color-mix(in srgb,var(--field-bg) 88%,#000);color:var(--text);font-weight:900;cursor:pointer}
 .lightstoneTypeSwitch button.active,.lightstoneTypeSwitch button:hover{background:var(--a1);border-color:var(--a1);color:#06121c}
 .lightstoneAmpToggle{height:36px;display:inline-flex;align-items:center;gap:9px;padding:0 12px;border:1px solid color-mix(in srgb,#ffd65c 38%,var(--border));border-radius:9px;background:color-mix(in srgb,var(--field-bg) 88%,#000);color:var(--muted);font-size:12px;font-weight:900;cursor:pointer;user-select:none}
+.lightstoneAmpToggle[hidden]{display:none!important}
 .lightstoneAmpToggle .switch{width:42px;height:22px}
 .lightstoneAmpToggle .slider:before{height:16px;width:16px;left:3px}
 .lightstoneAmpToggle input:checked + .slider:before{transform:translate(18px,-50%)}

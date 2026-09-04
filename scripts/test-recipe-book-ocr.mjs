@@ -834,7 +834,7 @@ assert.match(programSource, /unsafeTruncatedRescueCandidates[\s\S]*?"665"[\s\S]*
 assert.match(programSource,/disputed\.Suggestion\?\.Token != "12103"[\s\S]*?lowConfidenceSuggestion\.Suggestion\?\.Quantity != 2_199[\s\S]*?singleMainSuggestion\.Suggestion\?\.Quantity != 23_796[\s\S]*?roundedSuggestion\.Suggestion\?\.Token != "278\.8K"/,"Offline smoke must pin majority, low-confidence, single-main-view, and rounded review suggestions");
 assert.match(programSource,/unsafeTruncatedRescue\.Suggestion\?\.Quantity != 665[\s\S]*?rightOnlySingleDigit\.Suggestion\?\.Quantity != 3[\s\S]*?singleRightGuess\.Suggestion\?\.Quantity != 3/,"Offline smoke must prefill every strict right-side guess, including majority, single-view, and multi-digit results");
 assert.match(programSource,/blankQuantityDecision = PpOcrv5QuantityRecognizer\.SelectStrictConsensus\([\s\S]*?blankQuantityCandidates[\s\S]*?blankQuantityDecision\.Suggestion is not null/,"Offline smoke must keep wholly blank OCR candidates out of suggestions");
-assert.match(programSource,/const string khanScaleIcon = "icons\/items\/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831\.webp"[\s\S]*?MatchBundledAtlasTileColorForSmoke\(khanScaleIcon\)[\s\S]*?Score < 0\.99[\s\S]*?Score - khanScaleMatches\[1\]\.Score < 0\.08/,"Offline smoke must keep Khan's Scale as a high-confidence, well-separated exact color match");
+assert.match(programSource,/const string khanScaleIcon = "icons\/items\/4b6f7809e85da0f7e673070d85a49da0a38b3ba24d5dd90d587019bd999b7b81\.webp"[\s\S]*?MatchBundledAtlasTileColorForSmoke\(khanScaleIcon\)[\s\S]*?Score < 0\.99[\s\S]*?Score - khanScaleMatches\[1\]\.Score < 0\.08/,"Offline smoke must keep Khan's Scale as a high-confidence, well-separated exact color match");
 assert.ok(fs.existsSync(fixtureRunnerPath), "The executable real-image OCR fixture runner is missing");
 assert.ok(fs.existsSync(fixtureManifestPath), "The real-image OCR fixture manifest is missing");
 const fixtureRunner = fs.readFileSync(fixtureRunnerPath, "utf8");
@@ -974,11 +974,12 @@ for (const requiredPath of [atlasPath, indexPath, clientCatalogAtlasPath, client
 assert.equal(fs.statSync(modelPath).size, 7_872_351, "The reviewed PP-OCRv5 model size changed unexpectedly");
 assert.equal(crypto.createHash("sha256").update(fs.readFileSync(modelPath)).digest("hex"), "c3461add59bb4323ecba96a492ab75e06dda42467c9e3d0c18db5d1d21924be8", "The reviewed PP-OCRv5 model changed unexpectedly");
 assert.match(fs.readFileSync(paddleLicensePath, "utf8"), /Apache License\s+Version 2\.0, January 2004/);
-assert.match(fs.readFileSync(modelNoticePath, "utf8"), /RapidOCR 3\.9\.2[\s\S]*?C3461ADD59BB4323ECBA96A492AB75E06DDA42467C9E3D0C18DB5D1D21924BE8/);
+const modelNotice = fs.readFileSync(modelNoticePath, "utf8");
+assert.match(modelNotice, /RapidOCR 3\.9\.2[\s\S]*?C3461ADD59BB4323ECBA96A492AB75E06DDA42467C9E3D0C18DB5D1D21924BE8/);
+assert.match(modelNotice, /Screenshot pixels are supplied directly to the local model and are not sent to[\s\S]*?any other network service\./, "The model notice must preserve the local-only screenshot-processing assurance");
 assert.match(fs.readFileSync(onnxRuntimeLicensePath, "utf8"), /Copyright \(c\) Microsoft Corporation[\s\S]*?Permission is hereby granted, free of charge/);
 assert.match(fs.readFileSync(onnxRuntimeNoticesPath, "utf8"), /THIRD PARTY SOFTWARE NOTICES AND INFORMATION/);
 const recipeNotice = fs.readFileSync(recipeNoticePath, "utf8");
-assert.match(recipeNotice, /RapidOCR 3\.9\.2 English PP-OCRv5 mobile ONNX model entirely locally and offline/);
 assert.doesNotMatch(recipeNotice, /Tesseract|Leptonica|eng\.traineddata/i, "The Recipe Book notice must not describe the retired OCR stack");
 for (const retiredPath of [
   path.join(ocrAssetRoot, "tessdata", "eng.traineddata"),
@@ -1008,7 +1009,7 @@ const recipePayload = JSON.parse(fs.readFileSync(recipeDataPath, "utf8"));
 const bundledOcrData=core.prepareData(recipePayload),driedClownfishIcon=recipePayload.items["8602"].icon,carrotConfitIcon=recipePayload.items["9321"].icon;
 const khanScale=recipePayload.items["5826"],waterSpiritStoneFragment=recipePayload.items["44306"];
 assert.equal(khanScale.name,"Khan's Scale");
-assert.equal(khanScale.icon,"icons/items/ecf23d19ec0badccd5ec9459f98e68b39ce70c5d136a17ae4571379135629831.webp");
+assert.equal(khanScale.icon,"icons/items/4b6f7809e85da0f7e673070d85a49da0a38b3ba24d5dd90d587019bd999b7b81.webp");
 assert.equal(waterSpiritStoneFragment.name,"Water Spirit Stone Fragment");
 assert.equal(waterSpiritStoneFragment.icon,"icons/items/987cedde035dbaeaa2bb0b2d7674d7cc1ad6710246b78fe93bdb4b10afc84dae.webp");
 assert.notEqual(khanScale.icon,waterSpiritStoneFragment.icon,"Khan's Scale and Water Spirit Stone Fragment must remain distinct visual identities");
@@ -1045,7 +1046,7 @@ assert.ok(atlasBytes.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d
 assert.equal(atlasBytes.readUInt32BE(16),index.columns*index.tileSize,"Atlas width must match its declared tile grid");
 assert.equal(atlasBytes.readUInt32BE(20),Math.ceil(expectedIcons.length/index.columns)*index.tileSize,"Atlas height must contain every positive and negative reference without an unused row");
 assert.equal(atlasBytes.readUInt32BE(16),1280);
-assert.equal(atlasBytes.readUInt32BE(20),1220);
+assert.equal(atlasBytes.readUInt32BE(20),1260);
 const clientCatalogAtlasBytes=fs.readFileSync(clientCatalogAtlasPath);
 assert.ok(clientCatalogAtlasBytes.subarray(0,8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a])),"The full-client catalog atlas must be a PNG");
 assert.equal(clientCatalogAtlasBytes.readUInt32BE(16),clientCatalogIndex.columns*clientCatalogIndex.tileSize);

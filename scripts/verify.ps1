@@ -65,6 +65,7 @@ $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mj
 $healthMonitorJsTestPath = Join-Path $repoRoot "scripts\test-health-monitor.mjs"
 $bracketsJsTestPath = Join-Path $repoRoot "scripts\test-brackets-js.mjs"
 $dehkiaFuelJsTestPath = Join-Path $repoRoot "scripts\test-dehkia-fuel-frontend.mjs"
+$lightstoneSetsJsTestPath = Join-Path $repoRoot "scripts\test-lightstone-sets.mjs"
 $startupSplashJsTestPath = Join-Path $repoRoot "scripts\test-startup-splash.mjs"
 $recipeBookJsTestPath = Join-Path $repoRoot "scripts\test-recipe-book.mjs"
 $recipeBookOcrJsTestPath = Join-Path $repoRoot "scripts\test-recipe-book-ocr.mjs"
@@ -235,7 +236,8 @@ if ($recipeBookActualIcons.Count -ne $recipeBookDeclaredIcons.Count -or
 $recipeBookItems = @($recipeBookData.items.PSObject.Properties)
 if ($recipeBookItems.Count -ne [int]$recipeBookData.counts.items -or
 	@($recipeBookData.recipes).Count -ne [int]$recipeBookData.counts.recipes -or
-	[int]$recipeBookData.counts.rawRecipes -ne ([int]$recipeBookData.counts.recipes + [int]$recipeBookData.counts.excludedRecipes)) {
+	([int]$recipeBookData.counts.rawRecipes + [int]$recipeBookData.counts.officialPatchRecipeOverrides) -ne
+	([int]$recipeBookData.counts.recipes + [int]$recipeBookData.counts.excludedRecipes)) {
 	throw "The Recipe Book dataset counts are inconsistent."
 }
 foreach ($item in $recipeBookItems) {
@@ -1055,7 +1057,7 @@ $expectedInnerEdaniaSpots = @(
 	@("Magaia Temple", 919, 410, 490, "1", "980129", "Elion Follower's Helmet", 181042, 17, "Assets/GrindTracker/icons-clean/item-980129.png"),
 	@("Aresion Temple", 920, 415, 495, "1", "980131", "Scorched Belt Ornament", 182049, 24, "Assets/GrindTracker/icons-clean/item-980131.png"),
 	@("Scales of Judgment", 921, 415, 500, "3", "980130", "Elion Follower's Mark", 186458, 24, "Assets/GrindTracker/icons-clean/item-980130.png"),
-	@("Event Horizon", 922, 420, 505, "1", "980132", "Broken Gloves of the Void", 196501, 27, "Assets/GrindTracker/icons-clean/item-980132.png")
+	@("Event Horizon", 922, 420, 505, "1", "980132", "Broken Gloves of the Void", 196501, 35, "Assets/GrindTracker/icons-clean/item-980132.png")
 )
 foreach ($expectedSpot in $expectedInnerEdaniaSpots) {
 	$zoneName = [string]$expectedSpot[0]
@@ -1114,6 +1116,11 @@ $expectedInnerEdaniaLocalizedNames = @{
 	"980142" = "Broken Vestige of Crimsonflare"
 	"980143" = "Broken Vestige of Voidreach"
 	"821471" = "Fusion Shard"
+	"767337" = "Refined Origin of Hunger"
+	"767338" = "Refined Essence of Devouring"
+	"821341" = "Crimson Primordial Luster - Sovereign"
+	"821342" = "Violet Primordial Luster - Sovereign"
+	"821343" = "Violet Primordial Luster - Edana"
 }
 foreach ($entry in $expectedInnerEdaniaLocalizedNames.GetEnumerator()) {
 	$drops = @($innerEdaniaDrops | Where-Object { [string]$_.id -eq [string]$entry.Key })
@@ -1128,6 +1135,7 @@ $expectedInnerEdaniaVendorPrices = @{
 	"980131" = 182049L; "980132" = 196501L
 	"980139" = 3000000000L; "980140" = 3100000000L; "980141" = 3200000000L
 	"980142" = 3300000000L; "980143" = 4000000000L
+	"721002" = 3000L
 }
 foreach ($entry in $expectedInnerEdaniaVendorPrices.GetEnumerator()) {
 	$priceToken = '"' + [string]$entry.Key + '":' + [string]$entry.Value
@@ -1135,7 +1143,7 @@ foreach ($entry in $expectedInnerEdaniaVendorPrices.GetEnumerator()) {
 		throw "Inner Edania item $($entry.Key) is missing its current-client vendor value."
 	}
 }
-$expectedInnerEdaniaMarketIds = @("1178", "11733", "11898", "12144", "12298", "761803", "767343", "767344", "767353", "821318", "821419", "821420", "821421", "821422", "821423", "821424", "821459", "821460", "821471")
+$expectedInnerEdaniaMarketIds = @("1178", "11733", "11898", "12144", "12298", "16001", "721003", "761803", "767337", "767338", "767343", "767344", "767353", "821318", "821341", "821342", "821343", "821419", "821420", "821421", "821422", "821423", "821424", "821459", "821460", "821471")
 $expectedInnerEdaniaUnmarketableIds = @("821461", "821462", "821463", "821464")
 $classifiedInnerEdaniaIds = @(
 	@($expectedInnerEdaniaVendorPrices.Keys) +
@@ -1143,8 +1151,8 @@ $classifiedInnerEdaniaIds = @(
 	$expectedInnerEdaniaUnmarketableIds
 ) | Sort-Object -Unique
 $actualInnerEdaniaIds = @($innerEdaniaDrops | ForEach-Object { [string]$_.id } | Sort-Object -Unique)
-if ($classifiedInnerEdaniaIds.Count -ne 42 -or
-	$actualInnerEdaniaIds.Count -ne 42 -or
+if ($classifiedInnerEdaniaIds.Count -ne 50 -or
+	$actualInnerEdaniaIds.Count -ne 50 -or
 	(Compare-Object $classifiedInnerEdaniaIds $actualInnerEdaniaIds)) {
 	throw "Every Inner Edania Part II reward must be explicitly classified as market, vendor-value, or unmarketable."
 }
@@ -1592,7 +1600,7 @@ $pearlAbyssFallbackAssignment = [regex]::Match(
 	$grindMarketProviderSource,
 	'(?s)PearlAbyssLiveFallbackItemIds\s*=\s*\[(.*?)\];'
 )
-$expectedPearlAbyssFallbackIds = @(11733L, 11898L, 12144L, 12298L, 767343L, 767344L, 767353L, 821419L, 821420L, 821421L, 821422L, 821423L, 821424L, 821459L, 821460L, 821471L)
+$expectedPearlAbyssFallbackIds = @(11733L, 11898L, 12144L, 12298L, 767337L, 767338L, 767343L, 767344L, 767353L, 821341L, 821342L, 821343L, 821419L, 821420L, 821421L, 821422L, 821423L, 821424L, 821459L, 821460L, 821471L)
 $actualPearlAbyssFallbackIds = if ($pearlAbyssFallbackAssignment.Success) {
 	@([regex]::Matches($pearlAbyssFallbackAssignment.Groups[1].Value, '\d+') | ForEach-Object { [long]$_.Value } | Sort-Object -Unique)
 }
@@ -1722,6 +1730,9 @@ if (!(Test-Path -LiteralPath $bracketsJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $dehkiaFuelJsTestPath -PathType Leaf)) {
 	throw "The executable Dehkia Fuel frontend regression test is missing."
 }
+if (!(Test-Path -LiteralPath $lightstoneSetsJsTestPath -PathType Leaf)) {
+	throw "The executable Lightstone Sets regression test is missing."
+}
 if (!(Test-Path -LiteralPath $startupSplashJsTestPath -PathType Leaf)) {
 	throw "The executable native startup splash regression test is missing."
 }
@@ -1791,6 +1802,10 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $dehkiaFuelJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
 		throw "Dehkia Fuel frontend regression tests failed."
+	}
+	& $nodeCommand.Source $lightstoneSetsJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Lightstone Sets regression tests failed."
 	}
 	& $nodeCommand.Source $startupSplashJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
@@ -1967,7 +1982,8 @@ if ((Get-Item -LiteralPath $recipeBookPpOcrModelPath).Length -ne 7872351 -or
 	$onnxRuntimeLicense -notmatch 'Copyright \(c\) Microsoft Corporation' -or
 	$onnxRuntimeLicense -notmatch 'Permission is hereby granted, free of charge' -or
 	$onnxRuntimeNotices -notmatch 'THIRD PARTY SOFTWARE NOTICES AND INFORMATION' -or
-	$recipeBookNotice -notmatch 'RapidOCR 3\.9\.2 English PP-OCRv5 mobile ONNX model entirely locally and offline' -or
+	$ppOcrNotice -notmatch 'The model is executed locally with Microsoft ONNX Runtime 1\.29\.0' -or
+	$ppOcrNotice -notmatch 'Screenshot pixels are supplied directly to the local model and are not sent to' -or
 	$recipeBookNotice -match 'Tesseract|Leptonica|eng\.traineddata') {
 	throw "The redistributed OCR license payload is missing or incomplete."
 }

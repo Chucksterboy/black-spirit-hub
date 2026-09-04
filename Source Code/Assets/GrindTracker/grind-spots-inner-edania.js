@@ -212,7 +212,15 @@ const BSH_INNER_EDANIA_PART_TWO_SPOTS=[
       {"id":"761803","name":"Silent Crystal of Origin","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-silent-crystal-of-origin.png","isTrash":false},
       {"id":"821460","name":"Nev's Fragment","grade":3,"icon":"Assets/GrindTracker/icons-clean/official-inner-edania-nev-fragment.png","isTrash":false},
       {"id":"821471","name":"Fusion Shard","grade":4,"icon":"Assets/GrindTracker/icons-clean/official-inner-edania-fusion-crystal.png","isTrash":false},
-      {"id":"1178","name":"Corrupt Oil of Immortality","grade":3,"icon":"Assets/GrindTracker/icons-clean/custom-corrupt-oil-of-immortality.png","isTrash":false}
+      {"id":"1178","name":"Corrupt Oil of Immortality","grade":3,"icon":"Assets/GrindTracker/icons-clean/custom-corrupt-oil-of-immortality.png","isTrash":false},
+      {"id":"821341","name":"Crimson Primordial Luster - Sovereign","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-crimson-primordial-luster-sovereign.png","isTrash":false},
+      {"id":"821342","name":"Violet Primordial Luster - Sovereign","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-violet-primordial-luster-sovereign.png","isTrash":false},
+      {"id":"821343","name":"Violet Primordial Luster - Edana","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-violet-primordial-luster-edana.png","isTrash":false},
+      {"id":"767337","name":"Refined Origin of Hunger","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-refined-origin-of-hunger.png","isTrash":false},
+      {"id":"767338","name":"Refined Essence of Devouring","grade":4,"icon":"Assets/GrindTracker/icons-clean/custom-edania-refined-essence-of-devouring.png","isTrash":false},
+      {"id":"16001","name":"Black Stone","grade":4,"icon":"Assets/GrindTracker/icons-clean/item-16001.png","isTrash":false},
+      {"id":"721002","name":"Ancient Spirit Dust","grade":1,"icon":"Assets/GrindTracker/icons-clean/item-721002.png","isTrash":false},
+      {"id":"721003","name":"Caphras Stone","grade":2,"icon":"Assets/GrindTracker/icons-clean/item-721003.png","isTrash":false}
     ]
   }
 ];

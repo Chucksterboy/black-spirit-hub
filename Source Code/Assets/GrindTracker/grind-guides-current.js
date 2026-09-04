@@ -11,6 +11,7 @@
 
   const officialCombat=source("Pearl Abyss","July 2025 combat and monster-zone update","https://blackdesert.pearlabyss.com/Asia/en-us/News/Notice/Detail?_boardNo=7955","2025-07-24");
   const officialInnerEdania=source("Pearl Abyss","Inner Edania monster zones","https://blackdesert.pearlabyss.com/ASIA/en-US/Game/Wiki?_masterWikiNo=84","2026-08-13");
+  const officialSep2026=source("Pearl Abyss","Patch Notes - September 3, 2026","https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US","2026-09-03");
   const calpheonGuide=source("Garmoth","Elvia Realm: Calpheon","https://garmoth.com/guides/post/elvia-realm-calpheon/","2026-08-15");
 
   delete guides["112"];
@@ -177,11 +178,11 @@
     step("avoid","Do not feed an uncontrolled absorption","Keep the party together and finish the required targets promptly; an absorbed Old Mirumok unleashes lethal attacks.")
   ],rotations:[...(guides["912"]?.rotations||[])]});
 
-  set(919,{source:officialInnerEdania,summary:"Clear Magaia's sinner and Elion-follower packs while prioritizing the Knight and Priest threats, then move only after the active group is fully controlled.",steps:[
-    step("do","Prioritize the clergy and knights","Focus the Elion-follower Knight and Priest targets before cleaning up the surrounding sinners."),
-    step("watch","Prepare the correct resistance","Magaia uses the Stun, Stiffness, and Freeze control family. Keep the matching resistance setup active."),
-    step("do","Finish the active group","Keep enemies compact and complete each group before advancing to the next temple pack."),
-    step("avoid","Do not assume an undocumented phase","Current official guidance confirms the enemies and control family but not a special activation puzzle; follow the visible combat notices rather than imported mechanics.")
+  set(919,{source:officialSep2026,summary:"At each active Magaia brazier, begin the revised encounter with Unbroken Oath, follow the intervening combat notices, and face the Priest of the End in the third battle.",steps:[
+    step("trigger","Watch for the brazier message","Begin the sequence when the notice says that flames of doubt smolder within the brazier."),
+    step("do","Take Unbroken Oath first","The September 3 revision makes the combat fought with the Unbroken Oath buff the first battle in the brazier sequence."),
+    step("watch","Face the Priest third","Follow the encounter prompts between battles; the Priest of the End fight is now the third battle, not the opening phase."),
+    step("avoid","Prepare the correct resistance","Magaia uses the Stun, Stiffness, and Freeze control family. Keep the matching resistance setup active throughout the sequence.")
   ],rotations:[]});
 
   set(920,{source:officialInnerEdania,summary:"Fight Aresion's soldiers around the War Beacon, purify the Unholy Ember they leave behind, and use its strong combat benefit on the next concentrated group.",steps:[
@@ -198,10 +199,10 @@
     step("avoid","Prepare group stun resistance","Scales uses Stun, Stiffness, and Freeze. Do not let staggered party positioning turn one control hit into a wipe.")
   ],rotations:[]});
 
-  set(922,{source:officialInnerEdania,summary:"Cut through Event Horizon's Despairbringers, immediately remove Ibedor's commanding ranks, and keep each lethal pack controlled before moving deeper into the field.",steps:[
+  set(922,{source:officialSep2026,summary:"Cut through Event Horizon's Despairbringers, then re-center immediately when Ibedor appears because the surrounding Despair-Consumed Edanas now disappear at that moment.",steps:[
     step("do","Group the Despairbringers","Pull each active group into one compact area and keep damage focused instead of chasing scattered targets."),
-    step("do","Prioritize commanding ranks","Remove Ibedor's commanders as soon as they enter; they are the encounter's highest-priority targets."),
-    step("watch","Read every combat notice","The zone's current official guide identifies priority ranks rather than a fixed puzzle. Re-center when a new command group appears."),
+    step("watch","Recognize Ibedor's arrival","When Ibedor appears, the Despair-Consumed Edanas surrounding it now disappear instead of remaining as targets."),
+    step("do","Re-center on Ibedor","Stop chasing the vanished outer enemies, collapse back onto Ibedor, and spend the opening on the real priority target."),
     step("avoid","Prepare Stun resistance","Event Horizon uses Stun, Stiffness, and Freeze. Preserve an escape for overlapping marked attacks.")
   ],rotations:[]});
 
@@ -312,10 +313,10 @@
     916:["Seven Gavinya stations","Community maps number seven independent stations. Choose a compact station sequence that matches your clear speed and finish each awakened group before its Stalagmite.","pending-original","rotation-sites"],
     917:["Eleven independent Aphrodon sites","Pick one of the eleven marked grind locations and work that site's scarecrows and tree cycle; do not connect all eleven into one route.","embedded","rotation-sites"],
     918:["Hermesia tower-and-crystal flow","Clear the main tower, first crystal, second crystal, and dragon phase in sequence, then reset at the same encounter.","text-only","encounter-layout"],
-    919:["Magaia temple packs","Move between ready sinner and Elion-follower groups, prioritize Knights and Priests, and complete each pack before advancing.","pending-original","rotation-route"],
+    919:["Magaia brazier sequence","Begin when the brazier notice appears, fight with Unbroken Oath first, follow the intervening prompts, and face the Priest of the End third.","text-only","encounter-layout"],
     920:["Aresion beacon packs","Cycle ready War Beacon groups, purify each Unholy Ember, and carry its benefit directly into the next concentrated pack.","pending-original","rotation-route"],
     921:["Scales party encounter","Circle the Scales as one three-player group and resolve each justice or vengeance follower wave before the next balance phase.","pending-original","encounter-layout"],
-    922:["Event Horizon priority loop","Move pack to pack through Despairbringers, stopping to collapse every Ibedor command group before advancing deeper.","pending-original","rotation-route"]
+    922:["Event Horizon Ibedor transition","Move pack to pack through Despairbringers, then re-center on Ibedor when the surrounding Despair-Consumed Edanas disappear.","text-only","encounter-layout"]
   };
 
   for(const [id,spec] of Object.entries(routeCatalog)){
@@ -400,6 +401,6 @@
   for(const guide of Object.values(guides))if(!guide.sources)guide.sources=[guide.source];
 
   bundle.schemaVersion=2;
-  bundle.generatedAt="2026-08-15";
+  bundle.generatedAt="2026-09-03";
   bundle.guideCount=Object.keys(guides).length;
 })();

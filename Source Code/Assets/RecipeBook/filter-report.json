@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
-  "generatedAtUtc": "2026-08-06T11:57:41.185Z",
+  "generatedAtUtc": "2026-09-03T14:41:47.192Z",
   "filters": {
     "excludesEventPrefixedItems": true,
     "excludesRetiredGhostItems": true,
     "excludesLegacyImperialBoxes": true,
     "excludesClientRetiredItems": true,
+    "excludesOfficialPatchRetiredItems": true,
     "excludesClientUnavailableItems": true,
     "excludesNonCraftableByproductProjections": true,
     "excludesDuplicateRecipes": true,
@@ -13,25 +14,26 @@
     "requiresCurrentEnglishNamesAndIcons": true
   },
   "counts": {
-    "rawRecipes": 13127,
-    "recipes": 9854,
-    "excludedRecipes": 3273,
-    "items": 7100,
+    "rawRecipes": 13525,
+    "officialPatchRecipeOverrides": 4,
+    "recipes": 10213,
+    "excludedRecipes": 3316,
+    "items": 7626,
     "recipeTypes": {
-      "ALCHEMY": 394,
+      "ALCHEMY": 378,
       "COOK": 1196,
-      "CRAFT": 558,
+      "CRAFT": 754,
       "DRY": 272,
       "FIREWOOD": 51,
-      "GRIND": 203,
+      "GRIND": 201,
       "GUILD": 20,
-      "HEAT": 1821,
-      "HOUSE": 2968,
+      "HEAT": 1838,
+      "HOUSE": 2989,
       "ROYALGIFT_ALCHEMY": 279,
       "ROYALGIFT_COOK": 784,
       "SHAKE": 45,
-      "SIMPLE_ALCHEMY": 1147,
-      "SIMPLE_COOK": 102,
+      "SIMPLE_ALCHEMY": 1282,
+      "SIMPLE_COOK": 110,
       "THINNING": 14
     },
     "exclusions": {
@@ -39,11 +41,12 @@
       "client-retired-output": 73,
       "client-unavailable-ingredient": 5,
       "client-unavailable-output": 1,
-      "duplicate-recipe": 2316,
+      "duplicate-recipe": 2331,
       "event-or-retired-ingredient": 28,
       "event-or-retired-output": 59,
       "legacy-imperial-box": 50,
-      "non-craftable-byproduct-projection": 201,
+      "non-craftable-byproduct-projection": 203,
+      "official-patch-retired-output": 26,
       "retired-ingredient-ghost": 12,
       "retired-output-ghost": 15
     }
@@ -678,6 +681,13 @@
       "type": "SIMPLE_ALCHEMY",
       "outputId": 885,
       "outputName": "[Event] Immortal: Perfume of Charm"
+    },
+    {
+      "sourceId": "urn::recipe:890:0",
+      "reason": "non-craftable-byproduct-projection",
+      "type": "ALCHEMY",
+      "outputId": 890,
+      "outputName": "Perfume of Verdure"
     },
     {
       "sourceId": "urn::recipe:1053:0",
@@ -2038,6 +2048,34 @@
       "outputName": "Nickel Ingot"
     },
     {
+      "sourceId": "urn::recipe:4099:0",
+      "reason": "non-craftable-byproduct-projection",
+      "type": "HEAT",
+      "outputId": 4099,
+      "outputName": "Magnetite Ingot"
+    },
+    {
+      "sourceId": "urn::recipe:4099:3",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 4099,
+      "outputName": "Magnetite Ingot"
+    },
+    {
+      "sourceId": "urn::recipe:4099:4",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 4099,
+      "outputName": "Magnetite Ingot"
+    },
+    {
+      "sourceId": "urn::recipe:4099:5",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 4099,
+      "outputName": "Magnetite Ingot"
+    },
+    {
       "sourceId": "urn::recipe:4252:0",
       "reason": "non-craftable-byproduct-projection",
       "type": "HEAT",
@@ -2563,6 +2601,69 @@
       "outputName": "Magical Shard"
     },
     {
+      "sourceId": "urn::recipe:4924:0",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:1",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:2",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:3",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:4",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:5",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:6",
+      "reason": "official-patch-retired-output",
+      "type": "GRIND",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:7",
+      "reason": "official-patch-retired-output",
+      "type": "SIMPLE_ALCHEMY",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
+      "sourceId": "urn::recipe:4924:8",
+      "reason": "official-patch-retired-output",
+      "type": "SIMPLE_ALCHEMY",
+      "outputId": 4924,
+      "outputName": "Mystical Spirit Powder"
+    },
+    {
       "sourceId": "urn::recipe:5104:1",
       "reason": "duplicate-recipe",
       "type": "HOUSE",
@@ -2864,32 +2965,67 @@
       "outputName": "Essence of Destruction"
     },
     {
+      "sourceId": "urn::recipe:5303:0",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 5303,
+      "outputName": "Tenacious Origin of Life"
+    },
+    {
       "sourceId": "urn::recipe:5303:1",
-      "reason": "duplicate-recipe",
+      "reason": "official-patch-retired-output",
       "type": "ALCHEMY",
       "outputId": 5303,
       "outputName": "Tenacious Origin of Life"
     },
     {
       "sourceId": "urn::recipe:5303:2",
-      "reason": "duplicate-recipe",
+      "reason": "official-patch-retired-output",
       "type": "ALCHEMY",
       "outputId": 5303,
       "outputName": "Tenacious Origin of Life"
     },
     {
       "sourceId": "urn::recipe:5303:3",
-      "reason": "duplicate-recipe",
+      "reason": "official-patch-retired-output",
       "type": "ALCHEMY",
       "outputId": 5303,
       "outputName": "Tenacious Origin of Life"
     },
     {
       "sourceId": "urn::recipe:5303:4",
-      "reason": "duplicate-recipe",
+      "reason": "official-patch-retired-output",
       "type": "ALCHEMY",
       "outputId": 5303,
       "outputName": "Tenacious Origin of Life"
+    },
+    {
+      "sourceId": "urn::recipe:5303:5",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 5303,
+      "outputName": "Tenacious Origin of Life"
+    },
+    {
+      "sourceId": "urn::recipe:5303:6",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 5303,
+      "outputName": "Tenacious Origin of Life"
+    },
+    {
+      "sourceId": "urn::recipe:5304:0",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 5304,
+      "outputName": "Rough Opulent Crystal"
+    },
+    {
+      "sourceId": "urn::recipe:5305:0",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 5305,
+      "outputName": "Flawless Spirit Stone"
     },
     {
       "sourceId": "urn::recipe:5901:1",
@@ -14351,13 +14487,6 @@
       "outputName": "Crude Crystal Fragment"
     },
     {
-      "sourceId": "urn::recipe:9733:9",
-      "reason": "non-craftable-byproduct-projection",
-      "type": "ALCHEMY",
-      "outputId": 9733,
-      "outputName": "Shining Powder"
-    },
-    {
       "sourceId": "urn::recipe:9733:10",
       "reason": "non-craftable-byproduct-projection",
       "type": "ALCHEMY",
@@ -14380,6 +14509,13 @@
     },
     {
       "sourceId": "urn::recipe:9733:13",
+      "reason": "non-craftable-byproduct-projection",
+      "type": "ALCHEMY",
+      "outputId": 9733,
+      "outputName": "Shining Powder"
+    },
+    {
+      "sourceId": "urn::recipe:9733:14",
       "reason": "non-craftable-byproduct-projection",
       "type": "ALCHEMY",
       "outputId": 9733,
@@ -15280,6 +15416,34 @@
       "type": "HOUSE",
       "outputId": 11911,
       "outputName": "Topaz Earrings"
+    },
+    {
+      "sourceId": "urn::recipe:12318:0",
+      "reason": "official-patch-retired-output",
+      "type": "HOUSE",
+      "outputId": 12318,
+      "outputName": "Golden Coral Belt"
+    },
+    {
+      "sourceId": "urn::recipe:12319:0",
+      "reason": "official-patch-retired-output",
+      "type": "HOUSE",
+      "outputId": 12319,
+      "outputName": "Brilliant Golden Coral Belt"
+    },
+    {
+      "sourceId": "urn::recipe:12320:0",
+      "reason": "official-patch-retired-output",
+      "type": "HOUSE",
+      "outputId": 12320,
+      "outputName": "Golden Sun Coral Belt"
+    },
+    {
+      "sourceId": "urn::recipe:12329:0",
+      "reason": "official-patch-retired-output",
+      "type": "HOUSE",
+      "outputId": 12329,
+      "outputName": "Manos Golden Coral Belt"
     },
     {
       "sourceId": "urn::recipe:12501:1",
@@ -18481,6 +18645,27 @@
       "outputName": "Magic Crystal of Infinity - Magic Attack"
     },
     {
+      "sourceId": "urn::recipe:15276:0",
+      "reason": "official-patch-retired-output",
+      "type": "HEAT",
+      "outputId": 15276,
+      "outputName": "JIN Dawn Crystal - Life EXP"
+    },
+    {
+      "sourceId": "urn::recipe:15277:0",
+      "reason": "official-patch-retired-output",
+      "type": "HEAT",
+      "outputId": 15277,
+      "outputName": "BON Dawn Crystal - Life EXP"
+    },
+    {
+      "sourceId": "urn::recipe:15278:0",
+      "reason": "official-patch-retired-output",
+      "type": "HEAT",
+      "outputId": 15278,
+      "outputName": "WON Dawn Crystal - Life EXP"
+    },
+    {
       "sourceId": "urn::recipe:15736:1",
       "reason": "event-or-retired-ingredient",
       "type": "SIMPLE_ALCHEMY",
@@ -19207,6 +19392,13 @@
       "type": "ALCHEMY",
       "outputId": 42413,
       "outputName": "Elixir of Fond Memories"
+    },
+    {
+      "sourceId": "urn::recipe:44332:0",
+      "reason": "official-patch-retired-output",
+      "type": "ALCHEMY",
+      "outputId": 44332,
+      "outputName": "Vell's Fine Powder"
     },
     {
       "sourceId": "urn::recipe:49001:1",
@@ -20406,6 +20598,90 @@
       "outputName": "Coal Bag"
     },
     {
+      "sourceId": "urn::recipe:55445:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55445,
+      "outputName": "Magnetite Ore Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55445:2",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55445,
+      "outputName": "Magnetite Ore Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55445:3",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55445,
+      "outputName": "Magnetite Ore Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55446:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55446,
+      "outputName": "Rough Marble Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55446:2",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55446,
+      "outputName": "Rough Marble Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55446:3",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55446,
+      "outputName": "Rough Marble Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55447:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55447,
+      "outputName": "Magnetite Ingot Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55447:2",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55447,
+      "outputName": "Magnetite Ingot Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55447:3",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55447,
+      "outputName": "Magnetite Ingot Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55448:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55448,
+      "outputName": "Marble Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55448:2",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55448,
+      "outputName": "Marble Crate"
+    },
+    {
+      "sourceId": "urn::recipe:55448:3",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 55448,
+      "outputName": "Marble Crate"
+    },
+    {
       "sourceId": "urn::recipe:55914:1",
       "reason": "duplicate-recipe",
       "type": "HOUSE",
@@ -20999,6 +21275,34 @@
       "type": "HOUSE",
       "outputId": 56220,
       "outputName": "[Hunting] Master Matchlock"
+    },
+    {
+      "sourceId": "urn::recipe:59406:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 59406,
+      "outputName": "Panokseon: Byukgye's Enhanced Cannon"
+    },
+    {
+      "sourceId": "urn::recipe:59407:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 59407,
+      "outputName": "Panokseon: Byukgye's Enhanced Sail"
+    },
+    {
+      "sourceId": "urn::recipe:59408:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 59408,
+      "outputName": "Panokseon: Byukgye's Enhanced Figurehead"
+    },
+    {
+      "sourceId": "urn::recipe:59409:1",
+      "reason": "duplicate-recipe",
+      "type": "HOUSE",
+      "outputId": 59409,
+      "outputName": "Panokseon: Byukgye's Enhanced Plating"
     },
     {
       "sourceId": "urn::recipe:719525:1",

@@ -13,7 +13,14 @@ import {
 import path from "node:path";
 
 const SCHEMA_VERSION = 1;
-const EXTRACTOR_COMMIT = "2e4ace61e2a3967663cb36580edb7201b7ca3fd4";
+const EXTRACTOR_VERSION = "v0.1.9";
+const EXTRACTOR_COMMIT = "5bf11bd7bc60dcbb6126be34bf3d76633abdd8b2";
+const OFFICIAL_PATCH = Object.freeze({
+  publisher: "Pearl Abyss",
+  title: "Patch Notes - September 3, 2026",
+  publishedDate: "2026-09-03",
+  url: "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US"
+});
 const ITEM_ID_MASK = 0x00ff_ffff;
 const KNOWN_RECIPE_TYPES = new Set([
   "ALCHEMY",
@@ -44,6 +51,32 @@ const CLIENT_RETIRED_ITEM_IDS = new Set([
   5958, 5959, 5961, 5962, 5963, 16002, 16005
 ]);
 const CLIENT_UNAVAILABLE_ITEM_IDS = new Set([757130]);
+const OFFICIAL_PATCH_RETIRED_ITEM_IDS = new Set([
+  4924, 5303, 5304, 5305, 5306, 12318, 12319, 12320, 12329,
+  15276, 15277, 15278, 44332, 45122, 45123, 45297, 45299, 45301,
+  45333, 45335, 45336, 45337, 45338, 45339, 45341,
+  45342, 45343, 45344, 45345, 768154, 768155, 1000462
+]);
+const OFFICIAL_PATCH_RECIPE_OVERRIDES = Object.freeze([
+  Object.freeze({
+    outputId: 17566,
+    type: "SIMPLE_ALCHEMY",
+    inputs: Object.freeze([
+      Object.freeze({ itemId: 8042, count: 1 }),
+      Object.freeze({ itemId: 721002, count: 50 })
+    ]),
+    source: OFFICIAL_PATCH.url
+  }),
+  ...[45298, 45300, 45302].map(itemId => Object.freeze({
+    outputId: 44336,
+    type: "GRIND",
+    inputs: Object.freeze([Object.freeze({ itemId, count: 1 })]),
+    outputQuantityMin: 10,
+    outputQuantityMax: 18,
+    outputQuantityNote: "Varies with Processing Mastery",
+    source: OFFICIAL_PATCH.url
+  }))
+]);
 
 function fail(message) {
   throw new Error(message);
@@ -134,7 +167,10 @@ function recipeSignature(recipe) {
   const inputs = recipe.inputs
     .map(input => `${input.rawId}x${input.count}`)
     .sort((left, right) => left.localeCompare(right));
-  return [recipe.outputRawId, recipe.type, recipe.station || "", ...inputs].join("|");
+  const outputRange = recipe.outputQuantityMin || recipe.outputQuantityMax
+    ? [`yield:${recipe.outputQuantityMin || 1}-${recipe.outputQuantityMax || recipe.outputQuantityMin || 1}`]
+    : [];
+  return [recipe.outputRawId, recipe.type, recipe.station || "", ...outputRange, ...inputs].join("|");
 }
 
 function recipeId(signature, outputId) {
@@ -251,6 +287,10 @@ function buildPlan(rawItems, rawRecipes, source) {
       exclude(rawRecipe, "client-retired-output", output.itemId, outputName);
       continue;
     }
+    if (OFFICIAL_PATCH_RETIRED_ITEM_IDS.has(output.itemId)) {
+      exclude(rawRecipe, "official-patch-retired-output", output.itemId, outputName);
+      continue;
+    }
     if (CLIENT_UNAVAILABLE_ITEM_IDS.has(output.itemId)) {
       exclude(rawRecipe, "client-unavailable-output", output.itemId, outputName);
       continue;
@@ -285,6 +325,7 @@ function buildPlan(rawItems, rawRecipes, source) {
       else if (item.ghost) inputFailure = "retired-ingredient-ghost";
       else if (!name) inputFailure = "nameless-ingredient";
       else if (CLIENT_RETIRED_ITEM_IDS.has(input.itemId)) inputFailure = "client-retired-ingredient";
+      else if (OFFICIAL_PATCH_RETIRED_ITEM_IDS.has(input.itemId)) inputFailure = "official-patch-retired-ingredient";
       else if (CLIENT_UNAVAILABLE_ITEM_IDS.has(input.itemId)) inputFailure = "client-unavailable-ingredient";
       else if (retiredItemName(name)) inputFailure = "event-or-retired-ingredient";
       else if (!String(item.icon || "").trim()) inputFailure = "iconless-ingredient";
@@ -327,6 +368,47 @@ function buildPlan(rawItems, rawRecipes, source) {
     });
   }
 
+  for (const override of OFFICIAL_PATCH_RECIPE_OVERRIDES) {
+    const outputItem = itemsById.get(override.outputId);
+    const outputName = String(outputItem?.name || "").trim();
+    if (!outputItem || outputItem.ghost || !outputName || !String(outputItem.icon || "").trim()) {
+      fail(`Official patch recipe output ${override.outputId} is unavailable in the client snapshot.`);
+    }
+    const inputs = override.inputs.map(input => {
+      const item = itemsById.get(input.itemId);
+      if (!item || item.ghost || !String(item.name || "").trim() || !String(item.icon || "").trim()) {
+        fail(`Official patch recipe ingredient ${input.itemId} is unavailable in the client snapshot.`);
+      }
+      if (OFFICIAL_PATCH_RETIRED_ITEM_IDS.has(input.itemId)) {
+        fail(`Official patch recipe references retired ingredient ${input.itemId}.`);
+      }
+      return { itemId: input.itemId, rawId: input.itemId, count: input.count };
+    });
+    const normalized = {
+      outputId: override.outputId,
+      outputRawId: override.outputId,
+      type: override.type,
+      inputs,
+      ...(override.outputQuantityMin ? { outputQuantityMin: override.outputQuantityMin } : {}),
+      ...(override.outputQuantityMax ? { outputQuantityMax: override.outputQuantityMax } : {}),
+      ...(override.outputQuantityNote ? { outputQuantityNote: override.outputQuantityNote } : {})
+    };
+    const signature = recipeSignature(normalized);
+    if (signatures.has(signature)) continue;
+    signatures.add(signature);
+    kept.push({
+      id: recipeId(signature, override.outputId),
+      outputId: override.outputId,
+      type: override.type,
+      inputs: inputs.map(({ rawId: _rawId, ...input }) => input),
+      ...(normalized.outputQuantityMin ? { outputQuantityMin: normalized.outputQuantityMin } : {}),
+      ...(normalized.outputQuantityMax ? { outputQuantityMax: normalized.outputQuantityMax } : {}),
+      ...(normalized.outputQuantityNote ? { outputQuantityNote: normalized.outputQuantityNote } : {}),
+      officialSource: override.source,
+      _outputName: outputName
+    });
+  }
+
   kept.sort((left, right) => left._outputName.localeCompare(right._outputName, "en")
     || left.type.localeCompare(right.type)
     || left.id.localeCompare(right.id));
@@ -365,6 +447,7 @@ function buildPlan(rawItems, rawRecipes, source) {
       excludesRetiredGhostItems: true,
       excludesLegacyImperialBoxes: true,
       excludesClientRetiredItems: true,
+      excludesOfficialPatchRetiredItems: true,
       excludesClientUnavailableItems: true,
       excludesNonCraftableByproductProjections: true,
       excludesDuplicateRecipes: true,
@@ -373,6 +456,7 @@ function buildPlan(rawItems, rawRecipes, source) {
     },
     counts: {
       rawRecipes: rawRecipes.length,
+      officialPatchRecipeOverrides: OFFICIAL_PATCH_RECIPE_OVERRIDES.length,
       recipes: kept.length,
       excludedRecipes: exclusions.length,
       items: Object.keys(items).length,
@@ -397,9 +481,11 @@ async function sourceMetadata(extractDirectory, gameDirectory) {
       : new Date(Math.max(itemsInfo.mtimeMs, recipesInfo.mtimeMs)).toISOString(),
     extractor: {
       repository: "https://github.com/iDevelopThings/bdo-data-extractor",
+      version: EXTRACTOR_VERSION,
       commit: EXTRACTOR_COMMIT,
-      compatibility: "2026-08 client item slot/footer layout"
+      compatibility: "2026-09 client item layout"
     },
+    officialPatch: OFFICIAL_PATCH,
     files: {
       itemsSha256: await hashFile(itemsFile),
       recipesSha256: await hashFile(recipesFile)
@@ -628,7 +714,7 @@ async function finalize(args) {
   const notice = [
     "Black Spirit Hub Recipe Book",
     "",
-    "Recipe facts, English item names and descriptions, and item icons were extracted from a legally installed Black Desert client for this non-commercial fan utility.",
+    "Recipe facts come from a legally installed Black Desert client plus the cited official Pearl Abyss September 3, 2026 patch overlay for this non-commercial fan utility. English item names, descriptions, and item icons were extracted from the installed client.",
     `Cached item artwork is stored as ${iconEncodings.length === 1 ? iconEncodings[0] : "mixed-encoding"} WebP at its native client dimensions; non-square client preview artwork is replaced with the bundled fallback.`,
     "Black Desert and all related game data and artwork are trademarks or copyrighted material of Pearl Abyss. Black Spirit Hub is unofficial and is not affiliated with or endorsed by Pearl Abyss.",
     "No BDO Codex, BDOlytics, or Black Desert Foundry editorial content or artwork is bundled."
