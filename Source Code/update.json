@@ -1,7 +1,7 @@
 {
-    "version":  "v0.9.59",
+    "version":  "v0.9.60",
     "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.59/Black-Spirit-Hub-Installer.exe",
-    "sha256":  "A76C27280695B5AFFE23F968809762B204679BD3BBDF0BB6BA32C3CF56DE5A20",
-    "notes":  "Adds persistent notification volume and selectable English Windows TTS voice controls for boss and Node War alerts, includes alarm and speech test actions plus direct access to Windows Speech settings, and polishes the smoothly collapsible notification panel and centered toggle alignment."
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.60/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "598F39F5A0ADDC16AF97C66EDBCEF1F37AF0D437197932CE75596BC5A8792D02",
+    "notes":  "### What\u0027s new\r\n\r\n- Added the Weeklies planner with a guided activity picker, search, progress dashboard, individual completion controls, and All Done tracking.\r\n- Weeklies automatically clear at their own reset and support configurable 1-3 day desktop reminders.\r\n- Added red taskbar and tray attention for unfinished weeklies, responsive Weeklies navigation, clearer countdowns, and unique activity title colours.\r\n- Added update-safe Weeklies state and durable coupon redemption history so selections survive application updates."
 }
