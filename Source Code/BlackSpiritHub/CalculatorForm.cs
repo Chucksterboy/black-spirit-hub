@@ -23,7 +23,7 @@ namespace BlackSpiritHub;
 internal sealed class CalculatorForm : Form
 {
 	private const string LocalAppHost = "app.bdo.local";
-	private const string UiRevision = "coupon-redemptions-20260830a";
+	private const string UiRevision = "weeklies-20260903a";
 	private const string RecipeBookHost = "recipebook.bdo.local";
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
@@ -117,6 +117,22 @@ internal sealed class CalculatorForm : Form
 	[return: MarshalAs(UnmanagedType.Bool)]
 	private static extern bool DestroyIcon(IntPtr hIcon);
 
+	[StructLayout(LayoutKind.Sequential)]
+	private struct FlashWindowInfo
+	{
+		public uint Size;
+		public IntPtr WindowHandle;
+		public uint Flags;
+		public uint Count;
+		public uint Timeout;
+	}
+
+	[DllImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool FlashWindowEx(ref FlashWindowInfo info);
+
+	private const uint FlashWindowTray = 0x00000002;
+
 	private const int WmNcHitTest = 132;
 
 	internal const int DefaultAlertVolumePercent = 50;
@@ -181,6 +197,8 @@ internal sealed class CalculatorForm : Form
 
 	private readonly CouponService couponService;
 
+	private readonly WeeklyPlannerStore weeklyPlannerStore;
+
 	private readonly EventService eventService;
 
 	private readonly BossScheduleService bossScheduleService;
@@ -230,6 +248,8 @@ internal sealed class CalculatorForm : Form
 
 	private int couponBadgeCount;
 
+	private int weekliesBadgeCount;
+
 	private System.Windows.Forms.Timer? backgroundNotificationTimer;
 
 	private int backgroundNotificationTickActive;
@@ -250,6 +270,7 @@ internal sealed class CalculatorForm : Form
 			paths,
 			logger,
 			ReadGarmothCouponsPayloadWithBrowserAsync);
+		weeklyPlannerStore = new WeeklyPlannerStore(paths);
 		eventService = new EventService(paths, logger);
 		bossScheduleService = new BossScheduleService(paths, logger);
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
@@ -346,7 +367,7 @@ internal sealed class CalculatorForm : Form
 			if (WindowState == FormWindowState.Minimized)
 				WindowState = FormWindowState.Normal;
 			Activate();
-			ApplyTaskbarCouponBadge(couponBadgeCount);
+			ApplyTaskbarNotificationBadge();
 			PostEvent("updateCheckRequested", new { source = "trayRestore" });
 		}
 		catch (Exception ex)
@@ -459,19 +480,33 @@ internal sealed class CalculatorForm : Form
 
 		int safeCount = Math.Max(0, count);
 		couponBadgeCount = safeCount;
-		UpdateTrayCouponBadge(safeCount);
-		ApplyTaskbarCouponBadge(safeCount);
+		UpdateTrayNotificationBadge();
+		ApplyTaskbarNotificationBadge();
 	}
 
-	private void ApplyTaskbarCouponBadge(int count)
+	private void SetWeekliesBadgeCount(int count)
 	{
 		if (InvokeRequired)
 		{
-			BeginInvoke(new Action<int>(ApplyTaskbarCouponBadge), count);
+			BeginInvoke(new Action<int>(SetWeekliesBadgeCount), count);
 			return;
 		}
 
-		int safeCount = Math.Max(0, count);
+		weekliesBadgeCount = Math.Max(0, count);
+		UpdateTrayNotificationBadge();
+		ApplyTaskbarNotificationBadge();
+	}
+
+	private void ApplyTaskbarNotificationBadge()
+	{
+		if (InvokeRequired)
+		{
+			BeginInvoke(new Action(ApplyTaskbarNotificationBadge));
+			return;
+		}
+
+		bool showWeeklies = weekliesBadgeCount > 0;
+		int count = showWeeklies ? weekliesBadgeCount : couponBadgeCount;
 		try
 		{
 			if (taskbarList == null)
@@ -482,25 +517,30 @@ internal sealed class CalculatorForm : Form
 			taskbarList.HrInit();
 			taskbarBadgeIcon?.Dispose();
 			taskbarBadgeIcon = null;
-			if (safeCount <= 0)
+			if (count <= 0)
 			{
 				taskbarList.SetOverlayIcon(Handle, IntPtr.Zero, string.Empty);
 				return;
 			}
 
-			taskbarBadgeIcon = CreateCouponNumberBadgeIcon(Math.Min(safeCount, 99));
-			taskbarList.SetOverlayIcon(Handle, taskbarBadgeIcon.Handle, safeCount == 1 ? "1 new coupon" : $"{safeCount} new coupons");
+			taskbarBadgeIcon = CreateNotificationNumberBadgeIcon(Math.Min(count, 99), showWeeklies);
+			string description = showWeeklies
+				? count == 1 ? "1 unfinished weekly" : $"{count} unfinished weeklies"
+				: count == 1 ? "1 new coupon" : $"{count} new coupons";
+			taskbarList.SetOverlayIcon(Handle, taskbarBadgeIcon.Handle, description);
 		}
 		catch (Exception ex)
 		{
-			logger.Warn("Could not update taskbar coupon badge: " + ex.Message);
+			logger.Warn("Could not update taskbar notification badge: " + ex.Message);
 		}
 	}
 
-	private void UpdateTrayCouponBadge(int count)
+	private void UpdateTrayNotificationBadge()
 	{
 		try
 		{
+			bool showWeeklies = weekliesBadgeCount > 0;
+			int count = showWeeklies ? weekliesBadgeCount : couponBadgeCount;
 			Icon? previousBadge = trayBadgeIcon;
 			trayBadgeIcon = null;
 			if (count <= 0)
@@ -511,15 +551,36 @@ internal sealed class CalculatorForm : Form
 				return;
 			}
 
-			trayBadgeIcon = CreateTrayIconWithCouponDot(trayAppIcon);
+			trayBadgeIcon = CreateTrayIconWithNotificationDot(trayAppIcon, showWeeklies);
 			trayIcon.Icon = trayBadgeIcon;
-			trayIcon.Text = count == 1 ? "Black Spirit Hub - 1 new coupon" : "Black Spirit Hub - new coupons available";
+			trayIcon.Text = showWeeklies
+				? count == 1 ? "Black Spirit Hub - 1 unfinished weekly" : "Black Spirit Hub - unfinished weeklies"
+				: count == 1 ? "Black Spirit Hub - 1 new coupon" : "Black Spirit Hub - new coupons available";
 			previousBadge?.Dispose();
 		}
 		catch (Exception ex)
 		{
-			logger.Warn("Could not update system tray coupon badge: " + ex.Message);
+			logger.Warn("Could not update system tray notification badge: " + ex.Message);
 		}
+	}
+
+	private void FlashTaskbarAttention()
+	{
+		if (InvokeRequired)
+		{
+			BeginInvoke(new Action(FlashTaskbarAttention));
+			return;
+		}
+
+		FlashWindowInfo info = new()
+		{
+			Size = (uint)Marshal.SizeOf<FlashWindowInfo>(),
+			WindowHandle = Handle,
+			Flags = FlashWindowTray,
+			Count = 3,
+			Timeout = 0
+		};
+		FlashWindowEx(ref info);
 	}
 
 	private bool TrySetTrayVisible(bool visible)
@@ -536,7 +597,7 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
-	private static Icon CreateCouponNumberBadgeIcon(int count)
+	private static Icon CreateNotificationNumberBadgeIcon(int count, bool weeklies)
 	{
 		using Bitmap bitmap = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 		using Graphics graphics = Graphics.FromImage(bitmap);
@@ -550,7 +611,9 @@ internal sealed class CalculatorForm : Form
 			SurroundColors = new[] { Color.Transparent }
 		};
 		graphics.FillPath(shadow, shadowPath);
-		using LinearGradientBrush fill = new LinearGradientBrush(new Rectangle(2, 1, 28, 28), Color.FromArgb(255, 79, 234, 117), Color.FromArgb(255, 245, 236, 65), LinearGradientMode.ForwardDiagonal);
+		Color fillStart = weeklies ? Color.FromArgb(255, 255, 75, 98) : Color.FromArgb(255, 79, 234, 117);
+		Color fillEnd = weeklies ? Color.FromArgb(255, 176, 20, 56) : Color.FromArgb(255, 245, 236, 65);
+		using LinearGradientBrush fill = new LinearGradientBrush(new Rectangle(2, 1, 28, 28), fillStart, fillEnd, LinearGradientMode.ForwardDiagonal);
 		using Pen border = new Pen(Color.White, 2.2f);
 		graphics.FillEllipse(fill, 2, 1, 28, 28);
 		graphics.DrawEllipse(border, 2.5f, 1.5f, 27, 27);
@@ -558,7 +621,7 @@ internal sealed class CalculatorForm : Form
 		using Font font = new Font("Segoe UI", text.Length > 1 ? 11.5f : 15f, FontStyle.Bold, GraphicsUnit.Pixel);
 		using StringFormat format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 		using Brush textShadow = new SolidBrush(Color.FromArgb(155, 0, 0, 0));
-		using Brush textBrush = new SolidBrush(Color.FromArgb(20, 28, 16));
+		using Brush textBrush = new SolidBrush(weeklies ? Color.White : Color.FromArgb(20, 28, 16));
 		RectangleF textRect = new RectangleF(2, 1, 28, 27);
 		graphics.DrawString(text, font, textShadow, new RectangleF(textRect.X + 1, textRect.Y + 1, textRect.Width, textRect.Height), format);
 		graphics.DrawString(text, font, textBrush, textRect, format);
@@ -573,7 +636,7 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
-	private static Icon CreateTrayIconWithCouponDot(Icon baseIcon)
+	private static Icon CreateTrayIconWithNotificationDot(Icon baseIcon, bool weeklies)
 	{
 		int size = Math.Clamp(Math.Max(baseIcon.Width, baseIcon.Height), 16, 32);
 		using Bitmap bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -582,10 +645,11 @@ internal sealed class CalculatorForm : Form
 		graphics.Clear(Color.Transparent);
 		graphics.DrawIcon(baseIcon, new Rectangle(0, 0, size, size));
 		float dotSize = Math.Max(6f, size * 0.35f);
-		DrawCouponDot(
+		DrawNotificationDot(
 			graphics,
 			new RectangleF(size - dotSize - 1f, 1f, dotSize, dotSize),
-			Math.Max(1f, size / 20f));
+			Math.Max(1f, size / 20f),
+			weeklies);
 		IntPtr handle = bitmap.GetHicon();
 		try
 		{
@@ -597,7 +661,7 @@ internal sealed class CalculatorForm : Form
 		}
 	}
 
-	private static void DrawCouponDot(Graphics graphics, RectangleF bounds, float borderWidth)
+	private static void DrawNotificationDot(Graphics graphics, RectangleF bounds, float borderWidth, bool weeklies)
 	{
 		using GraphicsPath shadowPath = new GraphicsPath();
 		shadowPath.AddEllipse(bounds.X - 2f, bounds.Y + 1.5f, bounds.Width + 4f, bounds.Height + 4f);
@@ -607,7 +671,9 @@ internal sealed class CalculatorForm : Form
 			SurroundColors = new[] { Color.Transparent }
 		};
 		graphics.FillPath(shadow, shadowPath);
-		using LinearGradientBrush fill = new LinearGradientBrush(Rectangle.Round(bounds), Color.FromArgb(255, 255, 242, 69), Color.FromArgb(255, 255, 170, 26), LinearGradientMode.ForwardDiagonal);
+		Color fillStart = weeklies ? Color.FromArgb(255, 255, 75, 98) : Color.FromArgb(255, 255, 242, 69);
+		Color fillEnd = weeklies ? Color.FromArgb(255, 176, 20, 56) : Color.FromArgb(255, 255, 170, 26);
+		using LinearGradientBrush fill = new LinearGradientBrush(Rectangle.Round(bounds), fillStart, fillEnd, LinearGradientMode.ForwardDiagonal);
 		using Pen border = new Pen(Color.White, borderWidth);
 		graphics.FillEllipse(fill, bounds);
 		graphics.DrawEllipse(border, bounds.X, bounds.Y, bounds.Width, bounds.Height);
@@ -1249,9 +1315,11 @@ internal sealed class CalculatorForm : Form
 	protected override void OnFormClosed(FormClosedEventArgs e)
 	{
 		try { SetCouponBadgeCount(0); } catch { }
+		try { SetWeekliesBadgeCount(0); } catch { }
 		try { marketService?.Dispose(); } catch { }
 		try { grindMarketPriceProvider.Dispose(); } catch { }
 		try { couponService.Dispose(); } catch { }
+		try { weeklyPlannerStore.Dispose(); } catch { }
 		try { eventService.Dispose(); } catch { }
 		try { bossScheduleService.Dispose(); } catch { }
 		try { playerGuildService.Dispose(); } catch { }
@@ -2160,6 +2228,23 @@ internal sealed class CalculatorForm : Form
 				.ToList();
 			return await couponService.SaveRedemptionsAsync(redeemedCodes, cancellationToken);
 		}
+		case "initializeWeeklyPlanner":
+		{
+			WeeklyPlannerInitialization initialization =
+				await weeklyPlannerStore.InitializeAsync(cancellationToken);
+			return new
+			{
+				stateExists = initialization.LoadedPersistedState,
+				state = initialization.State
+			};
+		}
+		case "saveWeeklyPlannerState":
+		{
+			WeeklyPlannerState state = JsonSerializer.Deserialize<WeeklyPlannerState>(payload.GetRawText(), JsonOptions)
+				?? throw new InvalidDataException("Weekly planner data is invalid.");
+			WeeklyPlannerState saved = await weeklyPlannerStore.SaveAsync(state, cancellationToken);
+			return new { state = saved };
+		}
 		case "setCouponBadgeCount":
 		{
 			int count = payload.TryGetProperty("count", out JsonElement countValue) && countValue.TryGetInt32(out int parsedCount)
@@ -2168,6 +2253,17 @@ internal sealed class CalculatorForm : Form
 			SetCouponBadgeCount(count);
 			return new { count = Math.Max(0, count) };
 		}
+		case "setWeekliesBadgeCount":
+		{
+			int count = payload.TryGetProperty("count", out JsonElement countValue) && countValue.TryGetInt32(out int parsedCount)
+				? parsedCount
+				: 0;
+			SetWeekliesBadgeCount(count);
+			return new { count = Math.Max(0, count) };
+		}
+		case "flashTaskbarAttention":
+			FlashTaskbarAttention();
+			return new { flashed = true };
 		case "getAppBehaviorSettings":
 			return new AppBehaviorSettings(minimizeToTray);
 		case "saveAppBehaviorSettings":

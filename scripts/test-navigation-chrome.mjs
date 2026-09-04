@@ -156,6 +156,7 @@ const expectedIcons = new Map([
   ["playerGuildView", "nav-icon-player-guild-search"],
   ["grindTrackerView", "nav-icon-grind-zones"],
   ["resetTimersView", "nav-icon-timers"],
+  ["weekliesView", "nav-icon-weeklies"],
   ["eventsView", "nav-icon-events"],
   ["bracketsView", "nav-icon-brackets"],
   ["masteryBracketsView", "nav-icon-mastery-brackets"],
@@ -172,20 +173,20 @@ const expectedNavigationLayout = [...expectedIcons.keys()];
 assert.deepEqual(
   navigationLayoutTokens,
   expectedNavigationLayout,
-  "Desktop navigation must retain exactly two balanced rows of eight buttons.",
+  "Desktop navigation must retain a balanced nine-button row above a centered eight-button row.",
 );
 const navigationSpritePath = path.join(path.dirname(scriptPath), "NavigationAssets", "nav-icons.svg");
 assert.ok(fs.existsSync(navigationSpritePath), "The shared navigation SVG sprite must ship beside the UI resources.");
 const navigationSprite = fs.readFileSync(navigationSpritePath, "utf8");
 assert.equal(
   createHash("sha256").update(navigationSprite.replace(/\r\n/g, "\n")).digest("hex"),
-  "873a9cb686009b4d7906e4561a0edfa6289b661e41c86560b4603b227d9df718",
+  "50769a4e005327a4d78eacabeaf4364221996a2d1d18b8b96d9cee3a5ca1c26e",
   "The approved navigation glyph geometry must remain byte-for-byte identical apart from line endings.",
 );
 for (const [view, iconId] of expectedIcons) {
   assert.match(
     markup,
-    new RegExp(`<button\\b(?=[^>]*\\bdata-app-view="${view}")[^>]*>(?:(?!<\\/button>)[\\s\\S])*?<use\\s+href="NavigationAssets/nav-icons\\.svg\\?v=cartographers-brass-20260827#${iconId}"`),
+    new RegExp(`<button\\b(?=[^>]*\\bdata-app-view="${view}")[^>]*>(?:(?!<\\/button>)[\\s\\S])*?<use\\s+href="NavigationAssets/nav-icons\\.svg\\?v=cartographers-brass-2026(?:0827|0903)#${iconId}"`),
     `The ${view} button must use its immutable shared vector glyph.`,
   );
   assert.match(
@@ -197,7 +198,7 @@ for (const [view, iconId] of expectedIcons) {
 assert.equal(
   [...navigationSprite.matchAll(/<symbol\s+id="nav-icon-[^"]+"/g)].length,
   expectedIcons.size,
-  "The shared sprite must contain exactly the 16 live navigation glyphs.",
+  "The shared sprite must contain exactly the 17 live navigation glyphs.",
 );
 assert.doesNotMatch(navigationSprite, /#[0-9a-f]{3,8}|rgb\(|hsl\(/i, "Navigation glyph geometry must not hardcode theme colors.");
 assert.doesNotMatch(
@@ -228,7 +229,7 @@ const desktopCanvasRule = { body: desktopCanvasRules.at(-1)?.[1] ?? "" };
 assert.ok(desktopCanvasRule.body, "Desktop navigation must retain its final capped canvas rule.");
 for (const [property, value] of [
   ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(8,minmax\(0,1fr\)\)\s*!important$/],
+  ["grid-template-columns", /^repeat\(18,minmax\(0,1fr\)\)\s*!important$/],
   ["justify-content", /^center\s*!important$/],
   ["column-gap", /^8px\s*!important$/],
   ["width", /^min\(100%,1336px\)\s*!important$/],
@@ -243,7 +244,7 @@ const nonCustomDesktopCanvasRule = { body: nonCustomDesktopCanvasRules.at(-1)?.[
 assert.ok(nonCustomDesktopCanvasRule.body, "Non-Custom themes must override the legacy fullscreen rail.");
 for (const [property, value] of [
   ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(8,minmax\(0,1fr\)\)\s*!important$/],
+  ["grid-template-columns", /^repeat\(18,minmax\(0,1fr\)\)\s*!important$/],
   ["justify-content", /^center\s*!important$/],
   ["column-gap", /^8px\s*!important$/],
   ["width", /^min\(100%,1336px\)\s*!important$/],
@@ -254,22 +255,22 @@ for (const [property, value] of [
 const compactNavigationCss = stylesheet.slice(compactNavigationBreakpoint);
 for (const expected of [
   /display:grid!important/,
+  /grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important/,
+  /grid-template-columns:repeat\(12,minmax\(0,1fr\)\)!important/,
   /grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important/,
-  /grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/,
-  /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/,
   /overflow-x:clip!important/,
   /overflow-y:visible!important/,
   /\.navRowBreak\{display:none!important/,
   /max-width:160px!important/,
-  /:nth-child\(13\)\{grid-column:2!important\}/,
+  /:nth-child\(10\)\{grid-column:auto\/span 2!important\}/,
+  /:nth-child\(13\)\{grid-column:2\/span 2!important\}/,
+  /:nth-child\(17\)\{grid-column:4\/span 2!important\}/,
 ]) {
   assert.match(compactNavigationCss, expected, "Compact navigation must retain its responsive wrapping-grid contract.");
 }
 assert.doesNotMatch(compactNavigationCss, /display:flex!important|flex-wrap:nowrap!important|overflow-x:(?:auto|scroll)!important/, "Final navigation breakpoints must wrap instead of scrolling horizontally.");
-assert.equal((8 * 160) + (7 * 8), 1336, "Eight equal buttons and seven gaps must exactly fill the desktop canvas.");
-assert.equal((1278 - 36 - (7 * 6)) / 8, 150, "The reported 1278px viewport must fit two complete equal navigation rows.");
-assert.equal((6 * 160) + (5 * 8), 1000, "The three-row navigation canvas must cap six equal buttons per row.");
-assert.equal(16 - (2 * 6), 4, "The centered third row must contain the final four navigation buttons.");
+assert.equal(17 - 9, 8, "The desktop navigation must center eight buttons beneath the first nine.");
+assert.equal(17 - (2 * 6), 5, "The medium navigation's centered third row must contain five buttons.");
 assert.doesNotMatch(desktopNavigationCss, /--nav-button-width\s*:/, "Individual navigation tools must not override the shared width.");
 assert.doesNotMatch(desktopNavigationCss, /flex-grow\s*:|flex\s*:\s*[^;]*clamp\(/, "Legacy row-expansion rules must not return.");
 
@@ -323,9 +324,11 @@ assert.ok(navigationLockGlyphRule.body, "The final navigation lock glyph geometr
 finalDeclaration(navigationLockGlyphRule, "width", /^16px\s*!important$/, "Navigation lock glyph");
 finalDeclaration(navigationLockGlyphRule, "height", /^16px\s*!important$/, "Navigation lock glyph");
 
-const narrowNavigationCss = stylesheet.slice(stylesheet.lastIndexOf("@media(max-width:720px){"));
+const narrowNavigationBreakpoint = compactNavigationCss.indexOf("@media(max-width:720px){");
+assert.ok(narrowNavigationBreakpoint >= 0, "The narrow navigation breakpoint must remain defined.");
+const narrowNavigationCss = compactNavigationCss.slice(narrowNavigationBreakpoint);
 for (const expected of [
-  /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/,
+  /grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important/,
   /grid-template-columns:32px minmax\(0,1fr\)!important/,
   /height:44px!important/,
   /font-size:12px!important/,

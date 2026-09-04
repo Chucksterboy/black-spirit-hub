@@ -37,6 +37,7 @@
     <button class="navButton betaNavButton" data-app-view="playerGuildView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-player-guild-search"></use></svg></span><span class="navLabel">Player &amp; Guild Search</span></button>
     <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-grind-zones"></use></svg></span><span class="navLabel">Grind Zones</span></button>
     <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-timers"></use></svg></span><span class="navLabel">Timers</span></button>
+    <button class="navButton betaNavButton" data-app-view="weekliesView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260903#nav-icon-weeklies"></use></svg></span><span class="navLabel">Weeklies</span></button>
     <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-events"></use></svg></span><span class="navLabel">Events</span></button>
     <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-brackets"></use></svg></span><span class="navLabel">Brackets</span></button>
     <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-mastery-brackets"></use></svg></span><span class="navLabel">Mastery Brackets</span></button>
@@ -115,6 +116,73 @@
     </header>
     <div id="resetTimersGrid" class="resetTimersGrid" aria-label="Black Desert timers"></div>
   </section>
+</div>
+<div id="weekliesView" class="appView">
+  <section class="weekliesShell" aria-labelledby="weekliesTitle">
+    <header class="weekliesHeader">
+      <div>
+        <span class="weekliesEyebrow">Your weekly route</span>
+        <h1 id="weekliesTitle">Weeklies</h1>
+        <p>Choose what matters, mark it complete, and see exactly how long remains before each reset.</p>
+      </div>
+      <div id="weekliesDashboardActions" class="weekliesDashboardActions" hidden>
+        <button id="weekliesAllDone" class="weekliesActionButton weekliesAllDone" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path><path d="M21 12a9 9 0 1 1-5.3-8.2"></path></svg><span>All done</span></button>
+        <button id="weekliesOpenSettings" class="weekliesCogButton" type="button" aria-haspopup="dialog" aria-controls="weekliesSettingsOverlay" title="Weekly settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg><span class="srOnly">Open weekly settings</span></button>
+      </div>
+    </header>
+
+    <div id="weekliesOnboarding" class="weekliesStage weekliesOnboarding">
+      <div class="weekliesWelcome">
+        <span class="weekliesWelcomeMark" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M18 10v8M46 10v8M12 23h40M17 15h30a5 5 0 0 1 5 5v31a5 5 0 0 1-5 5H17a5 5 0 0 1-5-5V20a5 5 0 0 1 5-5Z"></path><path d="m21 38 7 7 15-17"></path></svg></span>
+        <div><strong>Build your weekly route</strong><span>Start with the essentials or search the complete list. You can change this later from the cog.</span></div>
+        <button id="weekliesSelectRecommended" class="weekliesGhostButton" type="button">Select essentials</button>
+      </div>
+      <div class="weekliesPickerToolbar">
+        <label class="weekliesSearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="weekliesOnboardingSearch" type="search" autocomplete="off" placeholder="Search bosses, dungeons, progression, sailing..." aria-label="Search weekly activities"></label>
+        <div id="weekliesOnboardingCategories" class="weekliesCategoryChips" aria-label="Filter weekly activities"></div>
+      </div>
+      <div id="weekliesOnboardingList" class="weekliesPickerList"></div>
+      <div class="weekliesPickerFooter">
+        <span><strong id="weekliesOnboardingCount">0</strong> selected</span>
+        <small id="weekliesOnboardingHint">Choose at least one activity to continue.</small>
+        <button id="weekliesFinishOnboarding" class="weekliesPrimaryButton" type="button" disabled>Done</button>
+      </div>
+    </div>
+
+    <div id="weekliesDashboard" class="weekliesStage weekliesDashboard" hidden>
+      <div class="weekliesSummaryGrid">
+        <article><span>Completed</span><strong id="weekliesCompletedCount">0</strong><small id="weekliesCompletedLabel">of 0 this cycle</small></article>
+        <article><span>Still to do</span><strong id="weekliesRemainingCount">0</strong><small>selected activities</small></article>
+        <article><span>Next reset</span><strong id="weekliesNextReset">--:--:--</strong><small id="weekliesNextResetLabel">Calculating...</small></article>
+        <article class="weekliesProgressSummary"><span>Weekly progress</span><strong id="weekliesProgressPercent">0%</strong><div><i id="weekliesProgressBar"></i></div></article>
+      </div>
+      <div id="weekliesDashboardList" class="weekliesDashboardList"></div>
+      <span id="weekliesLiveStatus" class="srOnly" aria-live="polite"></span>
+    </div>
+  </section>
+
+</div>
+
+<div id="weekliesSettingsOverlay" class="weekliesSettingsOverlay" hidden>
+    <section class="weekliesSettingsDialog" role="dialog" aria-modal="true" aria-labelledby="weekliesSettingsTitle" tabindex="-1">
+      <header>
+        <div><span>Planner controls</span><h2 id="weekliesSettingsTitle">Weekly settings</h2><p>Adjust reminders or add and remove activities from your route.</p></div>
+        <button id="weekliesCloseSettings" class="weekliesDialogClose" type="button" aria-label="Close weekly settings">&times;</button>
+      </header>
+      <div class="weekliesReminderPanel">
+        <div class="weekliesReminderCopy"><span class="weekliesReminderBell" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg></span><div><strong>Desktop reminders</strong><span>Remind me again on every remaining day in the selected window.</span></div></div>
+        <div class="weekliesReminderControls">
+          <label class="switch" title="Enable weekly reminders"><input id="weekliesReminderEnabled" type="checkbox"><span class="slider"></span></label>
+          <label class="weekliesReminderSelect" for="weekliesReminderDays"><span>Reminder in</span><select id="weekliesReminderDays" class="settingSelect"><option value="1">1 day before reset</option><option value="2">2 days before reset</option><option value="3">3 days before reset</option></select></label>
+        </div>
+      </div>
+      <div class="weekliesManageToolbar">
+        <label class="weekliesSearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input id="weekliesSettingsSearch" type="search" autocomplete="off" placeholder="Search activities to add or remove" aria-label="Search activities in weekly settings"></label>
+        <span><strong id="weekliesSettingsCount">0</strong> selected</span>
+      </div>
+      <div id="weekliesSettingsList" class="weekliesPickerList weekliesSettingsList"></div>
+      <footer><button id="weekliesCancelSettings" class="weekliesGhostButton" type="button">Cancel</button><button id="weekliesSaveSettings" class="weekliesPrimaryButton" type="button">Save changes</button></footer>
+    </section>
 </div>
 <div id="calculatorView" class="appView">
 <main>
@@ -1215,7 +1283,7 @@
 
 <footer class="appStatusBar" aria-label="Black Spirit Hub status">
   <span class="statusLeft"><button class="supportHeart" type="button" data-open-url="https://ko-fi.com/chucksterboy" aria-label="Support Me" title="Support Me" data-tooltip="Support Me"><svg class="supportHeartGlyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z"></path></svg><span class="supportHeartLabel">Support Me</span></button></span>
-  <span class="statusRight"><button id="couponStatusAlert" class="couponStatusAlert" type="button" aria-label="Open available coupons" title="Open available coupons"></button><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><button id="appHealthMonitor" class="bsh-status-health bsh-status-health--checking" type="button" title="Testing local saves and Black Spirit Hub services." aria-busy="true"><span class="bsh-status-ecg" aria-hidden="true"><svg viewBox="0 0 46 28" role="presentation"><path class="bsh-status-ecg-baseline" d="M1 14H45" /><path class="bsh-status-ecg-trace" d="M1 14H10L13 11L16 22L21 4L25 18L29 12L33 14H45" /></svg></span><span class="bsh-status-health-copy" role="status" aria-live="polite"><small>Health</small><strong>Checking core systems...</strong></span></button><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
+  <span class="statusRight"><button id="couponStatusAlert" class="couponStatusAlert" type="button" aria-label="Open available coupons" title="Open available coupons"></button><button id="weekliesStatusAlert" class="weekliesStatusAlert" type="button" aria-label="Open unfinished weeklies" title="Open unfinished weeklies"></button><span id="updateStatusAlert" class="updateStatusAlert" role="button" tabindex="0"></span><button id="appHealthMonitor" class="bsh-status-health bsh-status-health--checking" type="button" title="Testing local saves and Black Spirit Hub services." aria-busy="true"><span class="bsh-status-ecg" aria-hidden="true"><svg viewBox="0 0 46 28" role="presentation"><path class="bsh-status-ecg-baseline" d="M1 14H45" /><path class="bsh-status-ecg-trace" d="M1 14H10L13 11L16 22L21 4L25 18L29 12L33 14H45" /></svg></span><span class="bsh-status-health-copy" role="status" aria-live="polite"><small>Health</small><strong>Checking core systems...</strong></span></button><span id="appVersionLabel" class="appVersionLabel" title="Application version">v...</span></span>
 </footer>
 
 <script src="Assets/GrindTracker/grind-spots.js?v=v0.9.59"></script>

@@ -59,6 +59,7 @@ $grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
 $marketOutfitJsTestPath = Join-Path $repoRoot "scripts\test-market-outfit-frontend.mjs"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $navigationChromeJsTestPath = Join-Path $repoRoot "scripts\test-navigation-chrome.mjs"
+$weekliesJsTestPath = Join-Path $repoRoot "scripts\test-weeklies.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
 $healthMonitorJsTestPath = Join-Path $repoRoot "scripts\test-health-monitor.mjs"
@@ -634,7 +635,7 @@ $projectSource = Get-Content -LiteralPath $project -Raw
 $navigationMarkupMatch = [regex]::Match($html, '(?s)<nav class="appNav"[^>]*>.*?</nav>')
 $expectedNavigationViews = @(
 	"homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView", "settingsView",
-	"playerGuildView", "grindTrackerView", "resetTimersView", "eventsView", "bracketsView", "masteryBracketsView",
+	"playerGuildView", "grindTrackerView", "resetTimersView", "weekliesView", "eventsView", "bracketsView", "masteryBracketsView",
 	"recipeBookView", "dehkiaFuelView", "lightstoneSetsView"
 )
 $navigationViews = if ($navigationMarkupMatch.Success) {
@@ -644,7 +645,7 @@ $navigationViews = if ($navigationMarkupMatch.Success) {
 if (!$navigationMarkupMatch.Success -or
 	($navigationViews -join "|") -ne ($expectedNavigationViews -join "|") -or
 	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 0) {
-	throw "The Cartographer navigation must retain its exact 8/8 button order."
+	throw "The Cartographer navigation must retain its exact 9/8 button order."
 }
 
 if ($html -notmatch '(?s)<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?</button>\s*<button[^>]*data-app-view="grindTrackerView"' -or
@@ -1369,9 +1370,9 @@ if ($homeTimerIconCount -ne 5 -or $resetTimerIconCount -ne 7 -or $script -match 
 	throw "Dashboard timer badges are missing, malformed, or using placeholder glyphs."
 }
 if ($html.Length -gt 100000) { throw "The HTML shell exceeded the 100 KB performance budget." }
-# The local OCR review flow, reviewed BDO substitution metadata, and background timer
-# scheduler intentionally share this dependency-free script; retain measured headroom.
-if ($script.Length -gt 596000) { throw "The main UI script exceeded the notification-audio-aware 596 KB performance budget." }
+# The local OCR review flow, reviewed BDO substitution metadata, background timer
+# scheduler, and update-safe Weeklies planner share this dependency-free script.
+if ($script.Length -gt 640000) { throw "The main UI script exceeded the Weeklies-aware 640 KB performance budget." }
 if ($css -notmatch 'body\[data-motion="reduced"\]' -or $script -notmatch 'visibilitychange') {
 	throw "Reduced-motion or visibility lifecycle handling is missing."
 }
@@ -1703,6 +1704,9 @@ if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $navigationChromeJsTestPath -PathType Leaf)) {
 	throw "The executable navigation chrome JavaScript regression test is missing."
 }
+if (!(Test-Path -LiteralPath $weekliesJsTestPath -PathType Leaf)) {
+	throw "The executable Weeklies JavaScript regression test is missing."
+}
 if (!(Test-Path -LiteralPath $playerGuildJsTestPath -PathType Leaf)) {
 	throw "The executable Player & Guild JavaScript regression test is missing."
 }
@@ -1764,6 +1768,10 @@ if ($nodeCommand) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "Navigation chrome JavaScript regression tests failed."
 	}
+	& $nodeCommand.Source $weekliesJsTestPath $scriptPath
+	if ($LASTEXITCODE -ne 0) {
+		throw "Weeklies JavaScript regression tests failed."
+	}
 	& $nodeCommand.Source $playerGuildJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "Player & Guild JavaScript regression tests failed."
@@ -1818,8 +1826,8 @@ if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app
 if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
 	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
 }
-if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
-	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
+if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(18,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
+	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(18,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
 	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;' -or
 	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;[^}]*padding:12px!important;' -or
 	$css -notmatch '(?s)body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{[^}]*transform:none!important;') {
@@ -1830,13 +1838,14 @@ $cartographerCss = if ($cartographerStart -ge 0) { $css.Substring($cartographerS
 if ($css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view="homeView"\]\{flex-grow:' -or
 	$css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\.betaNavButton\[data-app-view="[^"]+"\]\{flex:0 1 clamp\(' -or
 	$css -match '--nav-button-width\s*:' -or
-	$css -notmatch '(?s)@media\(max-width:1291px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important;[^}]*overflow-x:clip!important;[^}]*overflow-y:visible!important' -or
+	$css -notmatch '(?s)@media\(max-width:1291px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important;[^}]*overflow-x:clip!important;[^}]*overflow-y:visible!important' -or
 	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame,[^{]*\{[^}]*width:min\(calc\(100% - 8px\),1028px\)!important;' -or
-	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important;[^}]*width:min\(100%,1000px\)!important;[^}]*overflow-x:clip!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(13\)\{grid-column:2!important\}' -or
+	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*grid-template-columns:repeat\(12,minmax\(0,1fr\)\)!important;[^}]*width:min\(100%,1000px\)!important;[^}]*overflow-x:clip!important;' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(13\)\{grid-column:2/span 2!important\}' -or
+	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(17\)\{grid-column:4/span 2!important\}' -or
 	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*display:flex!important' -or
 	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*overflow-x:(?:auto|scroll)!important') {
-	throw "The equal-width navigation or its responsive two-row and three-row wrapping has regressed."
+	throw "The equal-width 17-button navigation or its responsive wrapping has regressed."
 }
 if ($css -notmatch 'body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{--nav-label:#f4e5c0\}') {
 	throw "Custom light mode must keep bright, readable navigation labels on the dark plaques."
@@ -2142,6 +2151,8 @@ if ($LASTEXITCODE -ne 0) {
 if ($LASTEXITCODE -ne 0) { throw "Offline application smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --product-migration-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "Product data migration smoke test failed with exit code $LASTEXITCODE." }
+& $dotnet $appDll --weekly-planner-smoke-test
+if ($LASTEXITCODE -ne 0) { throw "Weekly planner persistence smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --app-behavior-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "App behavior persistence smoke test failed with exit code $LASTEXITCODE." }
 

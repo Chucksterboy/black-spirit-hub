@@ -4520,7 +4520,7 @@ body[data-style] .navFrame>.appNav{
   position:relative!important;
   z-index:2!important;
   display:grid!important;
-  grid-template-columns:repeat(8,minmax(0,1fr))!important;
+  grid-template-columns:repeat(18,minmax(0,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4540,6 +4540,7 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]{
   position:relative!important;
   isolation:isolate!important;
   display:grid!important;
+  grid-column:span 2!important;
   grid-template-columns:40px minmax(0,1fr)!important;
   grid-template-rows:1fr!important;
   align-items:center!important;
@@ -4722,6 +4723,9 @@ body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{
   text-align:center!important;
   text-overflow:clip!important;
 }
+body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(10){
+  grid-column:2/span 2!important;
+}
 body[data-style] .navFrame>.navPinButton{
   right:4px!important;
   bottom:-30px!important;
@@ -4747,7 +4751,7 @@ body[data-style] .navFrame>.navPinButton::before{
    the stylesheet. Keep every desktop preset on the same centered canvas. */
 body[data-style]:not([data-style="custom"]) .navFrame>.appNav{
   display:grid!important;
-  grid-template-columns:repeat(8,minmax(0,1fr))!important;
+  grid-template-columns:repeat(18,minmax(0,1fr))!important;
   align-items:center!important;
   align-content:center!important;
   justify-content:center!important;
@@ -4776,9 +4780,11 @@ body[data-style="custom"] .navFrame>.navCrest{
 }
 @media(max-width:1291px){
   body[data-style] .navFrame>.appNav,
-  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:grid!important;grid-template-columns:repeat(8,minmax(0,1fr))!important;align-items:center!important;align-content:center!important;justify-content:center!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,1336px)!important;margin:0 auto!important;padding:0!important;overflow-x:clip!important;overflow-y:visible!important}
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{display:grid!important;grid-template-columns:repeat(16,minmax(0,1fr))!important;align-items:center!important;align-content:center!important;justify-content:center!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,1336px)!important;margin:0 auto!important;padding:0!important;overflow-x:clip!important;overflow-y:visible!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
-  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:36px minmax(0,1fr)!important;width:100%!important;min-width:0!important;max-width:160px!important;height:46px!important;min-height:46px!important;padding:3px 4px!important;column-gap:4px!important;font-size:13px!important;line-height:1!important}
+  body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-column:span 2!important;grid-template-columns:36px minmax(0,1fr)!important;width:100%!important;min-width:0!important;max-width:160px!important;height:46px!important;min-height:46px!important;padding:3px 4px!important;column-gap:4px!important;font-size:13px!important;line-height:1!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(10){grid-column:auto/span 2!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(17){grid-column:8/span 2!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
   body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:36px!important;height:36px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
@@ -4788,19 +4794,700 @@ body[data-style="custom"] .navFrame>.navCrest{
   body[data-style] .navFrame,
   body[data-style]:not([data-style="custom"]) .navFrame{width:min(calc(100% - 8px),1028px)!important;margin:4px auto 14px!important;padding:12px!important}
   body[data-style] .navFrame>.appNav,
-  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(6,minmax(0,1fr))!important;column-gap:8px!important;row-gap:8px!important;width:min(100%,1000px)!important;overflow-x:clip!important;overflow-y:visible!important}
-  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:2!important}
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(12,minmax(0,1fr))!important;column-gap:8px!important;row-gap:8px!important;width:min(100%,1000px)!important;overflow-x:clip!important;overflow-y:visible!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:2/span 2!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(17){grid-column:auto/span 2!important}
 }
 @media(max-width:720px){
   body[data-style] .navFrame,
   body[data-style]:not([data-style="custom"]) .navFrame{width:min(calc(100% - 8px),682px)!important;padding:10px!important}
   body[data-style] .navFrame>.appNav,
-  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(4,minmax(0,1fr))!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,658px)!important;overflow-x:clip!important;overflow-y:visible!important}
-  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:auto!important}
+  body[data-style]:not([data-style="custom"]) .navFrame>.appNav{grid-template-columns:repeat(8,minmax(0,1fr))!important;column-gap:6px!important;row-gap:6px!important;width:min(100%,658px)!important;overflow-x:clip!important;overflow-y:visible!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(13){grid-column:auto/span 2!important}
+  body[data-style] .navFrame .appNav>.navButton[data-app-view]:nth-child(17){grid-column:4/span 2!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view],
   body[data-style] .navFrame .appNav>.navButton.betaNavButton[data-app-view]{grid-template-columns:32px minmax(0,1fr)!important;height:44px!important;min-height:44px!important;padding:3px!important;column-gap:4px!important;font-size:12px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navIcon,
   body[data-style] .navFrame .appNav>.navButton[data-app-view] .navGlyph{width:32px!important;height:32px!important}
   body[data-style] .navFrame .appNav>.navButton[data-app-view]>.navLabel{padding:0!important}
+}
+
+/* Weeklies planner: theme-aware onboarding, checklist dashboard, and settings. */
+#weekliesView{
+  --weekly-accent:var(--a1);
+  --weekly-accent-2:var(--a2);
+  --weekly-success:var(--ui-success,#4ade80);
+  --weekly-alert:#ef4444;
+  --weekly-alert-deep:#991b1b;
+  --weekly-timer:#ffe7a3;
+  --weekly-timer-urgent:#ff5366;
+  --weekly-line:color-mix(in srgb,var(--weekly-accent) 28%,var(--border));
+  --weekly-panel:color-mix(in srgb,var(--surface) 94%,transparent);
+  --weekly-card:color-mix(in srgb,var(--surface2) 92%,var(--surface));
+  min-height:calc(100vh - var(--fixedTopOffset,218px) - var(--bsh-status-bar-height,50px));
+  color:var(--text);
+}
+#weekliesView *,
+.weekliesSettingsOverlay *{box-sizing:border-box}
+#weekliesView button,
+.weekliesSettingsOverlay button,
+.weekliesStatusAlert{
+  font:inherit;
+  clip-path:none!important;
+  -webkit-clip-path:none!important;
+  mask:none!important;
+  -webkit-mask:none!important;
+}
+#weekliesView :is(button,input,select):focus-visible,
+.weekliesSettingsOverlay :is(button,input,select):focus-visible,
+.weekliesStatusAlert:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--weekly-accent,var(--a1)) 78%,white);
+  outline-offset:3px;
+}
+.weekliesShell{
+  width:min(1500px,calc(100% - 28px));
+  margin:18px auto 38px;
+  color:var(--text);
+}
+.weekliesHeader{
+  position:relative;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:24px;
+  margin-bottom:16px;
+  padding:19px 22px;
+  overflow:hidden;
+  border:1px solid var(--weekly-line);
+  border-radius:var(--ui-radius,12px);
+  background:
+    radial-gradient(520px 150px at 0 0,color-mix(in srgb,var(--weekly-accent) 16%,transparent),transparent 72%),
+    linear-gradient(145deg,color-mix(in srgb,var(--surface) 97%,transparent),color-mix(in srgb,var(--bg0) 88%,var(--surface2)));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 7%,transparent),0 16px 40px rgba(0,0,0,.18);
+}
+.weekliesHeader::after{
+  position:absolute;
+  right:-70px;
+  bottom:-115px;
+  width:250px;
+  height:250px;
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 18%,transparent);
+  border-radius:50%;
+  content:"";
+  box-shadow:0 0 0 34px color-mix(in srgb,var(--weekly-accent) 3%,transparent),0 0 0 68px color-mix(in srgb,var(--weekly-accent) 2%,transparent);
+  pointer-events:none;
+}
+.weekliesHeader>div{position:relative;z-index:1;min-width:0}
+.weekliesEyebrow{
+  display:block;
+  margin-bottom:5px;
+  color:var(--weekly-accent);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+.weekliesHeader h1{
+  margin:0;
+  color:var(--text);
+  font:900 clamp(25px,3vw,38px)/1.05 var(--style-heading,"Segoe UI",sans-serif);
+  letter-spacing:.015em;
+}
+.weekliesHeader p{max-width:720px;margin:7px 0 0;color:var(--muted);font-size:13px;line-height:1.55}
+.weekliesDashboardActions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.weekliesDashboardActions[hidden],
+.weekliesStage[hidden],
+.weekliesSettingsOverlay[hidden]{display:none!important}
+.weekliesActionButton,
+.weekliesCogButton,
+.weekliesPrimaryButton,
+.weekliesGhostButton,
+.weekliesDialogClose,
+.weekliesEmptyAction{
+  min-height:42px;
+  border:1px solid var(--weekly-line);
+  border-radius:calc(var(--ui-radius,12px) * .58)!important;
+  color:var(--text);
+  background:color-mix(in srgb,var(--surface2) 90%,transparent);
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 7%,transparent),0 7px 18px rgba(0,0,0,.14);
+  font-size:12px;
+  font-weight:850;
+  cursor:pointer;
+  transition:transform .17s ease,border-color .17s ease,background .17s ease,box-shadow .17s ease,opacity .17s ease;
+}
+.weekliesActionButton{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 15px}
+.weekliesActionButton svg,.weekliesCogButton svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.weekliesAllDone{border-color:color-mix(in srgb,var(--weekly-success) 38%,var(--border));color:color-mix(in srgb,var(--weekly-success) 74%,var(--text))}
+.weekliesAllDone.complete,
+.weekliesAllDone[aria-pressed="true"]{color:#06120b!important;border-color:var(--weekly-success);background:linear-gradient(135deg,var(--weekly-success),color-mix(in srgb,var(--weekly-success) 62%,var(--weekly-accent)))}
+.weekliesCogButton{width:42px;min-width:42px;height:42px;display:grid;place-items:center;padding:0;color:var(--weekly-accent)}
+.weekliesPrimaryButton{
+  min-width:112px;
+  padding:0 18px;
+  color:color-mix(in srgb,var(--bg0) 86%,#020617);
+  border-color:color-mix(in srgb,var(--weekly-accent) 72%,white);
+  background:linear-gradient(135deg,var(--weekly-accent),var(--weekly-accent-2));
+  box-shadow:0 10px 25px color-mix(in srgb,var(--weekly-accent) 24%,transparent),inset 0 1px rgba(255,255,255,.25);
+}
+.weekliesGhostButton,.weekliesEmptyAction{padding:0 15px;color:var(--text)}
+.weekliesActionButton:disabled,
+.weekliesPrimaryButton:disabled,
+.weekliesGhostButton:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+@media(hover:hover){
+  .weekliesActionButton:not(:disabled):hover,
+  .weekliesCogButton:hover,
+  .weekliesPrimaryButton:not(:disabled):hover,
+  .weekliesGhostButton:not(:disabled):hover,
+  .weekliesEmptyAction:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--weekly-accent) 72%,var(--border));box-shadow:0 12px 26px color-mix(in srgb,var(--weekly-accent) 14%,rgba(0,0,0,.2))}
+}
+
+.weekliesStage{transition:opacity .18s ease,transform .18s ease,filter .18s ease}
+.weekliesStage.isLeaving{opacity:0;filter:blur(2px);transform:translateY(8px);pointer-events:none}
+.weekliesStage.isEntering{opacity:0;filter:blur(2px);transform:translateY(8px)}
+.weekliesOnboarding{
+  padding:18px;
+  border:1px solid var(--weekly-line);
+  border-radius:var(--ui-radius,12px);
+  background:linear-gradient(150deg,var(--weekly-panel),color-mix(in srgb,var(--bg0) 85%,var(--surface)));
+  box-shadow:0 18px 46px rgba(0,0,0,.18);
+}
+.weekliesWelcome{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:15px;
+  margin-bottom:16px;
+  padding:16px;
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 35%,var(--border));
+  border-radius:calc(var(--ui-radius,12px) * .78);
+  background:radial-gradient(400px 130px at 0 0,color-mix(in srgb,var(--weekly-accent) 16%,transparent),transparent 75%),color-mix(in srgb,var(--surface2) 89%,transparent);
+}
+.weekliesWelcomeMark,
+.weeklyPickerIcon,
+.weeklyTaskIcon,
+.weekliesPickerGroup>header>span{
+  display:grid;
+  place-items:center;
+  color:var(--weekly-accent);
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 34%,var(--border));
+  background:radial-gradient(circle,color-mix(in srgb,var(--weekly-accent) 13%,var(--surface2)),color-mix(in srgb,var(--surface) 94%,transparent));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 7%,transparent),0 7px 20px color-mix(in srgb,var(--weekly-accent) 10%,transparent);
+}
+.weekliesWelcomeMark{width:58px;height:58px;border-radius:16px}
+.weekliesWelcomeMark svg{width:38px;height:38px}
+.weekliesWelcomeMark svg,
+.weeklyPickerIcon svg,
+.weeklyTaskIcon svg,
+.weekliesPickerGroup>header>span svg,
+.weekliesReminderBell svg{
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.75;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.weekliesWelcome>div{min-width:0;display:grid;gap:4px}
+.weekliesWelcome>div>strong{color:var(--text);font:900 17px/1.2 var(--style-heading,"Segoe UI",sans-serif)}
+.weekliesWelcome>div>span{color:var(--muted);font-size:12px;line-height:1.5}
+.weekliesPickerToolbar{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:12px;
+  margin-bottom:18px;
+}
+.weekliesSearch{position:relative;display:block;flex:0 1 auto;width:min(640px,100%);max-width:640px;min-width:220px;margin:0 auto!important}
+.weekliesSearch>svg{position:absolute;z-index:2;top:50%;left:14px;width:18px;height:18px;color:var(--muted);fill:none;stroke:currentColor;stroke-width:1.8;transform:translateY(-50%);pointer-events:none}
+body[data-style] #weekliesView .weekliesSearch>input,
+body[data-style] #weekliesSettingsOverlay .weekliesSearch>input{
+  box-sizing:border-box!important;
+  width:100%;
+  height:44px;
+  min-height:44px;
+  margin:0!important;
+  padding:0 42px!important;
+  text-align:center!important;
+  color:var(--text)!important;
+  border:1px solid var(--weekly-line)!important;
+  border-radius:10px!important;
+  border-image:none!important;
+  background-color:color-mix(in srgb,var(--field-bg) 95%,var(--surface))!important;
+  background-image:linear-gradient(180deg,color-mix(in srgb,var(--field-bg) 96%,var(--surface2)),var(--field-bg))!important;
+  background-position:0 0!important;
+  background-size:100% 100%!important;
+  background-repeat:no-repeat!important;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.12)!important;
+  clip-path:none!important;
+  -webkit-clip-path:none!important;
+  mask:none!important;
+  -webkit-mask:none!important;
+}
+body[data-style] #weekliesView .weekliesSearch>input:focus,
+body[data-style] #weekliesSettingsOverlay .weekliesSearch>input:focus{border-color:var(--weekly-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--weekly-accent) 17%,transparent)!important}
+.weekliesCategoryChips{display:flex;align-items:center;justify-content:center;gap:7px;max-width:100%;overflow-x:auto;padding:3px;scrollbar-width:thin}
+.weekliesCategoryChips button{
+  min-height:36px;
+  flex:0 0 auto;
+  padding:0 12px;
+  border:1px solid color-mix(in srgb,var(--border) 88%,transparent);
+  border-radius:999px!important;
+  color:var(--muted);
+  background:color-mix(in srgb,var(--surface2) 83%,transparent);
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.025em;
+  cursor:pointer;
+  transition:color .16s ease,border-color .16s ease,background .16s ease,transform .16s ease;
+}
+.weekliesCategoryChips button.active,
+.weekliesCategoryChips button[aria-pressed="true"]{color:color-mix(in srgb,var(--weekly-accent) 72%,var(--text));border-color:color-mix(in srgb,var(--weekly-accent) 58%,var(--border));background:color-mix(in srgb,var(--weekly-accent) 14%,var(--surface2))}
+@media(hover:hover){.weekliesCategoryChips button:hover{color:var(--text);border-color:var(--weekly-accent);transform:translateY(-1px)}}
+
+.weekliesPickerList{display:grid;gap:20px}
+.weekliesPickerGroup{min-width:0}
+.weekliesPickerGroup>header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0 2px 9px;
+}
+.weekliesPickerGroup>header>span{width:34px;height:34px;flex:0 0 auto;border-radius:10px}
+.weekliesPickerGroup>header svg{width:20px;height:20px}
+.weekliesPickerGroup>header div{min-width:0}
+.weekliesPickerGroup>header h2{margin:0;color:var(--text);font:900 14px/1.2 var(--style-heading,"Segoe UI",sans-serif)}
+.weekliesPickerGroup>header small{display:block;margin-top:2px;color:var(--muted);font-size:9px;font-weight:750}
+.weekliesPickerGroup>div{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+.weeklyPickerCard{
+  position:relative;
+  min-width:0;
+  min-height:142px;
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  align-items:start;
+  gap:12px;
+  padding:15px;
+  overflow:hidden;
+  text-align:left;
+  color:var(--text);
+  border:1px solid color-mix(in srgb,var(--weekly-task-accent) 30%,var(--border));
+  border-radius:calc(var(--ui-radius,12px) * .8)!important;
+  background:
+    radial-gradient(240px 110px at 0 0,color-mix(in srgb,var(--weekly-task-accent) 11%,transparent),transparent 78%),
+    linear-gradient(150deg,var(--weekly-card),color-mix(in srgb,var(--bg0) 84%,var(--surface)));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 6%,transparent),0 9px 24px rgba(0,0,0,.13);
+  cursor:pointer;
+  transition:transform .17s ease,border-color .17s ease,background .17s ease,box-shadow .17s ease;
+}
+.weeklyPickerCard::after{
+  position:absolute;
+  inset:0;
+  border:1px solid transparent;
+  border-radius:inherit;
+  content:"";
+  pointer-events:none;
+  transition:border-color .17s ease,box-shadow .17s ease;
+}
+.weeklyPickerCard.selected,
+.weeklyPickerCard[aria-pressed="true"]{border-color:color-mix(in srgb,var(--weekly-task-accent) 72%,var(--border));background:radial-gradient(260px 130px at 0 0,color-mix(in srgb,var(--weekly-task-accent) 18%,transparent),transparent 78%),linear-gradient(150deg,color-mix(in srgb,var(--surface2) 90%,var(--weekly-task-accent) 10%),color-mix(in srgb,var(--bg0) 82%,var(--surface)))}
+.weeklyPickerCard.selected::after,
+.weeklyPickerCard[aria-pressed="true"]::after{border-color:color-mix(in srgb,var(--weekly-task-accent) 28%,transparent);box-shadow:inset 0 0 25px color-mix(in srgb,var(--weekly-task-accent) 8%,transparent)}
+@media(hover:hover){.weeklyPickerCard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--weekly-task-accent) 58%,var(--border));box-shadow:0 14px 30px rgba(0,0,0,.18),0 0 20px color-mix(in srgb,var(--weekly-task-accent) 7%,transparent)}}
+.weeklyPickerCheck{
+  position:absolute;
+  z-index:2;
+  top:10px;
+  right:10px;
+  width:24px;
+  height:24px;
+  display:grid;
+  place-items:center;
+  color:transparent;
+  border:1px solid color-mix(in srgb,var(--border) 88%,var(--muted));
+  border-radius:50%;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);
+  transition:color .16s ease,border-color .16s ease,background .16s ease,transform .16s ease;
+}
+.weeklyPickerCheck svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.weeklyPickerCard.selected .weeklyPickerCheck,
+.weeklyPickerCard[aria-pressed="true"] .weeklyPickerCheck{color:color-mix(in srgb,var(--bg0) 84%,#06120b);border-color:var(--weekly-task-accent);background:var(--weekly-task-accent);transform:scale(1.04)}
+.weeklyPickerIcon{width:42px;height:42px;border-radius:12px}
+.weeklyPickerIcon svg{width:23px;height:23px}
+.weeklyPickerCard .weeklyPickerIcon,
+.weeklyTaskCard .weeklyTaskIcon{color:var(--weekly-task-accent);border-color:color-mix(in srgb,var(--weekly-task-accent) 43%,var(--border));background:radial-gradient(circle,color-mix(in srgb,var(--weekly-task-accent) 16%,var(--surface2)),color-mix(in srgb,var(--surface) 94%,transparent));box-shadow:inset 0 1px color-mix(in srgb,var(--text) 7%,transparent),0 7px 20px color-mix(in srgb,var(--weekly-task-accent) 13%,transparent)}
+.weeklyPickerCopy{min-width:0;display:grid;align-content:start;gap:7px;padding-right:17px}
+.weeklyPickerTitle{display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px;min-width:0}
+.weeklyPickerTitle strong{min-width:0;color:var(--weekly-task-accent);font:900 15px/1.25 var(--style-heading,"Segoe UI",sans-serif);text-shadow:0 0 12px color-mix(in srgb,var(--weekly-task-accent) 24%,transparent)}
+.weeklyPickerTitle i{
+  padding:3px 6px;
+  color:color-mix(in srgb,var(--weekly-task-accent) 72%,var(--text));
+  border:1px solid color-mix(in srgb,var(--weekly-task-accent) 38%,var(--border));
+  border-radius:999px;
+  background:color-mix(in srgb,var(--weekly-task-accent) 10%,transparent);
+  font-size:7px;
+  font-style:normal;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.weeklyPickerCopy>span:not(.weeklyPickerTitle){color:var(--text);font-size:11px;line-height:1.5;opacity:.92}
+.weeklyPickerCopy>small{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;color:var(--text);font-size:9.5px;opacity:.84}
+.weeklyPickerCopy>small b{color:var(--text);font-weight:850}
+.weeklyPickerCopy>small em{overflow:hidden;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+.weekliesPickerFooter{
+  position:sticky;
+  z-index:20;
+  bottom:calc(var(--bsh-status-bar-height,50px) + 8px);
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:13px;
+  margin-top:20px;
+  padding:12px 14px;
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 32%,var(--border));
+  border-radius:calc(var(--ui-radius,12px) * .76);
+  background:color-mix(in srgb,var(--surface) 94%,transparent);
+  box-shadow:0 15px 34px rgba(0,0,0,.25),inset 0 1px color-mix(in srgb,var(--text) 7%,transparent);
+  backdrop-filter:blur(16px);
+}
+.weekliesPickerFooter>span{color:var(--text);font-size:12px;font-weight:750;white-space:nowrap}
+.weekliesPickerFooter>span strong{color:var(--weekly-accent);font-size:16px}
+.weekliesPickerFooter>small{color:var(--muted);font-size:10px;line-height:1.4}
+.weekliesPickerEmpty,
+.weekliesEmptyState,
+.weekliesDashboardEmpty,
+#weekliesEmpty{
+  min-height:210px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:7px;
+  padding:28px;
+  color:var(--muted);
+  text-align:center;
+  border:1px dashed color-mix(in srgb,var(--weekly-accent) 38%,var(--border));
+  border-radius:var(--ui-radius,12px);
+  background:radial-gradient(circle at 50% 20%,color-mix(in srgb,var(--weekly-accent) 10%,transparent),transparent 58%),color-mix(in srgb,var(--surface) 82%,transparent);
+}
+.weekliesPickerEmpty strong,
+.weekliesEmptyState strong,
+.weekliesDashboardEmpty strong,
+#weekliesEmpty strong{color:var(--text);font:900 16px/1.25 var(--style-heading,"Segoe UI",sans-serif)}
+.weekliesPickerEmpty span,
+.weekliesEmptyState span,
+.weekliesDashboardEmpty span,
+#weekliesEmpty span{max-width:480px;font-size:11px;line-height:1.5}
+
+.weekliesDashboard{display:grid;gap:18px}
+.weekliesSummaryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.weekliesSummaryGrid>article{
+  min-width:0;
+  min-height:112px;
+  display:grid;
+  align-content:center;
+  gap:5px;
+  padding:16px 17px;
+  border:1px solid var(--weekly-line);
+  border-radius:calc(var(--ui-radius,12px) * .78);
+  background:radial-gradient(220px 110px at 0 0,color-mix(in srgb,var(--weekly-accent) 11%,transparent),transparent 75%),linear-gradient(150deg,var(--weekly-card),color-mix(in srgb,var(--bg0) 86%,var(--surface)));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 6%,transparent),0 10px 25px rgba(0,0,0,.14);
+}
+.weekliesSummaryGrid>article>span{color:var(--muted);font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.weekliesSummaryGrid>article>strong{min-width:0;overflow:hidden;color:var(--text);font:900 clamp(22px,2.6vw,32px)/1.05 var(--style-heading,"Segoe UI",sans-serif);text-overflow:ellipsis;white-space:nowrap}
+.weekliesSummaryGrid>article>small{color:var(--muted);font-size:9px;line-height:1.35}
+.weekliesProgressSummary>div{height:7px;margin-top:5px;overflow:hidden;border-radius:999px;background:color-mix(in srgb,var(--bg0) 72%,var(--border));box-shadow:inset 0 1px 3px rgba(0,0,0,.2)}
+.weekliesProgressSummary>div>i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--weekly-accent),var(--weekly-success));box-shadow:0 0 13px color-mix(in srgb,var(--weekly-success) 42%,transparent);transition:width .28s ease}
+.weekliesDashboardList{display:block;min-width:0}
+.weekliesDashboardGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-width:0}
+.weeklyTaskCard{
+  position:relative;
+  min-width:0;
+  min-height:154px;
+  display:grid;
+  grid-template-columns:40px 44px minmax(0,1fr);
+  align-items:start;
+  gap:12px;
+  padding:15px;
+  overflow:hidden;
+  color:var(--text);
+  border:1px solid color-mix(in srgb,var(--weekly-task-accent) 30%,var(--border));
+  border-radius:calc(var(--ui-radius,12px) * .8);
+  background:radial-gradient(260px 130px at 0 0,color-mix(in srgb,var(--weekly-task-accent) 11%,transparent),transparent 78%),linear-gradient(150deg,var(--weekly-card),color-mix(in srgb,var(--bg0) 84%,var(--surface)));
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 6%,transparent),0 10px 27px rgba(0,0,0,.14);
+  transition:opacity .18s ease,border-color .18s ease,background .18s ease,transform .18s ease,box-shadow .18s ease;
+}
+.weeklyTaskCard::after{position:absolute;right:-55px;bottom:-75px;width:145px;height:145px;border:1px solid color-mix(in srgb,var(--weekly-task-accent) 16%,transparent);border-radius:50%;content:"";pointer-events:none}
+@media(hover:hover){.weeklyTaskCard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--weekly-task-accent) 54%,var(--border));box-shadow:0 15px 32px rgba(0,0,0,.18)}}
+.weeklyTaskCard.isDone,
+.weeklyTaskCard[data-weekly-done-state="true"]{opacity:.78;border-color:color-mix(in srgb,var(--weekly-success) 43%,var(--border));background:radial-gradient(260px 130px at 0 0,color-mix(in srgb,var(--weekly-success) 12%,transparent),transparent 78%),linear-gradient(150deg,var(--weekly-card),color-mix(in srgb,var(--bg0) 84%,var(--surface)))}
+.weeklyDoneToggle{
+  position:relative;
+  z-index:2;
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  color:transparent;
+  border:1px solid color-mix(in srgb,var(--border) 72%,var(--muted));
+  border-radius:12px!important;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);
+  box-shadow:inset 0 1px color-mix(in srgb,var(--text) 5%,transparent);
+  cursor:pointer;
+  transition:color .16s ease,border-color .16s ease,background .16s ease,transform .16s ease,box-shadow .16s ease;
+}
+.weeklyDoneToggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity .16s ease}
+.weeklyDoneToggle[aria-pressed="true"]{color:#06120b!important;border-color:var(--weekly-success);background:var(--weekly-success);box-shadow:0 0 18px color-mix(in srgb,var(--weekly-success) 30%,transparent),inset 0 1px rgba(255,255,255,.3)}
+.weeklyDoneToggle[aria-pressed="true"] svg{opacity:1}
+@media(hover:hover){.weeklyDoneToggle:hover{transform:scale(1.05);border-color:var(--weekly-success)}}
+.weeklyTaskIcon{position:relative;z-index:1;width:44px;height:44px;border-radius:12px}
+.weeklyTaskIcon svg{width:24px;height:24px}
+.weeklyTaskCopy{position:relative;z-index:1;min-width:0;align-self:stretch;display:grid;align-content:center;gap:6px}
+body[data-style] #weekliesView .weeklyTaskCopy h3{margin:0;color:var(--weekly-task-accent)!important;font:900 17px/1.25 var(--style-heading,"Segoe UI",sans-serif);text-shadow:0 0 14px color-mix(in srgb,var(--weekly-task-accent) 25%,transparent)}
+.weeklyTaskCopy p{margin:0;color:var(--text);font-size:11px;line-height:1.5;opacity:.92}
+.weeklyTaskClock{position:relative;z-index:1;grid-column:2/-1;min-width:0;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding-top:3px;text-align:right}
+.weeklyTaskClock strong{max-width:100%;overflow:hidden;color:var(--weekly-timer);font:900 clamp(17px,1.65vw,24px)/1 var(--style-heading,"Segoe UI",sans-serif);font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 12px color-mix(in srgb,var(--weekly-timer) 19%,transparent);transition:color .18s ease,text-shadow .18s ease}
+.weeklyTaskClock strong[data-weekly-countdown-state="urgent"]{color:var(--weekly-timer-urgent);text-shadow:0 0 15px color-mix(in srgb,var(--weekly-timer-urgent) 38%,transparent)}
+.weeklyTaskClock span{max-width:170px;color:var(--text);font-size:9px;line-height:1.35;opacity:.78}
+#weekliesNextReset{color:var(--weekly-timer);text-shadow:0 0 12px color-mix(in srgb,var(--weekly-timer) 19%,transparent);transition:color .18s ease,text-shadow .18s ease}
+#weekliesNextReset[data-weekly-countdown-state="urgent"]{color:var(--weekly-timer-urgent);text-shadow:0 0 15px color-mix(in srgb,var(--weekly-timer-urgent) 38%,transparent)}
+
+/* Kept outside the transformed app view so fixed positioning remains viewport-based. */
+.weekliesSettingsOverlay{
+  --weekly-accent:var(--a1);
+  --weekly-accent-2:var(--a2);
+  --weekly-success:var(--ui-success,#4ade80);
+  --weekly-alert:#ef4444;
+  --weekly-alert-deep:#991b1b;
+  --weekly-line:color-mix(in srgb,var(--weekly-accent) 28%,var(--border));
+  --weekly-panel:color-mix(in srgb,var(--surface) 94%,transparent);
+  --weekly-card:color-mix(in srgb,var(--surface2) 92%,var(--surface));
+  position:fixed;
+  z-index:1450;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  color:var(--text);
+  background:rgba(2,6,14,.72);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  backdrop-filter:blur(9px);
+  transition:opacity .18s ease,visibility 0s linear .18s;
+}
+.weekliesSettingsOverlay.isOpen{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+body[data-style] .weekliesSettingsOverlay :is(input,select,textarea,option){color:var(--text)!important}
+body[data-style] .weekliesSettingsOverlay select option{background:var(--field-bg)!important}
+.weekliesSettingsDialog{
+  width:min(920px,calc(100vw - 36px));
+  max-height:calc(100vh - 36px);
+  display:grid;
+  grid-template-rows:auto auto minmax(0,auto) minmax(130px,1fr) auto;
+  overflow:hidden;
+  color:var(--text);
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 46%,var(--border));
+  border-radius:var(--ui-radius,14px);
+  background:radial-gradient(620px 220px at 0 0,color-mix(in srgb,var(--weekly-accent) 16%,transparent),transparent 72%),linear-gradient(155deg,color-mix(in srgb,var(--surface) 98%,var(--bg0)),color-mix(in srgb,var(--bg0) 91%,var(--surface2)));
+  box-shadow:0 34px 90px rgba(0,0,0,.48),inset 0 1px color-mix(in srgb,var(--text) 8%,transparent);
+  transform:translateY(10px) scale(.985);
+  transition:transform .2s cubic-bezier(.22,1,.36,1),opacity .18s ease;
+}
+.weekliesSettingsOverlay.isOpen .weekliesSettingsDialog{transform:translateY(0) scale(1)}
+.weekliesSettingsDialog>header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  padding:19px 20px 16px;
+  border-bottom:1px solid var(--weekly-line);
+}
+.weekliesSettingsDialog>header>div{min-width:0}
+.weekliesSettingsDialog>header span{display:block;margin-bottom:4px;color:var(--weekly-accent);font-size:8px;font-weight:900;letter-spacing:.15em;text-transform:uppercase}
+.weekliesSettingsDialog>header h2{margin:0;color:var(--text);font:900 23px/1.15 var(--style-heading,"Segoe UI",sans-serif)}
+.weekliesSettingsDialog>header p{margin:5px 0 0;color:var(--muted);font-size:10px;line-height:1.45}
+.weekliesDialogClose{width:39px;min-width:39px;height:39px;display:grid;place-items:center;padding:0;color:var(--muted);font-size:25px;line-height:1}
+.weekliesReminderPanel{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:16px;
+  margin:16px 20px 0;
+  padding:14px;
+  border:1px solid color-mix(in srgb,var(--weekly-accent) 32%,var(--border));
+  border-radius:calc(var(--ui-radius,12px) * .72);
+  background:color-mix(in srgb,var(--surface2) 86%,transparent);
+}
+.weekliesReminderCopy{min-width:0;display:flex;align-items:center;gap:11px}
+.weekliesReminderCopy>div{min-width:0;display:grid;gap:3px}
+.weekliesReminderCopy strong{color:var(--text);font-size:11px;font-weight:900}
+.weekliesReminderCopy>div>span{color:var(--muted);font-size:9px;line-height:1.4}
+.weekliesReminderBell{width:38px;height:38px;display:grid;flex:0 0 auto;place-items:center;color:var(--weekly-accent);border:1px solid color-mix(in srgb,var(--weekly-accent) 34%,var(--border));border-radius:11px;background:color-mix(in srgb,var(--weekly-accent) 10%,var(--surface))}
+.weekliesReminderBell svg{width:21px;height:21px}
+.weekliesReminderControls{min-width:0;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:13px}
+.weekliesReminderControls>.switch{flex:0 0 auto;margin:0!important}
+.weekliesReminderSelect{min-width:0;display:flex;align-items:center;justify-content:center;gap:10px;margin:0!important;white-space:nowrap}
+.weekliesReminderSelect>span{color:color-mix(in srgb,var(--weekly-accent) 88%,white);font-size:11px;font-weight:950;letter-spacing:.025em;text-align:center;text-shadow:0 0 13px color-mix(in srgb,var(--weekly-accent) 32%,transparent)}
+body[data-style] #weekliesSettingsOverlay .weekliesReminderSelect select{
+  box-sizing:border-box!important;
+  width:220px!important;
+  max-width:none!important;
+  height:42px!important;
+  min-height:42px!important;
+  margin:0!important;
+  padding:0 38px 0 14px!important;
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  text-align:center!important;
+  text-align-last:center!important;
+  color:var(--text)!important;
+  font-size:11px!important;
+  font-weight:850!important;
+  border:1px solid var(--weekly-line)!important;
+  border-radius:10px!important;
+  border-image:none!important;
+  background-color:color-mix(in srgb,var(--field-bg) 96%,var(--surface))!important;
+  background-image:linear-gradient(45deg,transparent 50%,var(--weekly-accent) 50%),linear-gradient(135deg,var(--weekly-accent) 50%,transparent 50%),linear-gradient(180deg,color-mix(in srgb,var(--field-bg) 96%,var(--surface2)),var(--field-bg))!important;
+  background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%,0 0!important;
+  background-size:5px 5px,5px 5px,100% 100%!important;
+  background-repeat:no-repeat!important;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.12),0 0 0 1px color-mix(in srgb,var(--weekly-accent) 6%,transparent)!important;
+  clip-path:none!important;
+  -webkit-clip-path:none!important;
+  mask:none!important;
+  -webkit-mask:none!important;
+}
+body[data-style] #weekliesSettingsOverlay .weekliesReminderSelect select:focus{border-color:var(--weekly-accent)!important;background-image:linear-gradient(45deg,transparent 50%,var(--weekly-accent-2) 50%),linear-gradient(135deg,var(--weekly-accent-2) 50%,transparent 50%),linear-gradient(180deg,color-mix(in srgb,var(--field-bg) 96%,var(--surface2)),var(--field-bg))!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--weekly-accent) 17%,transparent)!important}
+body[data-style] #weekliesSettingsOverlay .weekliesReminderSelect option{text-align:center}
+.weekliesReminderSelect select:disabled{opacity:.48;cursor:not-allowed}
+.weekliesManageToolbar{position:relative;display:flex;align-items:center;justify-content:center;gap:14px;padding:16px 20px 11px}
+.weekliesManageToolbar .weekliesSearch{flex:0 1 640px;width:min(640px,calc(100% - 110px));min-width:0}
+.weekliesManageToolbar>span{position:absolute;right:20px;flex:0 0 auto;color:var(--muted);font-size:10px;white-space:nowrap}
+.weekliesManageToolbar>span strong{color:var(--weekly-accent);font-size:14px}
+.weekliesSettingsList{min-height:0;padding:0 20px 18px;overflow-y:auto;overscroll-behavior:contain}
+.weekliesSettingsList .weeklyPickerCard{min-height:128px}
+.weekliesSettingsDialog>footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:13px 20px;border-top:1px solid var(--weekly-line);background:color-mix(in srgb,var(--surface) 90%,transparent)}
+body.weekliesDialogOpen{overflow:hidden!important}
+
+.weekliesStatusAlert{
+  display:none;
+  min-height:27px;
+  align-items:center;
+  gap:7px;
+  max-width:190px;
+  padding:4px 10px;
+  overflow:hidden;
+  color:#fff!important;
+  border:1px solid color-mix(in srgb,#fca5a5 72%,#7f1d1d);
+  border-radius:999px!important;
+  background:linear-gradient(100deg,var(--weekly-alert-deep,#991b1b),var(--weekly-alert,#ef4444));
+  box-shadow:0 0 19px rgba(239,68,68,.34),inset 0 1px rgba(255,255,255,.28);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.015em;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.weekliesStatusAlert::before{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:#fff;box-shadow:0 0 10px #fff;content:""}
+.weekliesStatusAlert.show{display:inline-flex;animation:weekliesStatusPulse 1.45s ease-in-out infinite alternate}
+@keyframes weekliesStatusPulse{from{filter:saturate(1);transform:translateY(0);box-shadow:0 0 14px rgba(239,68,68,.24),inset 0 1px rgba(255,255,255,.25)}to{filter:saturate(1.18) brightness(1.08);transform:translateY(-1px);box-shadow:0 0 25px rgba(239,68,68,.5),inset 0 1px rgba(255,255,255,.34)}}
+.weekliesDashboardEmpty>span{width:42px;height:42px;display:grid;place-items:center;color:#fff;border-radius:50%;background:linear-gradient(135deg,var(--weekly-accent),var(--weekly-accent-2));font-size:22px;font-weight:900;box-shadow:0 8px 22px color-mix(in srgb,var(--weekly-accent) 24%,transparent)}
+.weekliesDashboardEmpty>p{max-width:500px;margin:0 0 8px;color:var(--muted);font-size:11px;line-height:1.55}
+body[data-mode="light"] :is(.weekliesHeader,.weekliesOnboarding,.weeklyPickerCard,.weekliesSummaryGrid>article,.weeklyTaskCard),
+body[data-style="paper"] :is(.weekliesHeader,.weekliesOnboarding,.weeklyPickerCard,.weekliesSummaryGrid>article,.weeklyTaskCard),
+body[data-style="caravan"] :is(.weekliesHeader,.weekliesOnboarding,.weeklyPickerCard,.weekliesSummaryGrid>article,.weeklyTaskCard){box-shadow:inset 0 1px rgba(255,255,255,.5),0 12px 28px rgba(57,38,19,.12)}
+body[data-mode="light"] .weekliesSettingsDialog,
+body[data-style="paper"] .weekliesSettingsDialog,
+body[data-style="caravan"] .weekliesSettingsDialog{box-shadow:0 30px 80px rgba(28,20,12,.3),inset 0 1px rgba(255,255,255,.56)}
+body[data-style="paper"] .weekliesPrimaryButton,
+body[data-style="caravan"] .weekliesPrimaryButton{color:#fff3d2!important}
+body[data-mode="light"] .weeklyPickerTitle strong,
+body[data-style="paper"] .weeklyPickerTitle strong,
+body[data-style="caravan"] .weeklyPickerTitle strong{color:color-mix(in srgb,var(--weekly-task-accent) 70%,#172033)}
+body[data-mode="light"][data-style] #weekliesView .weeklyTaskCopy h3,
+body[data-style="paper"] #weekliesView .weeklyTaskCopy h3,
+body[data-style="caravan"] #weekliesView .weeklyTaskCopy h3{color:color-mix(in srgb,var(--weekly-task-accent) 70%,#172033)!important}
+body[data-mode="light"] #weekliesView,
+body[data-style="paper"] #weekliesView,
+body[data-style="caravan"] #weekliesView{--weekly-timer:#986400;--weekly-timer-urgent:#c92b42}
+
+@media(max-width:1050px){
+  .weekliesPickerGroup>div,
+  .weekliesDashboardGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .weekliesSummaryGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .weekliesSearch{width:min(640px,100%)}
+  .weekliesCategoryChips{justify-content:center}
+  .weekliesReminderPanel{grid-template-columns:1fr}
+  .weekliesReminderCopy{justify-content:center;text-align:center}
+  .weekliesReminderControls{grid-column:1/-1}
+  .weekliesStatusAlert{max-width:150px}
+}
+@media(max-width:720px){
+  .weekliesShell{width:calc(100% - 18px);margin-top:10px}
+  .weekliesHeader{align-items:flex-start;flex-direction:column;padding:16px}
+  .weekliesDashboardActions{width:100%;justify-content:flex-start}
+  .weekliesActionButton{flex:1 1 auto}
+  .weekliesOnboarding{padding:12px}
+  .weekliesWelcome{grid-template-columns:auto minmax(0,1fr);padding:13px}
+  .weekliesWelcome .weekliesGhostButton{grid-column:1/-1;width:100%}
+  .weekliesPickerGroup>div,
+  .weekliesDashboardGrid{grid-template-columns:1fr}
+  .weekliesPickerFooter{grid-template-columns:1fr auto;bottom:calc(var(--bsh-status-bar-height,50px) + 5px)}
+  .weekliesPickerFooter>small{grid-column:1/-1;grid-row:2}
+  .weeklyTaskCard{grid-template-columns:40px 42px minmax(0,1fr);min-height:0}
+  .weeklyTaskIcon{width:42px;height:42px}
+  .weeklyTaskCopy{grid-column:3}
+  .weeklyTaskClock{grid-column:2/-1;justify-content:flex-start;padding-top:4px;text-align:left}
+  .weeklyTaskClock span{max-width:none}
+  .weekliesSettingsOverlay{padding:8px}
+  .weekliesSettingsDialog{width:calc(100vw - 16px);max-height:calc(100vh - 16px);border-radius:calc(var(--ui-radius,12px) * .72)}
+  .weekliesSettingsDialog>header{padding:15px}
+  .weekliesReminderPanel{margin:12px 12px 0;padding:12px}
+  .weekliesManageToolbar{align-items:center;flex-direction:column;padding:13px 12px 9px}
+  .weekliesManageToolbar .weekliesSearch{width:100%;max-width:none}
+  .weekliesManageToolbar>span{position:static;align-self:center}
+  .weekliesSettingsList{padding:0 12px 12px}
+  .weekliesSettingsDialog>footer{padding:11px 12px}
+  .weekliesSettingsDialog>footer button{flex:1}
+}
+@media(max-width:520px){
+  .weekliesSummaryGrid{grid-template-columns:1fr}
+  .weekliesWelcomeMark{width:48px;height:48px;border-radius:13px}
+  .weekliesWelcomeMark svg{width:31px;height:31px}
+  .weekliesPickerFooter{grid-template-columns:1fr}
+  .weekliesPickerFooter>.weekliesPrimaryButton{width:100%}
+  .weekliesReminderControls{align-items:stretch;flex-direction:column}
+  .weekliesReminderControls>.switch{align-self:center}
+  .weekliesReminderSelect{flex-direction:column}
+  body[data-style] #weekliesSettingsOverlay .weekliesReminderSelect select{width:100%!important}
+  .weekliesStatusAlert{max-width:105px}
+}
+body[data-motion="reduced"] :is(.weekliesStage,.weeklyPickerCard,.weeklyPickerCheck,.weeklyTaskCard,.weeklyDoneToggle,.weekliesProgressSummary>div>i,.weekliesSettingsOverlay,.weekliesSettingsDialog,.weekliesStatusAlert){animation:none!important;transition:none!important}
+body[data-motion="reduced"] :is(.weekliesStage,.weeklyPickerCard,.weeklyTaskCard,.weeklyDoneToggle,.weekliesSettingsDialog,.weekliesStatusAlert){transform:none!important;filter:none!important}
+body[data-motion="reduced"] .weekliesSettingsOverlay{backdrop-filter:none!important}
+@media(prefers-reduced-motion:reduce){
+  .weekliesStage,
+  .weeklyPickerCard,
+  .weeklyPickerCheck,
+  .weeklyTaskCard,
+  .weeklyDoneToggle,
+  .weekliesProgressSummary>div>i,
+  .weekliesSettingsOverlay,
+  .weekliesSettingsDialog,
+  .weekliesStatusAlert{animation:none!important;transition:none!important}
+  .weekliesStage,
+  .weeklyPickerCard,
+  .weeklyTaskCard,
+  .weeklyDoneToggle,
+  .weekliesSettingsDialog,
+  .weekliesStatusAlert{transform:none!important;filter:none!important}
+  .weekliesSettingsOverlay{backdrop-filter:none!important}
 }
 

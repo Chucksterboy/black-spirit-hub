@@ -20,6 +20,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		"coupon_item_icons.json",
 		"coupon_settings.json",
 		"coupon_redemptions.json",
+		WeeklyPlannerStore.StateFileName,
 		"events_cache.json",
 		"events_cache.backup.json",
 		"boss_schedule_cache.json",
@@ -37,6 +38,8 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	public string CouponSettingsPath => Path.Combine(Root, "coupon_settings.json");
 
 	public string CouponRedemptionsPath => Path.Combine(Root, "coupon_redemptions.json");
+
+	public string WeeklyPlannerStatePath => Path.Combine(Root, WeeklyPlannerStore.StateFileName);
 
 	public string CouponItemIconsPath => Path.Combine(Root, "coupon_item_icons.json");
 

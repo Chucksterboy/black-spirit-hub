@@ -208,6 +208,11 @@ internal static class Program
 			Environment.Exit(RunProductMigrationSmokeTest());
 			return;
 		}
+		if (args.Any((string a) => string.Equals(a, "--weekly-planner-smoke-test", StringComparison.OrdinalIgnoreCase)))
+		{
+			Environment.Exit(RunWeeklyPlannerSmokeTestAsync().GetAwaiter().GetResult());
+			return;
+		}
 		if (args.Any((string a) => string.Equals(a, "--app-behavior-smoke-test", StringComparison.OrdinalIgnoreCase)))
 		{
 			Environment.Exit(RunAppBehaviorSmokeTest());
@@ -427,6 +432,9 @@ internal static class Program
 			Directory.CreateDirectory(Path.Combine(previousRoot, "logs"));
 			File.WriteAllText(Path.Combine(previousRoot, "grind-sessions.json"), "[{\"spotId\":\"test\"}]");
 			File.WriteAllText(Path.Combine(previousRoot, "coupon_redemptions.json"), "{\"schemaVersion\":1,\"redeemedCodes\":[\"KEEPME\"]}");
+			File.WriteAllText(
+				Path.Combine(previousRoot, WeeklyPlannerStore.StateFileName),
+				"{\"schemaVersion\":1,\"selectedIds\":[\"pit-of-the-undying\"]}");
 			string previousLogName = string.Concat("bdo", "-multi", "-tool.log");
 			File.WriteAllText(Path.Combine(previousRoot, "logs", previousLogName), "previous log");
 			string previousRotatedLogName = previousLogName + ".1";
@@ -440,6 +448,7 @@ internal static class Program
 			if (Directory.Exists(previousRoot)
 				|| !File.Exists(Path.Combine(currentRoot, "grind-sessions.json"))
 				|| !File.Exists(Path.Combine(currentRoot, "coupon_redemptions.json"))
+				|| !File.Exists(Path.Combine(currentRoot, WeeklyPlannerStore.StateFileName))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub.log.1"))
 				|| !File.Exists(Path.Combine(currentRoot, "logs", "black-spirit-hub-native.log"))
@@ -462,11 +471,15 @@ internal static class Program
 			File.WriteAllText(currentSharedPath, "current");
 			File.SetLastWriteTimeUtc(currentSharedPath, DateTime.UtcNow);
 			File.WriteAllText(Path.Combine(mergePreviousRoot, "market-analytics.db"), "market");
+			File.WriteAllText(
+				Path.Combine(mergePreviousRoot, WeeklyPlannerStore.StateFileName),
+				"{\"schemaVersion\":1,\"selectedIds\":[\"altar-of-blood\"]}");
 
 			AppPaths.MigratePreviousProductDataForTest(mergePreviousRoot, mergeCurrentRoot);
 			if (Directory.Exists(mergePreviousRoot)
 				|| File.ReadAllText(currentSharedPath) != "current"
-				|| !File.Exists(Path.Combine(mergeCurrentRoot, "market-analytics.db")))
+				|| !File.Exists(Path.Combine(mergeCurrentRoot, "market-analytics.db"))
+				|| !File.Exists(Path.Combine(mergeCurrentRoot, WeeklyPlannerStore.StateFileName)))
 			{
 				return 72;
 			}
@@ -490,6 +503,190 @@ internal static class Program
 			{
 			}
 		}
+	}
+
+	private static async Task<int> RunWeeklyPlannerSmokeTestAsync()
+	{
+		string root = Path.Combine(Path.GetTempPath(), $"black-spirit-hub-weekly-planner-{Guid.NewGuid():N}");
+		try
+		{
+			AppPaths paths = AppPaths.CreateAt(root);
+			paths.EnsureDirectories();
+
+			WeeklyPlannerState defaults;
+			using (WeeklyPlannerStore store = new(paths))
+			{
+				WeeklyPlannerInitialization initialization =
+					await store.InitializeAsync(CancellationToken.None);
+				if (initialization.LoadedPersistedState)
+				{
+					return 120;
+				}
+				defaults = initialization.State;
+			}
+			if (defaults.SchemaVersion != WeeklyPlannerState.CurrentSchemaVersion
+				|| defaults.Revision != 0
+				|| defaults.OnboardingComplete
+				|| defaults.SelectedIds.Count != 0
+				|| defaults.ReminderDays != WeeklyPlannerState.DefaultReminderDays
+				|| defaults.NotificationsEnabled
+				|| defaults.DoneById.Count != 0
+				|| defaults.Notified.Count != 0)
+			{
+				return 121;
+			}
+
+			WeeklyPlannerState normalized;
+			using (WeeklyPlannerStore store = new(paths))
+			{
+				normalized = await store.SaveAsync(
+					new WeeklyPlannerState(
+						SchemaVersion: 99,
+						Revision: 27,
+						OnboardingComplete: true,
+						SelectedIds:
+						[
+							" SHRINE-BOSSES ",
+							"pit-of-the-undying",
+							"shrine-bosses",
+							"bad/id",
+							"__proto__"
+						],
+						ReminderDays: 99,
+						NotificationsEnabled: true,
+						DoneById: new Dictionary<string, string>(StringComparer.Ordinal)
+						{
+							["SHRINE-BOSSES"] = "2026-09-10T08:00:00.000Z",
+							["bad/id"] = "2026-09-10T08:00:00.000Z",
+							["constructor"] = "2026-09-10T08:00:00.000Z"
+						},
+						Notified: new Dictionary<string, bool>(StringComparer.Ordinal)
+						{
+							["2026-09-10T08:00:00.000Z|3"] = true,
+							["__proto__"] = true
+						}),
+					CancellationToken.None);
+			}
+			if (normalized.SchemaVersion != WeeklyPlannerState.CurrentSchemaVersion
+				|| normalized.Revision != 27
+				|| !normalized.SelectedIds.SequenceEqual(["shrine-bosses", "pit-of-the-undying"])
+				|| normalized.ReminderDays != 3
+				|| normalized.DoneById.Count != 1
+				|| normalized.DoneById["shrine-bosses"] != "2026-09-10T08:00:00.000Z"
+				|| normalized.Notified.Count != 1
+				|| !normalized.Notified["2026-09-10T08:00:00.000Z|3"])
+			{
+				return 122;
+			}
+
+			WeeklyPlannerState remindersOff;
+			using (WeeklyPlannerStore store = new(paths))
+			{
+				remindersOff = await store.SaveAsync(
+					normalized with
+					{
+						ReminderDays = -4,
+						NotificationsEnabled = false
+					},
+					CancellationToken.None);
+			}
+			if (remindersOff.ReminderDays != 0 || remindersOff.NotificationsEnabled)
+			{
+				return 123;
+			}
+
+			WeeklyPlannerState reloaded;
+			using (WeeklyPlannerStore store = new(paths))
+			{
+				WeeklyPlannerInitialization initialization =
+					await store.InitializeAsync(CancellationToken.None);
+				if (!initialization.LoadedPersistedState)
+				{
+					return 124;
+				}
+				reloaded = initialization.State;
+			}
+			if (!WeeklyPlannerStatesMatch(remindersOff, reloaded))
+			{
+				return 124;
+			}
+
+			string statePath = Path.Combine(paths.Root, WeeklyPlannerStore.StateFileName);
+			File.WriteAllText(statePath, "{not-valid-json");
+			WeeklyPlannerState recovered;
+			using (WeeklyPlannerStore store = new(paths))
+			{
+				WeeklyPlannerInitialization initialization =
+					await store.InitializeAsync(CancellationToken.None);
+				if (!initialization.LoadedPersistedState)
+				{
+					return 125;
+				}
+				recovered = initialization.State;
+			}
+			if (!WeeklyPlannerStatesMatch(remindersOff, recovered)
+				|| !Directory.EnumerateFiles(
+					paths.Root,
+					WeeklyPlannerStore.StateFileName + ".corrupt-*",
+					SearchOption.TopDirectoryOnly).Any())
+			{
+				return 125;
+			}
+
+			string invalidRoot = Path.Combine(root, "invalid-only");
+			AppPaths invalidPaths = AppPaths.CreateAt(invalidRoot);
+			invalidPaths.EnsureDirectories();
+			File.WriteAllText(invalidPaths.WeeklyPlannerStatePath, "{still-not-valid-json");
+			using (WeeklyPlannerStore store = new(invalidPaths))
+			{
+				WeeklyPlannerInitialization initialization =
+					await store.InitializeAsync(CancellationToken.None);
+				if (initialization.LoadedPersistedState
+					|| !WeeklyPlannerStatesMatch(WeeklyPlannerState.Default, initialization.State))
+				{
+					return 126;
+				}
+			}
+
+			Console.WriteLine("Weekly planner smoke test passed.");
+			return 0;
+		}
+		catch (Exception exception)
+		{
+			Console.Error.WriteLine("Weekly planner smoke test failed: " + exception);
+			return 127;
+		}
+		finally
+		{
+			try
+			{
+				if (Directory.Exists(root))
+				{
+					Directory.Delete(root, recursive: true);
+				}
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private static bool WeeklyPlannerStatesMatch(WeeklyPlannerState expected, WeeklyPlannerState actual)
+	{
+		return expected.SchemaVersion == actual.SchemaVersion
+			&& expected.Revision == actual.Revision
+			&& expected.OnboardingComplete == actual.OnboardingComplete
+			&& expected.SelectedIds.SequenceEqual(actual.SelectedIds)
+			&& expected.ReminderDays == actual.ReminderDays
+			&& expected.NotificationsEnabled == actual.NotificationsEnabled
+			&& expected.DoneById.Count == actual.DoneById.Count
+			&& expected.DoneById.All(pair =>
+				actual.DoneById.TryGetValue(pair.Key, out string? cycleKey)
+				&& string.Equals(pair.Value, cycleKey, StringComparison.Ordinal))
+			&& expected.Notified.Count == actual.Notified.Count
+			&& expected.Notified.All(pair =>
+				actual.Notified.TryGetValue(pair.Key, out bool delivered)
+				&& pair.Value == delivered);
 	}
 
 	private static int RunAppBehaviorSmokeTest()
