@@ -110,7 +110,7 @@ assert.match(mechanicText(919),/Priest of the End[^.]*third|third[^.]*Priest of 
 assert.match(mechanicText(922),/Despair-Consumed Edanas[^.]*disappear|disappear[^.]*Despair-Consumed Edanas/i,"Event Horizon must explain the Ibedor disappearance change");
 
 const eventHorizon=spotById.get("922");
-assert.equal(eventHorizon.drops.length,35,"Event Horizon must expose all 35 official drops after patch 10550");
+assert.equal(eventHorizon.drops.length,38,"Event Horizon must include all 38 current advertised drops, including the shared highest-tier pigments");
 const patch10550Drops=[
   ["821341","Crimson Primordial Luster - Sovereign"],
   ["821342","Violet Primordial Luster - Sovereign"],

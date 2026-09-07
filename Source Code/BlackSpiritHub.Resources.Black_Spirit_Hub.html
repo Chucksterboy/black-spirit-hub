@@ -6,7 +6,7 @@
 <title>Black Spirit Hub</title>
 
 
-<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.61">
+<link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.61-loot-20260907">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -18,32 +18,32 @@
   <div class="windowBrand"><span class="windowBrandMark"><img src="Assets/AppIcon/app-icon-ui.png" alt=""></span><span>Black Spirit Hub</span></div>
   <div class="headerCenterCrest" aria-hidden="true"></div>
   <div class="windowControls">
+    <button class="windowControl windowSettingsButton" id="windowSettings" type="button" data-app-view="settingsView" aria-label="Settings" aria-controls="settingsView" aria-pressed="false" title="Settings"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-settings"></use></svg></button>
     <button class="windowControl" id="windowMinimize" aria-label="Minimize">&minus;</button>
     <button class="windowControl" id="windowMaximize" aria-label="Maximize">&#9633;</button>
     <button class="windowControl close" id="windowClose" aria-label="Close">&times;</button>
   </div>
 </header>
 
-<div class="navFrame">
+<div class="navFrame" data-nav-design="arcane-glass">
   <i class="navCrest" aria-hidden="true"></i>
   <nav class="appNav" aria-label="Application sections">
-    <button class="navButton active" data-app-view="homeView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-home"></use></svg></span><span class="navLabel">Home</span></button>
-    <button class="navButton" data-app-view="calculatorView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-trade-distance"></use></svg></span><span class="navLabel">Trade Distance</span></button>
-    <button class="navButton" data-app-view="marketView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-market-analytics"></use></svg></span><span class="navLabel">Market Analytics</span></button>
-    <button class="navButton" data-app-view="portraitView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-portrait-replacer"></use></svg></span><span class="navLabel">Portrait Replacer</span></button>
-    <button class="navButton" data-app-view="fontChangerView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-font-changer"></use></svg></span><span class="navLabel">Font Changer</span></button>
-    <button class="navButton" data-app-view="couponsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-coupons"></use></svg></span><span class="navLabel">Coupons</span></button>
-    <button class="navButton" data-app-view="settingsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-settings"></use></svg></span><span class="navLabel">Settings</span></button>
-    <button class="navButton betaNavButton" data-app-view="playerGuildView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-player-guild-search"></use></svg></span><span class="navLabel">Player &amp; Guild Search</span></button>
-    <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-grind-zones"></use></svg></span><span class="navLabel">Grind Zones</span></button>
-    <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-timers"></use></svg></span><span class="navLabel">Timers</span></button>
-    <button class="navButton betaNavButton" data-app-view="weekliesView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260903#nav-icon-weeklies"></use></svg></span><span class="navLabel">Weeklies</span></button>
-    <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-events"></use></svg></span><span class="navLabel">Events</span></button>
-    <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-brackets"></use></svg></span><span class="navLabel">Brackets</span></button>
-    <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-mastery-brackets"></use></svg></span><span class="navLabel">Mastery Brackets</span></button>
-    <button class="navButton betaNavButton" data-app-view="recipeBookView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-recipe-book"></use></svg></span><span class="navLabel">Recipe Book</span></button>
-    <button class="navButton betaNavButton" data-app-view="dehkiaFuelView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-dehkia-fuel"></use></svg></span><span class="navLabel">Dehkia Fuel</span></button>
-    <button class="navButton betaNavButton" data-app-view="lightstoneSetsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=cartographers-brass-20260827#nav-icon-lightstone-sets"></use></svg></span><span class="navLabel">Lightstone Sets</span></button>
+    <button class="navButton active" data-app-view="homeView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-home"></use></svg></span><span class="navLabel">Home</span></button>
+    <button class="navButton" data-app-view="calculatorView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-trade-distance"></use></svg></span><span class="navLabel">Trade Distance</span></button>
+    <button class="navButton" data-app-view="marketView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-market-analytics"></use></svg></span><span class="navLabel">Market Analytics</span></button>
+    <button class="navButton" data-app-view="portraitView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-portrait-replacer"></use></svg></span><span class="navLabel">Portrait Replacer</span></button>
+    <button class="navButton" data-app-view="fontChangerView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-font-changer"></use></svg></span><span class="navLabel">Font Changer</span></button>
+    <button class="navButton" data-app-view="couponsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-coupons"></use></svg></span><span class="navLabel">Coupons</span></button>
+    <button class="navButton betaNavButton" data-app-view="playerGuildView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-player-guild-search"></use></svg></span><span class="navLabel">Player &amp; Guild Search</span></button>
+    <button class="navButton betaNavButton" data-app-view="grindTrackerView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-grind-zones"></use></svg></span><span class="navLabel">Grind Zones</span></button>
+    <button class="navButton betaNavButton" data-app-view="resetTimersView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-timers"></use></svg></span><span class="navLabel">Timers</span></button>
+    <button class="navButton betaNavButton" data-app-view="weekliesView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-weeklies"></use></svg></span><span class="navLabel">Weeklies</span></button>
+    <button class="navButton betaNavButton" data-app-view="eventsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-events"></use></svg></span><span class="navLabel">Events</span></button>
+    <button class="navButton betaNavButton" data-app-view="bracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-brackets"></use></svg></span><span class="navLabel">Brackets</span></button>
+    <button class="navButton betaNavButton" data-app-view="masteryBracketsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-mastery-brackets"></use></svg></span><span class="navLabel">Mastery Brackets</span></button>
+    <button class="navButton betaNavButton" data-app-view="recipeBookView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-recipe-book"></use></svg></span><span class="navLabel">Recipe Book</span></button>
+    <button class="navButton betaNavButton" data-app-view="dehkiaFuelView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-dehkia-fuel"></use></svg></span><span class="navLabel">Dehkia Fuel</span></button>
+    <button class="navButton betaNavButton" data-app-view="lightstoneSetsView"><span class="navIcon" aria-hidden="true"><svg class="navGlyph" viewBox="0 0 64 64"><use href="NavigationAssets/nav-icons.svg?v=arcane-glass-20260907#nav-icon-lightstone-sets"></use></svg></span><span class="navLabel">Lightstone Sets</span></button>
   </nav>
   <button class="navPinButton" id="navigationPinButton" type="button" aria-pressed="false" aria-label="Keep navigation visible" title="Keep navigation visible"></button>
 </div>
@@ -52,14 +52,6 @@
 
 <div id="homeView" class="appView active">
   <div class="homeShell">
-    <header class="homeHero">
-      <div>
-        <h1>Home Dashboard</h1>
-        <p>World bosses, reset timers, day/night cycle, and desktop notification controls.</p>
-      </div>
-      <div class="homeStatus"><i></i><span id="homeScheduleStatus">Schedule loading...</span></div>
-    </header>
-
     <section class="homeTimerGrid" aria-label="Dashboard timers">
       <article class="homeTimerCard"><div class="homeTimerTop"><span id="homeNextBossTitle" class="homeTimerTitle">Next Boss</span><span class="homeTimerIcon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z"></path><path d="M5 20h14"></path></svg></span></div><strong id="homeNextBossTime" class="homeTimerValue">--:--:--</strong><div id="homeNextBossSub" class="homeTimerSub">Calculating next spawn...</div></article>
       <article id="homeDayNightCard" class="homeTimerCard" data-cycle-state="loading"><div class="homeTimerTop"><span class="homeTimerTitle">Day / Night</span><span id="homeDayNightIcon" class="homeTimerIcon" aria-hidden="true"><svg id="homeDayNightSun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg><svg id="homeDayNightMoon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></span></div><strong id="homeDayNightValue" class="homeTimerValue">--</strong><div id="homeDayNightSub" class="homeTimerSub">Cycle loading...</div><div class="homeProgress"><span id="homeDayNightProgress"></span></div></article>
@@ -71,7 +63,7 @@
     <section class="homeMainGrid">
       <article class="homePanel">
         <div class="homePanelHead">
-          <div class="homePanelTitle"><h2>Boss Schedule</h2><p id="homeBossNextLine">Next boss information will appear here.</p></div>
+          <div class="homePanelTitle"><h2>Boss Schedule</h2><p id="homeBossNextLine">Next boss information will appear here.</p><div class="homeStatus"><i></i><span id="homeScheduleStatus">Schedule loading...</span></div></div>
           <div class="timeToggle" role="group" aria-label="Time format"><button id="homeTime12" type="button">12H</button><button id="homeTime24" type="button">24H</button><label class="homeLocalToggle" title="Show boss schedule in your local PC time"><input id="homeLocalTime" type="checkbox"><span>Local time</span></label></div>
         </div>
         <div class="bossScheduleWrap"><table class="bossScheduleTable"><thead id="bossScheduleHead"></thead><tbody id="bossScheduleBody"><tr><td>Loading schedule...</td></tr></tbody></table></div>
@@ -102,18 +94,12 @@
 </div>
 <div id="resetTimersView" class="appView">
   <section class="resetTimersShell">
-    <header class="resetTimersHeader">
-      <div>
-        <h1>Timers</h1>
-        <p>Server countdowns for daily content, Node War, Imperial, BSA, Agris, Barter, and Trading.</p>
-      </div>
-      <div class="resetTimersActions">
+    <div class="resetTimersActions">
         <label class="resetLocalToggle" title="Show timer times in your local PC time instead of CET/CEST"><input id="resetLocalTime" type="checkbox"><span>Local time</span></label>
         <label class="resetTimerSetting"><span class="nodeWarSettingLabel">Nodewar Notification</span><select id="nodeWarNotificationMode" class="settingSelect resetTimerSelect" aria-label="Node War notification mode"><option value="off" selected>Off</option><option value="tts">TTS</option><option value="alarm">Alarm</option></select></label>
         <label class="resetTimerSetting"><span class="nodeWarSettingLabel">First Alert</span><select id="nodeWarLeadTime" class="settingSelect resetTimerSelect" aria-label="First Node War alert time" disabled><option value="0">Nodewar Starting</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option></select></label>
         <div class="homeStatus"><i></i><span id="resetTimersStatus">Timers loading...</span></div>
-      </div>
-    </header>
+    </div>
     <div id="resetTimersGrid" class="resetTimersGrid" aria-label="Black Desert timers"></div>
   </section>
 </div>
@@ -187,8 +173,6 @@
 <div id="calculatorView" class="appView">
 <main>
   <div class="container">
-    <h1 class="pageTitle">Trade Distance Calculator</h1>
-
     <div class="pageLayout">
       <section class="card">
         <div class="cardHead">
@@ -294,14 +278,7 @@
 
 <section id="marketView" class="appView">
   <div class="marketShell">
-    <header class="marketHeader">
-      <div>
-        <h1>Outfit Opportunities</h1>
-        <div id="marketProvider" hidden></div>
-      </div>
-      <div class="marketStatus" id="marketStatus">Ready</div>
-    </header>
-
+    <div id="marketProvider" hidden></div>
     <div class="marketToolbar">
       <div class="marketSearchWrap">
         <input id="marketSearch" type="search" placeholder="Search Central Market items to track..." autocomplete="off" />
@@ -311,6 +288,7 @@
         <button class="marketRegionTab active" data-market-region="eu" type="button" role="tab" aria-selected="true">EU</button>
       </div>
       <button id="marketExport" class="marketButton">Export CSV</button>
+      <div class="marketStatus" id="marketStatus">Ready</div>
     </div>
 
     <div class="marketSubTabs" role="tablist">
@@ -394,15 +372,7 @@
 
 <section id="portraitView" class="appView">
   <div class="portraitShell">
-    <header class="portraitHeader ornateFrame">
-      <div>
-        <h1>BDO Face Texture Replacer</h1>
-        <p class="portraitSubtitle">Replace Black Desert character portraits with custom images.</p>
-      </div>
-      <span class="pillValue">624 &times; 804 BMP</span>
-    </header>
-
-    <p class="coverageText">Default folder: Documents\Black Desert\FaceTexture</p>
+    <p class="coverageText">Default folder: Documents\Black Desert\FaceTexture <span class="portraitFormatHint">624 &times; 804 BMP</span></p>
     <section class="portraitPathCard">
       <div>
         <label>BDO FaceTexture folder</label>
@@ -536,12 +506,6 @@
 
 <section id="fontChangerView" class="appView">
   <div class="fontShell">
-    <header class="fontHeader">
-      <div>
-        <h1>BDO Font Changer</h1>
-      </div>
-    </header>
-
     <p class="coverageText">Default folder: C:\Pearlabyss\BlackDesert. The app creates prestringtable\font inside it automatically.</p>
     <div class="fontSetupRow">
       <section class="fontPathCard">
@@ -654,15 +618,6 @@
 
 <section id="playerGuildView" class="appView">
   <div class="playerGuildShell">
-    <header class="playerGuildHeader">
-      <div>
-        <span class="playerGuildEyebrow">GLOBAL ADVENTURER DIRECTORY</span>
-        <h1>Player &amp; Guild</h1>
-        <p>Find a family or guild across supported BDO regions, inspect its public profile, and move through the roster one adventurer at a time.</p>
-      </div>
-      <div id="playerGuildSourceStatus" class="playerGuildSourceStatus"><i></i><span>Ready to search</span></div>
-    </header>
-
     <section class="playerGuildSearchPanel" aria-label="Player and guild search">
       <form id="playerGuildSearchForm" class="playerGuildSearchBar" role="search">
         <div id="playerGuildSearchMode" class="playerGuildModeToggle" role="group" aria-label="Search directory">
@@ -685,6 +640,7 @@
       <div class="playerGuildRecentRow">
         <span>Recent</span>
         <div id="playerGuildRecents" class="playerGuildRecents"><small>Your recent profiles will stay on this device.</small></div>
+        <div id="playerGuildSourceStatus" class="playerGuildSourceStatus"><i></i><span>Ready to search</span></div>
       </div>
     </section>
 
@@ -774,15 +730,9 @@
 
 <section id="grindTrackerView" class="appView">
   <div class="grindShell" data-grind-screen="spot">
-    <header class="grindHeader">
-      <div>
-        <h1>Grind Zones</h1>
-        <p>Select a grind zone to preview every listed drop and its current market value.</p>
-      </div>
-      <div class="grindHeaderActions">
-        <button id="grindChangeZone" class="grindGhostButton grindBackButton" type="button">Choose Grind Zone</button>
-      </div>
-    </header>
+    <div class="grindHeaderActions">
+      <button id="grindChangeZone" class="grindGhostButton grindBackButton" type="button">Choose Grind Zone</button>
+    </div>
     <section class="grindLowerGrid">
       <article id="grindSpotDetail" class="grindSpotDetail">
         <div class="grindEmpty">Choose a grind zone to see every listed drop.</div>
@@ -841,13 +791,7 @@
 
 <section id="masteryBracketsView" class="appView">
   <div class="masteryShell">
-    <header class="masteryHeader">
-      <div>
-        <h1>Mastery Brackets</h1>
-        <p>Choose a lifeskill to view its mastery bonus table.</p>
-      </div>
-      <button id="masteryExtra" class="masteryExtra" type="button">Extra</button>
-    </header>
+    <div class="masteryToolbar">
     <div class="masterySkillTabs" id="masterySkillTabs" aria-label="Lifeskill mastery tables">
       <button class="masterySkillTab active" data-mastery-skill="gathering" type="button" title="Gathering" aria-label="Gathering"><img src="Assets/MasteryIcons/gathering.png" alt=""></button>
       <button class="masterySkillTab" data-mastery-skill="fishing" type="button" title="Fishing" aria-label="Fishing"><img src="Assets/MasteryIcons/fishing.png" alt=""></button>
@@ -857,6 +801,8 @@
       <button class="masterySkillTab" data-mastery-skill="hunting" type="button" title="Hunting" aria-label="Hunting"><img src="Assets/MasteryIcons/hunting.png" alt=""></button>
       <button class="masterySkillTab" data-mastery-skill="sailing" type="button" title="Sailing" aria-label="Sailing"><img src="Assets/MasteryIcons/sailing.png" alt=""></button>
       <button class="masterySkillTab" data-mastery-skill="training" type="button" title="Training" aria-label="Training"><img src="Assets/MasteryIcons/training.png" alt=""></button>
+    </div>
+      <button id="masteryExtra" class="masteryExtra" type="button">Extra</button>
     </div>
     <section class="masteryCalcCard" aria-label="Mastery goal calculator">
       <div class="masteryCalcFields">
@@ -1155,11 +1101,6 @@
 
 <section id="settingsView" class="appView">
   <div class="settingsShell">
-    <header class="settingsHeader">
-      <h1>Settings</h1>
-      <p>Shape the app around how you like to use it.</p>
-    </header>
-
     <div class="settingsGrid">
       <section class="settingsCard presetControlled" id="themePresetControls">
         <h2>Theme</h2>
@@ -1288,10 +1229,10 @@
 
 <script src="Assets/GrindTracker/grind-spots.js?v=v0.9.61"></script>
 <script src="Assets/GrindTracker/grind-spots-inner-edania.js?v=v0.9.61"></script>
-<script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.61"></script>
+<script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.61-loot-20260907"></script>
 <script src="Assets/GrindTracker/grind-guides.js?v=v0.9.61"></script>
 <script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.61"></script>
-<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.61"></script>
+<script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.61-loot-20260907"></script>
 
 </body>
 </html>

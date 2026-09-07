@@ -46,6 +46,7 @@ function Assert-AppPublish {
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 		"NavigationAssets\nav-icons.svg",
+		"NavigationAssets\arcane-refraction.svg",
 		"Assets\AppIcon\app-icon.ico",
 		"Assets\AppIcon\tray-icon.ico",
 		"Assets\AppIcon\app-icon.png",
@@ -54,6 +55,8 @@ function Assert-AppPublish {
 		"Assets\GrindTracker\grind-spots.js",
 		"Assets\GrindTracker\grind-spots-inner-edania.js",
 		"Assets\GrindTracker\grind-spots-corrections.js",
+		"Assets\GrindTracker\icons-clean\item-66946.webp",
+		"Assets\GrindTracker\icons-clean\item-735302.webp",
 		"Assets\GrindTracker\grind-guides.js",
 		"Assets\GrindTracker\grind-guides-current.js",
 		"Assets\RecipeBook\recipes.json",
@@ -208,6 +211,7 @@ function Assert-AppRunsWithoutDotnetRuntime {
 			-FilePath $ExecutablePath `
 			-ArgumentList @("--offline-smoke-test") `
 			-WorkingDirectory $WorkingDirectory `
+			-WindowStyle Hidden `
 			-Wait `
 			-PassThru
 		if ($process.ExitCode -ne 0) {
@@ -342,6 +346,7 @@ try {
 		$setupProcess = Start-Process `
 			-FilePath $selfTestInstaller `
 			-ArgumentList $setupArguments `
+			-WindowStyle Hidden `
 			-Wait `
 			-PassThru
 		if ($setupProcess.ExitCode -ne 0) {
@@ -357,6 +362,12 @@ try {
 			"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 			"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 			"NavigationAssets\nav-icons.svg",
+			"NavigationAssets\arcane-refraction.svg",
+			"Assets\GrindTracker\grind-spots.js",
+			"Assets\GrindTracker\grind-spots-inner-edania.js",
+			"Assets\GrindTracker\grind-spots-corrections.js",
+			"Assets\GrindTracker\icons-clean\item-66946.webp",
+			"Assets\GrindTracker\icons-clean\item-735302.webp",
 			"Assets\Alarm.mp3",
 			"Assets\RecipeBook\recipes.json",
 			"Assets\RecipeBook\manifest.json",

@@ -1,0 +1,1712 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "kind": "installed-client-monster-zone-info",
+    "snapshotDate": "2026-09-03",
+    "extractedFiles": {
+      "zones.json": "c2c020021d27fd617eae404feb974681e93e9d9d5986e8f6e8b939626fd00de1",
+      "items.json": "c9fcc68a1ee64e32efac814dae9189bd1e1adb0636866622b85a4b205774caf0"
+    },
+    "extractorVersion": "0.1.9",
+    "extractorCommit": "5bf11bd7bc60dcbb6126be34bf3d76633abdd8b2",
+    "table": "dropuihuntinggroundinfo.bss",
+    "identityWarning": "Extracted zone and node names are shifted in this client snapshot. Records are manually mapped using the unique primary trash item, AP/DP, ecology, and topography, never the extracted name.",
+    "poolBoundary": "These are advertised Monster Zone Info obtainable items, not a proven exhaustive server-side drop table. An existing item being absent here alone is not evidence that it was removed; removals require official patch corroboration."
+  },
+  "spots": [
+    {
+      "catalogId": 165,
+      "name": "Honglim Base",
+      "clientRecordKey": 24320,
+      "extractedNameNotUsed": "Cadry Ruins [Dehkia's Lantern]",
+      "primaryTrashId": "56328",
+      "primaryTrashName": "Faded Bandit Mask",
+      "sheetAP": 270,
+      "sheetDP": 360,
+      "topography": [
+        "Honglim Base"
+      ],
+      "ecology": [
+        "Lynx Bandit",
+        "Fox Bandit",
+        "Raccoon Bandit"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "56328",
+        "15262",
+        "15263",
+        "15265",
+        "15266",
+        "15268",
+        "15269",
+        "15271",
+        "15272",
+        "15274",
+        "15275"
+      ]
+    },
+    {
+      "catalogId": 166,
+      "name": "Dokkebi Forest",
+      "clientRecordKey": 24577,
+      "extractedNameNotUsed": "Honglim Base",
+      "primaryTrashId": "56327",
+      "primaryTrashName": "Discarded Kkebicap",
+      "sheetAP": 335,
+      "sheetDP": 420,
+      "topography": [
+        "Dokkebi Forest"
+      ],
+      "ecology": [
+        "Prankkebi",
+        "Strongkkebi",
+        "Philosophkebi"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "56327",
+        "15262",
+        "15263",
+        "15265",
+        "15266",
+        "15268",
+        "15269",
+        "15271",
+        "15272",
+        "15274",
+        "15275"
+      ]
+    },
+    {
+      "catalogId": 167,
+      "name": "Fortunate Golden Pig Cave",
+      "clientRecordKey": 24833,
+      "extractedNameNotUsed": "Dokkebi Forest",
+      "primaryTrashId": "56338",
+      "primaryTrashName": "Shiny Treasure",
+      "sheetAP": 340,
+      "sheetDP": 438,
+      "topography": [
+        "Golden Pig Cave"
+      ],
+      "ecology": [
+        "Elite Golden Pig",
+        "Raider Golden Pig",
+        "Golden Pig King"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "56338",
+        "15262",
+        "15263",
+        "15265",
+        "15266",
+        "15268",
+        "15269",
+        "15271",
+        "15272",
+        "15274",
+        "15275",
+        "56335",
+        "66945"
+      ]
+    },
+    {
+      "catalogId": 168,
+      "name": "Unlucky Golden Pig Cave",
+      "clientRecordKey": 25089,
+      "extractedNameNotUsed": "Fortunate Golden Pig Cave",
+      "primaryTrashId": "56329",
+      "primaryTrashName": "Shattered Treasures",
+      "sheetAP": 345,
+      "sheetDP": 438,
+      "topography": [
+        "Golden Pig Cave"
+      ],
+      "ecology": [
+        "Elite Golden Pig",
+        "Raider Golden Pig",
+        "Golden Pig King"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "56329",
+        "15262",
+        "15263",
+        "66946",
+        "820979"
+      ]
+    },
+    {
+      "catalogId": 901,
+      "name": "Aetherion Castle",
+      "clientRecordKey": 25602,
+      "extractedNameNotUsed": "Orzekea",
+      "primaryTrashId": "767244",
+      "primaryTrashName": "Chilled Soul Piece",
+      "sheetAP": 350,
+      "sheetDP": 427,
+      "topography": [
+        "Aetherion Castle"
+      ],
+      "ecology": [
+        "Darktouched Spirit Knight",
+        "Darktouched Spirit Shaman",
+        "Darktouched Young Spirit"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "767244",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821246",
+        "821253",
+        "15286",
+        "761802",
+        "761803",
+        "821317",
+        "821318"
+      ]
+    },
+    {
+      "catalogId": 902,
+      "name": "Nymphamare Castle",
+      "clientRecordKey": 25860,
+      "extractedNameNotUsed": "Aetherion Castle",
+      "primaryTrashId": "767245",
+      "primaryTrashName": "Contaminated Coral Piece",
+      "sheetAP": 370,
+      "sheetDP": 440,
+      "topography": [
+        "Nymphamaré Castle"
+      ],
+      "ecology": [
+        "Coral Naga Frontliner",
+        "Coral Naga Trickster",
+        "Coral Naga Lookout"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821254",
+        "15287",
+        "821317",
+        "821318",
+        "767245",
+        "761802",
+        "761803"
+      ]
+    },
+    {
+      "catalogId": 903,
+      "name": "Orbita Castle",
+      "clientRecordKey": 26372,
+      "extractedNameNotUsed": "Tenebraum Castle",
+      "primaryTrashId": "767247",
+      "primaryTrashName": "Lightlost Core",
+      "sheetAP": 380,
+      "sheetDP": 445,
+      "topography": [
+        "Orbita Castle"
+      ],
+      "ecology": [
+        "Titan",
+        "Gravekeeper Golem",
+        "Gravewarden of Dawn"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "767247",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821319",
+        "15290",
+        "821317",
+        "821318",
+        "761802",
+        "761803"
+      ]
+    },
+    {
+      "catalogId": 904,
+      "name": "Tenebraum Castle",
+      "clientRecordKey": 26116,
+      "extractedNameNotUsed": "Nymphamaré Castle",
+      "primaryTrashId": "767246",
+      "primaryTrashName": "Ancient Soldier Fragment",
+      "sheetAP": 390,
+      "sheetDP": 450,
+      "topography": [
+        "Tenebraum Castle"
+      ],
+      "ecology": [
+        "Manticore",
+        "Remnant of the Architect",
+        "Remnant of the Seer"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "767246",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821320",
+        "821250",
+        "821251",
+        "15291",
+        "821317",
+        "821318",
+        "761802",
+        "761803"
+      ]
+    },
+    {
+      "catalogId": 905,
+      "name": "Zephyros Castle",
+      "clientRecordKey": 26628,
+      "extractedNameNotUsed": "Orbita Castle",
+      "primaryTrashId": "767248",
+      "primaryTrashName": "Hardened Lava Chunk",
+      "sheetAP": 395,
+      "sheetDP": 460,
+      "topography": [
+        "Zephyros Castle"
+      ],
+      "ecology": [
+        "Beelzebub",
+        "Thebe",
+        "Zephyros Shadow Knight"
+      ],
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "767248",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821320",
+        "821250",
+        "821251",
+        "15291",
+        "821317",
+        "821318",
+        "761802",
+        "761803",
+        "768160"
+      ]
+    },
+    {
+      "catalogId": 906,
+      "name": "(Zephyros) Dark Energy Floodlands",
+      "clientRecordKey": 28420,
+      "extractedNameNotUsed": "Dark Energy Floodlands (Great Red Spot)",
+      "primaryTrashId": "767348",
+      "primaryTrashName": "Tainted Armor Fragment",
+      "sheetAP": 385,
+      "sheetDP": 450,
+      "topography": [
+        "Orbita Castle",
+        "Zephyros Castle"
+      ],
+      "ecology": [
+        "Source of the Dark Energy",
+        "Black Spirit-consumed Knight",
+        "Black Spirit-consumed Valkyrie"
+      ],
+      "identityCaveat": "The three Floodlands records share identical loot, stats, trash, and ecology. The individual location label is not independently certified; this fixture verifies their common reward pool only.",
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821320",
+        "821250",
+        "821251",
+        "15291",
+        "821317",
+        "821318",
+        "761802",
+        "761803",
+        "767348",
+        "767349"
+      ]
+    },
+    {
+      "catalogId": 907,
+      "name": "Star's End",
+      "clientRecordKey": 14338,
+      "extractedNameNotUsed": "Sycraia Ruins Lower Zone",
+      "primaryTrashId": "56339",
+      "primaryTrashName": "Corrupted Sanguine Crystal",
+      "sheetAP": 395,
+      "sheetDP": 460,
+      "topography": [
+        "Star's End"
+      ],
+      "ecology": [
+        "Unstable Star Debris",
+        "Apostle of Corruption",
+        "Harbinger of Defilement"
+      ],
+      "lootItemIds": [
+        "56339",
+        "721003",
+        "721002",
+        "768160",
+        "44405",
+        "821344",
+        "15741",
+        "16001",
+        "11882",
+        "11853",
+        "56340"
+      ]
+    },
+    {
+      "catalogId": 908,
+      "name": "Sycraia Ruins (Lower Zone)",
+      "clientRecordKey": 14082,
+      "extractedNameNotUsed": "Sycraia Ruins Upper Zone",
+      "primaryTrashId": "56341",
+      "primaryTrashName": "Underwater Ancient Weapon Power Stone",
+      "sheetAP": 395,
+      "sheetDP": 460,
+      "topography": [
+        "Sycraia Underwater Ruins"
+      ],
+      "ecology": [
+        "Pirash",
+        "Lykin",
+        "Kureba"
+      ],
+      "lootItemIds": [
+        "12061",
+        "12094",
+        "16001",
+        "761718",
+        "821347",
+        "735302",
+        "16017",
+        "768160",
+        "721002",
+        "721003",
+        "56341",
+        "44270",
+        "9774",
+        "56345",
+        "56346",
+        "56347",
+        "56348"
+      ]
+    },
+    {
+      "catalogId": 909,
+      "name": "(Orbita) Dark Energy Floodlands",
+      "clientRecordKey": 27905,
+      "extractedNameNotUsed": "Vessel of Inquisition",
+      "primaryTrashId": "767348",
+      "primaryTrashName": "Tainted Armor Fragment",
+      "sheetAP": 385,
+      "sheetDP": 450,
+      "topography": [
+        "Orbita Castle",
+        "Zephyros Castle"
+      ],
+      "ecology": [
+        "Source of the Dark Energy",
+        "Black Spirit-consumed Knight",
+        "Black Spirit-consumed Valkyrie"
+      ],
+      "identityCaveat": "The three Floodlands records share identical loot, stats, trash, and ecology. The individual location label is not independently certified; this fixture verifies their common reward pool only.",
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821320",
+        "821250",
+        "821251",
+        "15291",
+        "821317",
+        "821318",
+        "761802",
+        "761803",
+        "767348",
+        "767349"
+      ]
+    },
+    {
+      "catalogId": 910,
+      "name": "(Great Red Sea) Dark Energy Floodlands",
+      "clientRecordKey": 28164,
+      "extractedNameNotUsed": "Dark Energy Floodlands (Orbita)",
+      "primaryTrashId": "767348",
+      "primaryTrashName": "Tainted Armor Fragment",
+      "sheetAP": 385,
+      "sheetDP": 450,
+      "topography": [
+        "Orbita Castle",
+        "Zephyros Castle"
+      ],
+      "ecology": [
+        "Source of the Dark Energy",
+        "Black Spirit-consumed Knight",
+        "Black Spirit-consumed Valkyrie"
+      ],
+      "identityCaveat": "The three Floodlands records share identical loot, stats, trash, and ecology. The individual location label is not independently certified; this fixture verifies their common reward pool only.",
+      "lootItemIds": [
+        "721002",
+        "16001",
+        "721003",
+        "11653",
+        "11882",
+        "12276",
+        "12094",
+        "821252",
+        "821320",
+        "821250",
+        "821251",
+        "15291",
+        "821317",
+        "821318",
+        "761802",
+        "761803",
+        "767348",
+        "767349"
+      ]
+    },
+    {
+      "catalogId": 911,
+      "name": "[Dehkia] Gyfin Rhasia Temple (Upper)",
+      "clientRecordKey": 26884,
+      "extractedNameNotUsed": "Zephyros Castle",
+      "primaryTrashId": "44526",
+      "primaryTrashName": "Tainted Bronze Fragment",
+      "sheetAP": 370,
+      "sheetDP": 440,
+      "topography": [
+        "Gyfin Rhasia Temple",
+        "Southern Kamasylvia"
+      ],
+      "ecology": [
+        "Gyfin Rhasia Guard",
+        "Gyfin Rhasia Flamen",
+        "Gyfin Rhasia Decimator"
+      ],
+      "lootItemIds": [
+        "12276",
+        "12237",
+        "16001",
+        "748021",
+        "748022",
+        "767091",
+        "790694",
+        "15258",
+        "15259",
+        "15260",
+        "50801",
+        "4917",
+        "56284",
+        "45298",
+        "45300",
+        "45302",
+        "50803",
+        "50802",
+        "50807",
+        "5960",
+        "721003",
+        "721002",
+        "44526",
+        "40383"
+      ]
+    },
+    {
+      "catalogId": 912,
+      "name": "[Dehkia] Mirumok Ruins",
+      "clientRecordKey": 27139,
+      "extractedNameNotUsed": "Gyfin Rhasia Temple (Upper) [Dehkia's Lantern]",
+      "primaryTrashId": "44527",
+      "primaryTrashName": "Tainted Wood Fragment",
+      "sheetAP": 350,
+      "sheetDP": 427,
+      "topography": [
+        "White Tree Forest"
+      ],
+      "ecology": [
+        "Mirumok",
+        "Old Mirumok",
+        "Degraded Ruins Tree Treant"
+      ],
+      "lootItemIds": [
+        "12276",
+        "12236",
+        "16001",
+        "767091",
+        "748021",
+        "748022",
+        "15258",
+        "15259",
+        "15260",
+        "50801",
+        "4917",
+        "50803",
+        "50802",
+        "45298",
+        "45300",
+        "45302",
+        "790694",
+        "50807",
+        "40383",
+        "56284",
+        "44311",
+        "5960",
+        "721002",
+        "721003",
+        "44527"
+      ]
+    },
+    {
+      "catalogId": 916,
+      "name": "Gavinya Coastal Cliff",
+      "clientRecordKey": 28928,
+      "extractedNameNotUsed": "Pirate Island",
+      "primaryTrashId": "767350",
+      "primaryTrashName": "Sulfur Golem Fragment",
+      "sheetAP": 400,
+      "sheetDP": 470,
+      "topography": [
+        "Gavinya Coastal Cliff"
+      ],
+      "ecology": [
+        "Sulfur Volcano Golem",
+        "Sulfur Boulder Golem",
+        "Sulfur Rock Golem"
+      ],
+      "lootItemIds": [
+        "44272",
+        "761726",
+        "12276",
+        "12094",
+        "11882",
+        "11653",
+        "767293",
+        "767294",
+        "767296",
+        "767341",
+        "767342",
+        "821341",
+        "821342",
+        "821343",
+        "821417",
+        "821418",
+        "980115",
+        "980116",
+        "767337",
+        "767338",
+        "768160",
+        "1178",
+        "721002",
+        "721003",
+        "16001",
+        "767350",
+        "821459",
+        "767353"
+      ]
+    },
+    {
+      "catalogId": 917,
+      "name": "Aphrodon Temple",
+      "clientRecordKey": 29186,
+      "extractedNameNotUsed": "Gavinya Coastal Cliff",
+      "primaryTrashId": "980127",
+      "primaryTrashName": "Branch of Abundance",
+      "sheetAP": 400,
+      "sheetDP": 470,
+      "topography": [
+        "Aphrodon Temple"
+      ],
+      "ecology": [
+        "Goldfield Scarecrow",
+        "Goldfield Harvester",
+        "Goldfield Tiller"
+      ],
+      "lootItemIds": [
+        "821422",
+        "11898",
+        "15294",
+        "821430",
+        "821462",
+        "767293",
+        "767294",
+        "767296",
+        "767353",
+        "821341",
+        "821342",
+        "821343",
+        "821459",
+        "767337",
+        "767338",
+        "1178",
+        "761803",
+        "821318",
+        "821460",
+        "821471",
+        "980139",
+        "16001",
+        "721002",
+        "721003",
+        "980127"
+      ]
+    },
+    {
+      "catalogId": 918,
+      "name": "Hermesia Inner Castle",
+      "clientRecordKey": 29444,
+      "extractedNameNotUsed": "Aphrodon Temple",
+      "primaryTrashId": "980128",
+      "primaryTrashName": "Black Crystal Fragment",
+      "sheetAP": 405,
+      "sheetDP": 485,
+      "topography": [
+        "Hermesia Outer Castle",
+        "Anemoi Mountains"
+      ],
+      "ecology": [
+        "Markthanan's Daughter",
+        "Enslaved Overseer",
+        "Enslaved Miner"
+      ],
+      "lootItemIds": [
+        "11898",
+        "12144",
+        "821422",
+        "821423",
+        "16001",
+        "821461",
+        "821471",
+        "821460",
+        "15295",
+        "821431",
+        "767293",
+        "767294",
+        "767296",
+        "767353",
+        "821341",
+        "821342",
+        "821343",
+        "821459",
+        "761803",
+        "821318",
+        "767337",
+        "767338",
+        "980140",
+        "1178",
+        "721002",
+        "721003",
+        "980128"
+      ]
+    },
+    {
+      "catalogId": 919,
+      "name": "Magaia Temple",
+      "clientRecordKey": 29700,
+      "extractedNameNotUsed": "Hermesia Inner Castle",
+      "primaryTrashId": "980129",
+      "primaryTrashName": "Elion Follower's Helmet",
+      "sheetAP": 410,
+      "sheetDP": 490,
+      "topography": [
+        "Age of Men",
+        "Stages of Sins",
+        "Heavens' Revelation"
+      ],
+      "ecology": [
+        "Sinner of Accusation",
+        "Sinner of Incitement",
+        "Aetos"
+      ],
+      "lootItemIds": [
+        "821422",
+        "821423",
+        "821424",
+        "11898",
+        "12144",
+        "12298",
+        "15296",
+        "821432",
+        "821464",
+        "767353",
+        "767293",
+        "767294",
+        "767296",
+        "821459",
+        "821342",
+        "821343",
+        "821341",
+        "767337",
+        "767338",
+        "1178",
+        "768160",
+        "761803",
+        "821318",
+        "821460",
+        "821471",
+        "980141",
+        "16001",
+        "721002",
+        "721003",
+        "980129"
+      ]
+    },
+    {
+      "catalogId": 920,
+      "name": "Aresion Temple",
+      "clientRecordKey": 29956,
+      "extractedNameNotUsed": "Magaia Temple",
+      "primaryTrashId": "980131",
+      "primaryTrashName": "Scorched Belt Ornament",
+      "sheetAP": 415,
+      "sheetDP": 495,
+      "topography": [
+        "Stonehawk Watch"
+      ],
+      "ecology": [
+        "Curved Blade",
+        "Tempered Spear",
+        "Steadfast Arrow"
+      ],
+      "lootItemIds": [
+        "11733",
+        "11898",
+        "12144",
+        "12298",
+        "821421",
+        "821422",
+        "821423",
+        "821424",
+        "15297",
+        "821433",
+        "767293",
+        "767294",
+        "767296",
+        "767353",
+        "767343",
+        "767344",
+        "821341",
+        "821342",
+        "821343",
+        "821459",
+        "821419",
+        "821420",
+        "761803",
+        "821318",
+        "821460",
+        "821471",
+        "821463",
+        "980142",
+        "767337",
+        "767338",
+        "1178",
+        "721002",
+        "16001",
+        "721003",
+        "980131"
+      ]
+    },
+    {
+      "catalogId": 921,
+      "name": "Scales of Judgment",
+      "clientRecordKey": 30468,
+      "extractedNameNotUsed": "Event Horizon",
+      "primaryTrashId": "980130",
+      "primaryTrashName": "Elion Follower's Mark",
+      "sheetAP": 415,
+      "sheetDP": 500,
+      "topography": [
+        "Scales of Judgment"
+      ],
+      "ecology": [
+        "Elion's Resentment",
+        "Aetos",
+        "Sinner of Accusation"
+      ],
+      "lootItemIds": [
+        "821421",
+        "821422",
+        "821423",
+        "821424",
+        "11733",
+        "11898",
+        "12144",
+        "12298",
+        "15297",
+        "821433",
+        "821464",
+        "767293",
+        "767294",
+        "767296",
+        "767353",
+        "767343",
+        "767344",
+        "821341",
+        "821342",
+        "821343",
+        "821459",
+        "821419",
+        "821420",
+        "761803",
+        "821318",
+        "821460",
+        "821471",
+        "980141",
+        "767337",
+        "767338",
+        "1178",
+        "16001",
+        "721002",
+        "721003",
+        "980130"
+      ]
+    },
+    {
+      "catalogId": 922,
+      "name": "Event Horizon",
+      "clientRecordKey": 30212,
+      "extractedNameNotUsed": "Aresion Temple",
+      "primaryTrashId": "980132",
+      "primaryTrashName": "Broken Gloves of the Void",
+      "sheetAP": 420,
+      "sheetDP": 505,
+      "topography": [
+        "Ravaged Chaos",
+        "Ergosphere",
+        "Event Horizon",
+        "The Final Orbit",
+        "Guiding Accretion",
+        "Structural Paradox",
+        "Terminus"
+      ],
+      "ecology": [
+        "Despairbringer",
+        "Ibedor",
+        "Despair-Consumed Knight"
+      ],
+      "lootItemIds": [
+        "11733",
+        "11898",
+        "12144",
+        "12298",
+        "821421",
+        "821422",
+        "821423",
+        "821424",
+        "15297",
+        "821433",
+        "821464",
+        "821463",
+        "821462",
+        "821461",
+        "821460",
+        "821471",
+        "767293",
+        "767294",
+        "767296",
+        "767353",
+        "767343",
+        "767344",
+        "821341",
+        "821342",
+        "821343",
+        "821459",
+        "821419",
+        "821420",
+        "980143",
+        "761803",
+        "821318",
+        "767337",
+        "767338",
+        "1178",
+        "16001",
+        "721002",
+        "721003",
+        "980132"
+      ]
+    }
+  ],
+  "items": {
+    "1178": {
+      "name": "Corrupt Oil of Immortality",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00001178.dds"
+    },
+    "4917": {
+      "name": "Forest Fury",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00004917.dds"
+    },
+    "5960": {
+      "name": "Trace of Nature",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00005960.dds"
+    },
+    "9774": {
+      "name": "Abyssal Essence",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00009774.dds"
+    },
+    "11653": {
+      "name": "Deboreka Necklace",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/15_Necklace/00011653.dds"
+    },
+    "11733": {
+      "name": "Apeiron Necklace",
+      "grade": 5,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/15_Necklace/00011733_1.dds"
+    },
+    "11853": {
+      "name": "Black Distortion Earring",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/17_Earring/00011852.dds"
+    },
+    "11882": {
+      "name": "Deboreka Earring",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/17_Earring/00011882.dds"
+    },
+    "11898": {
+      "name": "Apeiron Earring",
+      "grade": 5,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/17_Earring/00011898_1.dds"
+    },
+    "12061": {
+      "name": "Tungrad Ring",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/16_Ring/00012061.dds"
+    },
+    "12094": {
+      "name": "Deboreka Ring",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/16_Ring/00012094_1.dds"
+    },
+    "12144": {
+      "name": "Apeiron Ring",
+      "grade": 5,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/16_Ring/00012144_1.dds"
+    },
+    "12236": {
+      "name": "Valtarra Eclipsed Belt",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/18_Belt/00012236.dds"
+    },
+    "12237": {
+      "name": "Tungrad Belt",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/18_Belt/00012237.dds"
+    },
+    "12276": {
+      "name": "Deboreka Belt",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/18_Belt/00012276.dds"
+    },
+    "12298": {
+      "name": "Apeiron Belt",
+      "grade": 5,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/18_Belt/00012298_1.dds"
+    },
+    "15258": {
+      "name": "Crystal of Stalwart Fortitude",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015258_1.dds"
+    },
+    "15259": {
+      "name": "Crystal of Dogged Patience",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015259_1.dds"
+    },
+    "15260": {
+      "name": "Crystal of Unyielding Spirit",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015260_1.dds"
+    },
+    "15262": {
+      "name": "BON Dawn Crystal - All AP",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015262_1.dds"
+    },
+    "15263": {
+      "name": "WON Dawn Crystal - All AP",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015263_1.dds"
+    },
+    "15265": {
+      "name": "BON Dawn Crystal - Black Spirit's Rage",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015265_1.dds"
+    },
+    "15266": {
+      "name": "WON Dawn Crystal - Black Spirit's Rage",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015266_1.dds"
+    },
+    "15268": {
+      "name": "BON Dawn Crystal - Accuracy",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015268_1.dds"
+    },
+    "15269": {
+      "name": "WON Dawn Crystal - Accuracy",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015269_1.dds"
+    },
+    "15271": {
+      "name": "BON Dawn Crystal - Damage Reduction",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015271_1.dds"
+    },
+    "15272": {
+      "name": "WON Dawn Crystal - Damage Reduction",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015272_1.dds"
+    },
+    "15274": {
+      "name": "BON Dawn Crystal - Evasion",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015274_1.dds"
+    },
+    "15275": {
+      "name": "WON Dawn Crystal - Evasion",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015275_1.dds"
+    },
+    "15286": {
+      "name": "WON Crystal of Dusky Ruin",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015286_1.dds"
+    },
+    "15287": {
+      "name": "BON Crystal of Dusky Ruin",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015290_1.dds"
+    },
+    "15290": {
+      "name": "JIN Crystal of Dusky Ruin",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015287_1.dds"
+    },
+    "15291": {
+      "name": "HAN Crystal of Dusky Ruin",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015291_1.dds"
+    },
+    "15294": {
+      "name": "WON Wandering Origin Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015294_1.dds"
+    },
+    "15295": {
+      "name": "BON Wandering Origin Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015295_1.dds"
+    },
+    "15296": {
+      "name": "JIN Wandering Origin Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015296_1.dds"
+    },
+    "15297": {
+      "name": "HAN Wandering Origin Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015297_1.dds"
+    },
+    "15741": {
+      "name": "Corrupted Gluttony Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00015741.dds"
+    },
+    "16001": {
+      "name": "Black Stone",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/11_Enchant_Material/00000008.dds"
+    },
+    "16017": {
+      "name": "Traveler's Map",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/00016017.dds"
+    },
+    "40383": {
+      "name": "Manshaum Voodoo Doll",
+      "grade": 1,
+      "clientIcon": "New_Icon/03_ETC/03_Quest_Item/00040383.dds"
+    },
+    "44270": {
+      "name": "Al Yurad's Ring Piece",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044270_1.dds"
+    },
+    "44272": {
+      "name": "Al Yurad's Ring Piece",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044272_1.dds"
+    },
+    "44311": {
+      "name": "Tree Spirit Stone Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044311.dds"
+    },
+    "44405": {
+      "name": "Clear Blackstar Crystal",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044405.dds"
+    },
+    "44526": {
+      "name": "Tainted Bronze Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044516_D.dds"
+    },
+    "44527": {
+      "name": "Tainted Wood Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00044527_D.dds"
+    },
+    "45298": {
+      "name": "Destruction Spirit Stone",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00045298.dds"
+    },
+    "45300": {
+      "name": "Guardian Spirit Stone",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00045300.dds"
+    },
+    "45302": {
+      "name": "Life Spirit Stone",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00045302.dds"
+    },
+    "50801": {
+      "name": "Krogdalo's Origin Stone",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/09_PetItem/00050801.dds"
+    },
+    "50802": {
+      "name": "Swaying Wind Shard",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/09_PetItem/00050802.dds"
+    },
+    "50803": {
+      "name": "Rumbling Earth Shard",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/09_PetItem/00050803.dds"
+    },
+    "50807": {
+      "name": "Pure Forest Breath",
+      "grade": 1,
+      "clientIcon": "New_Icon/03_ETC/09_PetItem/00050807.dds"
+    },
+    "56284": {
+      "name": "Forgotten Limbo Box",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/03_Quest_Item/00067340.dds"
+    },
+    "56327": {
+      "name": "Discarded Kkebicap",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065332.dds"
+    },
+    "56328": {
+      "name": "Faded Bandit Mask",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065249.dds"
+    },
+    "56329": {
+      "name": "Shattered Treasures",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065331.dds"
+    },
+    "56335": {
+      "name": "Golden Pigs Subjugation Token",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065336.dds"
+    },
+    "56338": {
+      "name": "Shiny Treasure",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065337.dds"
+    },
+    "56339": {
+      "name": "Corrupted Sanguine Crystal",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00767251.dds"
+    },
+    "56340": {
+      "name": "Origin of Corruption",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00768408.dds"
+    },
+    "56341": {
+      "name": "Underwater Ancient Weapon Power Stone",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00056341.dds"
+    },
+    "56345": {
+      "name": "Faint Sycraia's Memory",
+      "grade": 1,
+      "clientIcon": "New_Icon/03_ETC/00056345.dds"
+    },
+    "56346": {
+      "name": "Gentle Sycraia's Memory",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/00056346.dds"
+    },
+    "56347": {
+      "name": "Intense Sycraia's Memory",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00056347.dds"
+    },
+    "56348": {
+      "name": "Radiant Sycraia's Memory",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00056348.dds"
+    },
+    "66945": {
+      "name": "Fortunate Golden Pig King Summon Scroll",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/03_Quest_Item/00042490.dds"
+    },
+    "66946": {
+      "name": "Golden Pig King Summon Scroll",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/03_Quest_Item/00042490.dds"
+    },
+    "721002": {
+      "name": "Ancient Spirit Dust",
+      "grade": 1,
+      "clientIcon": "New_Icon/03_ETC/00721002.dds"
+    },
+    "721003": {
+      "name": "Caphras Stone",
+      "grade": 2,
+      "clientIcon": "New_Icon/03_ETC/00721003.dds"
+    },
+    "735302": {
+      "name": "Kehelle's Artifact - Max Stamina",
+      "grade": 3,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/00_ETC/00735203.dds"
+    },
+    "748021": {
+      "name": "Dehkia's Artifact - All Damage Reduction",
+      "grade": 4,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/00_ETC/00748021.dds"
+    },
+    "748022": {
+      "name": "Dehkia's Artifact - All Evasion",
+      "grade": 4,
+      "clientIcon": "New_Icon/06_PC_EquipItem/00_Common/00_ETC/00748022.dds"
+    },
+    "761718": {
+      "name": "Sycraia Underwater Ruins Paint",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00761718.dds"
+    },
+    "761726": {
+      "name": "Gavinya Coastal Cliff Paint",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00761727.dds"
+    },
+    "761802": {
+      "name": "Distorted Crystal of Origin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00761802.dds"
+    },
+    "761803": {
+      "name": "Silent Crystal of Origin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00761803.dds"
+    },
+    "767091": {
+      "name": "Dehkia's Fragment",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00767091.dds"
+    },
+    "767244": {
+      "name": "Chilled Soul Piece",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065338.dds"
+    },
+    "767245": {
+      "name": "Contaminated Coral Piece",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065340.dds"
+    },
+    "767246": {
+      "name": "Ancient Soldier Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065341.dds"
+    },
+    "767247": {
+      "name": "Lightlost Core",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065339.dds"
+    },
+    "767248": {
+      "name": "Hardened Lava Chunk",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00065342.dds"
+    },
+    "767293": {
+      "name": "Crimson Primordial Pigment - Sovereign",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767293.dds"
+    },
+    "767294": {
+      "name": "Violet Primordial Pigment - Sovereign",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767294.dds"
+    },
+    "767296": {
+      "name": "Violet Primordial Pigment - Edana",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767296.dds"
+    },
+    "767337": {
+      "name": "Refined Origin of Hunger",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00767337.dds"
+    },
+    "767338": {
+      "name": "Refined Essence of Devouring",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00767338.dds"
+    },
+    "767341": {
+      "name": "Turquoise Primordial Pigment - Sovereign",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767341.dds"
+    },
+    "767342": {
+      "name": "Turquoise Primordial Pigment - Edana",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767342.dds"
+    },
+    "767343": {
+      "name": "White Primordial Pigment - Sovereign",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767343.dds"
+    },
+    "767344": {
+      "name": "White Primordial Pigment - Edana",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767344.dds"
+    },
+    "767348": {
+      "name": "Tainted Armor Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00767250.dds"
+    },
+    "767349": {
+      "name": "Faded Dark Energy",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00767349.dds"
+    },
+    "767350": {
+      "name": "Sulfur Golem Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00767350.dds"
+    },
+    "767353": {
+      "name": "Sunset Primordial Pigment - Edana",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00767353.dds"
+    },
+    "768160": {
+      "name": "Sealed Black Magic Crystal",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00768160.dds"
+    },
+    "790694": {
+      "name": "Void Tainted Whispers",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00790694.dds"
+    },
+    "820979": {
+      "name": "Essence of Dawn",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00820979.dds"
+    },
+    "821246": {
+      "name": "Primordial Fragment",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821246.dds"
+    },
+    "821250": {
+      "name": "Herald's Crystal",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821250.dds"
+    },
+    "821251": {
+      "name": "Flawless Herald's Crystal",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821251.dds"
+    },
+    "821252": {
+      "name": "Crystallized Energy of Endtimes",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821252.dds"
+    },
+    "821253": {
+      "name": "WON Crystal of Ruin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821253.dds"
+    },
+    "821254": {
+      "name": "BON Crystal of Ruin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821319.dds"
+    },
+    "821317": {
+      "name": "Distorted Fragment of Origin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821317.dds"
+    },
+    "821318": {
+      "name": "Silent Fragment of Origin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821318.dds"
+    },
+    "821319": {
+      "name": "JIN Crystal of Ruin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821254.dds"
+    },
+    "821320": {
+      "name": "HAN Crystal of Ruin",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821320.dds"
+    },
+    "821341": {
+      "name": "Crimson Primordial Luster - Sovereign",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821341.dds"
+    },
+    "821342": {
+      "name": "Violet Primordial Luster - Sovereign",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821342.dds"
+    },
+    "821343": {
+      "name": "Violet Primordial Luster - Edana",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821343.dds"
+    },
+    "821344": {
+      "name": "Gluttony Crystal",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821344.dds"
+    },
+    "821347": {
+      "name": "Sycraia Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821347.dds"
+    },
+    "821417": {
+      "name": "Turquoise Primordial Luster - Sovereign",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821417.dds"
+    },
+    "821418": {
+      "name": "Turquoise Primordial Luster - Edana",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821418.dds"
+    },
+    "821419": {
+      "name": "White Primordial Luster - Sovereign",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821419.dds"
+    },
+    "821420": {
+      "name": "White Primordial Luster - Edana",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821420.dds"
+    },
+    "821421": {
+      "name": "Twilight of the End - Necklace",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821421.dds"
+    },
+    "821422": {
+      "name": "Twilight of the End - Earring",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821422.dds"
+    },
+    "821423": {
+      "name": "Twilight of the End - Ring",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821423.dds"
+    },
+    "821424": {
+      "name": "Twilight of the End - Belt",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821424.dds"
+    },
+    "821430": {
+      "name": "WON Origin Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821430.dds"
+    },
+    "821431": {
+      "name": "BON Origin Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821431.dds"
+    },
+    "821432": {
+      "name": "JIN Origin Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821432.dds"
+    },
+    "821433": {
+      "name": "HAN Origin Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821433.dds"
+    },
+    "821459": {
+      "name": "Sunset Primordial Luster - Edana",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821459.dds"
+    },
+    "821460": {
+      "name": "Nev's Fragment",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821460.dds"
+    },
+    "821461": {
+      "name": "Embers of Ynix - Helmet",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821461.dds"
+    },
+    "821462": {
+      "name": "Embers of Ynix - Armor",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821462.dds"
+    },
+    "821463": {
+      "name": "Embers of Ynix - Gloves",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821463.dds"
+    },
+    "821464": {
+      "name": "Embers of Ynix - Shoes",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821464.dds"
+    },
+    "821471": {
+      "name": "Fusion Shard",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/07_ProductMaterial/00821471.dds"
+    },
+    "980115": {
+      "name": "Sulfur Golem Power Core",
+      "grade": 4,
+      "clientIcon": "New_Icon/03_ETC/00980115.dds"
+    },
+    "980116": {
+      "name": "Sulfur Golem Power Core Fragment",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980116.dds"
+    },
+    "980127": {
+      "name": "Branch of Abundance",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980127.dds"
+    },
+    "980128": {
+      "name": "Black Crystal Fragment",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980128.dds"
+    },
+    "980129": {
+      "name": "Elion Follower's Helmet",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980129.dds"
+    },
+    "980130": {
+      "name": "Elion Follower's Mark",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980130.dds"
+    },
+    "980131": {
+      "name": "Scorched Belt Ornament",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980131.dds"
+    },
+    "980132": {
+      "name": "Broken Gloves of the Void",
+      "grade": 0,
+      "clientIcon": "New_Icon/03_ETC/04_DropItem/00980132.dds"
+    },
+    "980139": {
+      "name": "Broken Vestige of Goldroot",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980139.dds"
+    },
+    "980140": {
+      "name": "Broken Vestige of Ebonmere",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980140.dds"
+    },
+    "980141": {
+      "name": "Broken Vestige of Everlight",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980141.dds"
+    },
+    "980142": {
+      "name": "Broken Vestige of Crimsonflare",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980142.dds"
+    },
+    "980143": {
+      "name": "Broken Vestige of Voidreach",
+      "grade": 3,
+      "clientIcon": "New_Icon/03_ETC/00980143.dds"
+    }
+  }
+}

@@ -150,12 +150,12 @@ assert.deepStrictEqual(Array.from(maxCapOverrides[normalizeName("Orzekea")]), [1
 assert.deepStrictEqual(Array.from(recommendations(spot("Star's End")), group => group.primary.name), ["Sycraia Crystal - Giant"]);
 assert.deepStrictEqual(Array.from(recommendations(spot("[Dehkia] Thornwood Forest")), group => group.primary.name), ["Sycraia Crystal - Fighting Spirit"]);
 const innerEdaniaFixtures = [
-  ["Aphrodon Temple", 917, 400, 470, "1", 14, [2090, 810], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
-  ["Hermesia Inner Castle", 918, 405, 485, "1", 16, [2220, 830], ["knockback", "float"], "Sycraia Crystal - Fighting Spirit"],
-  ["Magaia Temple", 919, 410, 490, "1", 17, [2340, 840], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
-  ["Aresion Temple", 920, 415, 495, "1", 24, [2455, 850], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
-  ["Scales of Judgment", 921, 415, 500, "3", 24, [2455, 860], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
-  ["Event Horizon", 922, 420, 505, "1", 35, [2570, 870], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"]
+  ["Aphrodon Temple", 917, 400, 470, "1", 25, [2090, 810], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
+  ["Hermesia Inner Castle", 918, 405, 485, "1", 27, [2220, 830], ["knockback", "float"], "Sycraia Crystal - Fighting Spirit"],
+  ["Magaia Temple", 919, 410, 490, "1", 30, [2340, 840], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
+  ["Aresion Temple", 920, 415, 495, "1", 35, [2455, 850], ["knockdown", "bound"], "Sycraia Crystal - Adamantine"],
+  ["Scales of Judgment", 921, 415, 500, "3", 35, [2455, 860], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"],
+  ["Event Horizon", 922, 420, 505, "1", 38, [2570, 870], ["stun", "stiffness", "freeze"], "Sycraia Crystal - Giant"]
 ];
 for (const [name, id, ap, dp, players, expectedDropCount, maxCaps, expectedCcs, expectedCrystal] of innerEdaniaFixtures) {
   const zone = spot(name);

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -29,7 +28,7 @@ const selectableInterfaceStyles = [...interfaceStyleOptions[1].matchAll(
 assert.deepEqual(
   selectableInterfaceStyles,
   expectedInterfaceStyles,
-  "All 13 selectable interface styles must retain the shared rectangular navigation buttons.",
+  "All 13 selectable interface styles must remain available.",
 );
 
 const interfacePresets = source.match(/const INTERFACE_PRESETS\s*=\s*\{([\s\S]*?)\n\};/);
@@ -50,101 +49,9 @@ for (const style of expectedInterfaceStyles.slice(1)) {
   );
 }
 
-const navigationButtonSelector = String.raw`body\[data-style\]\s+\.navFrame\s+\.appNav\s*>\s*\.navButton\[data-app-view\]`;
-
-function finalNavigationRule(suffix, description) {
-  const matches = [...stylesheet.matchAll(new RegExp(
-    `${navigationButtonSelector}${suffix}\\s*\\{([^}]*)\\}`,
-    "g",
-  ))];
-  const match = matches.at(-1);
-  assert.ok(match, `${description} must use the universal direct navigation-button selector.`);
-  return { body: match[1], index: match.index };
-}
-
-function finalDeclaration(rule, property, expected, description) {
-  const propertyPattern = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = [...rule.body.matchAll(new RegExp(
-    `(?:^|;)\\s*${propertyPattern}\\s*:\\s*([^;]+)`,
-    "g",
-  ))];
-  const value = matches.at(-1)?.[1].trim();
-  assert.ok(value, `${description} must explicitly set ${property}.`);
-  assert.match(value, expected, `${description} must retain the Cartographer's Brass ${property} contract.`);
-  return value;
-}
-
-const normalNavigationRule = finalNavigationRule("", "Normal navigation buttons");
-for (const [property, value] of [
-  ["grid-template-columns", /^40px minmax\(0,1fr\)\s*!important$/],
-  ["column-gap", /^8px\s*!important$/],
-  ["width", /^100%\s*!important$/],
-  ["justify-self", /^stretch\s*!important$/],
-  ["flex", /^0 0 160px\s*!important$/],
-  ["max-width", /^160px\s*!important$/],
-  ["height", /^48px\s*!important$/],
-  ["border-radius", /^5px\s*!important$/],
-  ["clip-path", /^none\s*!important$/],
-  ["mask", /^none\s*!important$/],
-  ["-webkit-mask", /^none\s*!important$/],
-  ["background-image", /linear-gradient\(/],
-  ["box-shadow", /inset/],
-]) {
-  finalDeclaration(normalNavigationRule, property, value, "Normal navigation buttons");
-}
-finalDeclaration(
-  normalNavigationRule,
-  "background-color",
-  /var\(--nav-card-bottom\)/,
-  "Normal navigation buttons",
-);
-finalDeclaration(normalNavigationRule, "border", /var\(--nav-accent-deep\)/, "Normal navigation buttons");
-finalDeclaration(normalNavigationRule, "font", /700 14px\/1\.05 Georgia/, "Normal navigation buttons");
-assert.match(
-  normalNavigationRule.body,
-  /overflow\s*:\s*hidden\s*!important/,
-  "Normal navigation buttons must contain their text-safe map artwork.",
-);
-
-for (const [suffix, assetSuffix, description] of [
-  [":hover", "-hover", "Hovered navigation buttons"],
-  ["\\.active", "-active", "Active navigation buttons"],
-]) {
-  const stateRule = finalNavigationRule(suffix, description);
-  finalDeclaration(stateRule, "background-image", /(?:linear|radial)-gradient\(/, description);
-  finalDeclaration(
-    stateRule,
-    "background-color",
-    /var\(--nav-(?:card-bottom|accent)\)/,
-    description,
-  );
-  finalDeclaration(stateRule, "border-color", /var\(--nav-accent/, description);
-  const previousArtwork = stylesheet.lastIndexOf(`background-image:var(--asset-nav${assetSuffix})`);
-  assert.ok(
-    previousArtwork < stateRule.index,
-    `${description} must override the obsolete theme-specific raster plaque.`,
-  );
-}
-assert.ok(
-  stylesheet.lastIndexOf("background-image:var(--asset-nav)!") < normalNavigationRule.index,
-  "Normal navigation buttons must override the obsolete theme-specific raster plaque.",
-);
-
-const insetRule = finalNavigationRule("::before", "Navigation button inset");
-finalDeclaration(insetRule, "content", /^""\s*!important$/, "Navigation button inset");
-finalDeclaration(insetRule, "display", /^block\s*!important$/, "Navigation button inset");
-finalDeclaration(insetRule, "border", /var\(--nav-accent\)/, "Navigation button inset");
-const mapRule = finalNavigationRule("::after", "Navigation cartography artwork");
-finalDeclaration(mapRule, "content", /^""\s*!important$/, "Navigation cartography artwork");
-finalDeclaration(mapRule, "display", /^block\s*!important$/, "Navigation cartography artwork");
-finalDeclaration(mapRule, "background", /radial-gradient\(/, "Navigation cartography artwork");
-finalDeclaration(mapRule, "mask-image", /linear-gradient\(90deg,transparent 0 64%/, "Navigation cartography artwork");
-finalDeclaration(mapRule, "opacity", /^\.88\s*!important$/, "Navigation cartography artwork");
-assert.ok(
-  mapRule.index > normalNavigationRule.index,
-  "Text-safe cartography must be part of the final shared navigation treatment.",
-);
-
+// Keep this dependency-free test focused on the navigation's stable contract.
+// Actual CSS layout, states, XML parsing, and all theme/breakpoint combinations
+// are verified by test-navigation-layout.mjs in a browser.
 const expectedIcons = new Map([
   ["homeView", "nav-icon-home"],
   ["calculatorView", "nav-icon-trade-distance"],
@@ -166,207 +73,112 @@ const expectedIcons = new Map([
 ]);
 const appNavMarkup = markup.match(/<nav\b[^>]*class="appNav"[^>]*>([\s\S]*?)<\/nav>/);
 assert.ok(appNavMarkup, "The application navigation markup must remain available.");
-const navigationLayoutTokens = [...appNavMarkup[1].matchAll(
-  /<button\b[^>]*\bdata-app-view="([^"]+)"[^>]*>|<span\s+class="navRowBreak"\s+aria-hidden="true"><\/span>/g,
-)].map((match) => match[1] ?? "__ROW_BREAK__");
-const expectedNavigationLayout = [...expectedIcons.keys()];
+const expectedNavigationIcons = new Map([...expectedIcons].filter(([view]) => view !== "settingsView"));
+const navigationButtons = [...appNavMarkup[1].matchAll(
+  /<button\b[^>]*\bdata-app-view="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g,
+)];
 assert.deepEqual(
-  navigationLayoutTokens,
-  expectedNavigationLayout,
-  "Desktop navigation must retain a balanced nine-button row above a centered eight-button row.",
+  navigationButtons.map((match) => match[1]),
+  [...expectedNavigationIcons.keys()],
+  "The 16 navigation tiles must retain their order, with Settings moved to the title bar.",
 );
+const settingsButton = markup.match(/<button\b(?=[^>]*\bid="windowSettings")([^>]*)>([\s\S]*?)<\/button>/);
+assert.ok(settingsButton, "Settings must remain accessible through a title-bar button.");
+for (const attribute of ['aria-label="Settings"', 'aria-controls="settingsView"', 'aria-pressed="false"', 'data-app-view="settingsView"']) {
+  assert.ok(settingsButton[1].includes(attribute), "The Settings cog must retain " + attribute + ".");
+}
+assert.match(settingsButton[1], /\bclass="(?=[^"]*\bwindowControl\b)(?=[^"]*\bwindowSettingsButton\b)[^"]+"/, "The Settings cog must use the title-bar control styling.");
+assert.match(markup, /<div\b[^>]*\bclass="windowControls"[^>]*>\s*<button\b[^>]*\bid="windowSettings"[^>]*>[\s\S]*?<\/button>\s*<button\b[^>]*\bid="windowMinimize"/, "The Settings cog must sit immediately left of minimize, inside the window controls.");
+assert.match(markup, /<[^>]+\bid="settingsView"/, "The Settings page itself must remain available.");
+assert.doesNotMatch(appNavMarkup[1], /navRowBreak/, "Navigation rows must wrap responsively without hardcoded markup breaks.");
+assert.match(
+  markup,
+  /<div\b(?=[^>]*\bclass="navFrame")(?=[^>]*\bdata-nav-design="arcane-glass")[^>]*>/,
+  "The navigation frame must select the shared Arcane Glass design.",
+);
+assert.match(
+  markup,
+  /<\/nav>\s*<button\b(?=[^>]*\bid="navigationPinButton")(?=[^>]*\baria-pressed="(?:true|false)")(?=[^>]*\baria-label="[^"]+")[^>]*>/,
+  "The accessible pin control must remain outside the navigation button grid.",
+);
+
 const navigationSpritePath = path.join(path.dirname(scriptPath), "NavigationAssets", "nav-icons.svg");
 assert.ok(fs.existsSync(navigationSpritePath), "The shared navigation SVG sprite must ship beside the UI resources.");
 const navigationSprite = fs.readFileSync(navigationSpritePath, "utf8");
-assert.equal(
-  createHash("sha256").update(navigationSprite.replace(/\r\n/g, "\n")).digest("hex"),
-  "50769a4e005327a4d78eacabeaf4364221996a2d1d18b8b96d9cee3a5ca1c26e",
-  "The approved navigation glyph geometry must remain byte-for-byte identical apart from line endings.",
+const symbolIds = [...navigationSprite.matchAll(/<symbol\b[^>]*\bid="([^"]+)"/g)].map((match) => match[1]);
+assert.deepEqual(
+  [...symbolIds].sort(),
+  [...expectedIcons.values()].sort(),
+  "The shared sprite must define exactly the 17 live navigation symbols, without duplicates.",
 );
-for (const [view, iconId] of expectedIcons) {
-  assert.match(
-    markup,
-    new RegExp(`<button\\b(?=[^>]*\\bdata-app-view="${view}")[^>]*>(?:(?!<\\/button>)[\\s\\S])*?<use\\s+href="NavigationAssets/nav-icons\\.svg\\?v=cartographers-brass-2026(?:0827|0903)#${iconId}"`),
-    `The ${view} button must use its immutable shared vector glyph.`,
-  );
+const assetVersions = new Set();
+for (const [view, buttonMarkup] of navigationButtons.map((match) => [match[1], match[2]])) {
+  const iconId = expectedIcons.get(view);
+  const references = [...buttonMarkup.matchAll(/<use\b[^>]*\bhref="([^"]+)"/g)];
+  assert.equal(references.length, 1, view + " must render exactly one shared vector glyph.");
+  const reference = new URL(references[0][1], "https://navigation.test/");
+  assert.equal(reference.pathname, "/NavigationAssets/nav-icons.svg", view + " must use the shared sprite.");
+  assert.equal(reference.hash, "#" + iconId, view + " must retain its intended icon mapping.");
+  assert.ok(reference.searchParams.get("v"), view + " must version the shared navigation asset.");
+  assetVersions.add(reference.searchParams.get("v"));
   assert.match(
     navigationSprite,
-    new RegExp(`<symbol\\s+id="${iconId}"\\s+viewBox="0 0 64 64">`),
-    `The shared sprite must define ${iconId} on the common 64px geometry.`,
+    new RegExp('<symbol\\b(?=[^>]*\\bid="' + iconId + '")(?=[^>]*\\bviewBox="0 0 64 64")[^>]*>'),
+    iconId + " must use the common 64px coordinate system.",
+  );
+  assert.match(
+    markup,
+    new RegExp('<[^>]+\\bid="' + view + '"'),
+    view + " must still resolve to an application view.",
+  );
+  assert.match(
+    buttonMarkup,
+    /<span\b[^>]*class="navIcon"[^>]*aria-hidden="true"[\s\S]*<\/span>\s*<span\b[^>]*class="navLabel"[^>]*>\S[\s\S]*<\/span>\s*$/,
+    view + " must have decorative icon markup before its readable label.",
   );
 }
-assert.equal(
-  [...navigationSprite.matchAll(/<symbol\s+id="nav-icon-[^"]+"/g)].length,
-  expectedIcons.size,
-  "The shared sprite must contain exactly the 17 live navigation glyphs.",
-);
-assert.doesNotMatch(navigationSprite, /#[0-9a-f]{3,8}|rgb\(|hsl\(/i, "Navigation glyph geometry must not hardcode theme colors.");
+assert.equal(assetVersions.size, 1, "All navigation buttons must load the same version of the shared sprite.");
+const settingsIcon = settingsButton[2].match(/<use\b[^>]*\bhref="([^"]+)"/);
+assert.ok(settingsIcon, "The title-bar Settings cog must use the existing shared vector icon.");
+const settingsIconReference = new URL(settingsIcon[1], "https://navigation.test/");
+assert.equal(settingsIconReference.pathname, "/NavigationAssets/nav-icons.svg");
+assert.equal(settingsIconReference.hash, "#nav-icon-settings");
+assert.ok(assetVersions.has(settingsIconReference.searchParams.get("v")), "The Settings cog must load the same sprite version as the navigation tiles.");
+assert.doesNotMatch(navigationSprite, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i, "Navigation glyphs must not hardcode theme colors.");
 assert.doesNotMatch(
   navigationSprite,
   /\b(?:fill|stroke)="(?!currentColor"|none")[^"]+"/i,
-  "Navigation glyph paint must be limited to currentColor or none so themes cannot alter its inner design.",
+  "Every navigation glyph paint must use currentColor or none.",
 );
-assert.match(stylesheet, /\.navGlyph\{[^}]*color:inherit!important/, "Every navigation glyph must inherit the active theme palette.");
-assert.match(
-  stylesheet,
-  /body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navIcon\{[^}]*width:40px!important;[^}]*height:40px!important;/,
-  "Desktop navigation medallions must use the compact 40px geometry.",
-);
-assert.match(
-  stylesheet,
-  /body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\] \.navGlyph\{[^}]*width:40px!important;[^}]*height:40px!important;/,
-  "Desktop navigation glyphs must use the compact 40px geometry.",
-);
-const compactNavigationBreakpoint = stylesheet.lastIndexOf("@media(max-width:1291px){");
-assert.ok(compactNavigationBreakpoint >= 0, "The compact navigation breakpoint must remain defined.");
-const cartographerNavigationStart = stylesheet.lastIndexOf("/* Cartographer's Brass navigation.");
-assert.ok(cartographerNavigationStart >= 0, "The final Cartographer navigation block must remain available.");
-const desktopNavigationCss = stylesheet.slice(cartographerNavigationStart, compactNavigationBreakpoint);
-const desktopCanvasRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\] \.navFrame>\.appNav\{([^}]*)\}/g,
-)];
-const desktopCanvasRule = { body: desktopCanvasRules.at(-1)?.[1] ?? "" };
-assert.ok(desktopCanvasRule.body, "Desktop navigation must retain its final capped canvas rule.");
-for (const [property, value] of [
-  ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(18,minmax\(0,1fr\)\)\s*!important$/],
-  ["justify-content", /^center\s*!important$/],
-  ["column-gap", /^8px\s*!important$/],
-  ["width", /^min\(100%,1336px\)\s*!important$/],
-  ["margin", /^0 auto\s*!important$/],
-]) {
-  finalDeclaration(desktopCanvasRule, property, value, "Desktop navigation canvas");
-}
-const nonCustomDesktopCanvasRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\{([^}]*)\}/g,
-)];
-const nonCustomDesktopCanvasRule = { body: nonCustomDesktopCanvasRules.at(-1)?.[1] ?? "" };
-assert.ok(nonCustomDesktopCanvasRule.body, "Non-Custom themes must override the legacy fullscreen rail.");
-for (const [property, value] of [
-  ["display", /^grid\s*!important$/],
-  ["grid-template-columns", /^repeat\(18,minmax\(0,1fr\)\)\s*!important$/],
-  ["justify-content", /^center\s*!important$/],
-  ["column-gap", /^8px\s*!important$/],
-  ["width", /^min\(100%,1336px\)\s*!important$/],
-  ["margin", /^0 auto\s*!important$/],
-]) {
-  finalDeclaration(nonCustomDesktopCanvasRule, property, value, "Non-Custom desktop navigation canvas");
-}
-const compactNavigationCss = stylesheet.slice(compactNavigationBreakpoint);
-for (const expected of [
-  /display:grid!important/,
-  /grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important/,
-  /grid-template-columns:repeat\(12,minmax\(0,1fr\)\)!important/,
-  /grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important/,
-  /overflow-x:clip!important/,
-  /overflow-y:visible!important/,
-  /\.navRowBreak\{display:none!important/,
-  /max-width:160px!important/,
-  /:nth-child\(10\)\{grid-column:auto\/span 2!important\}/,
-  /:nth-child\(13\)\{grid-column:2\/span 2!important\}/,
-  /:nth-child\(17\)\{grid-column:4\/span 2!important\}/,
-]) {
-  assert.match(compactNavigationCss, expected, "Compact navigation must retain its responsive wrapping-grid contract.");
-}
-assert.doesNotMatch(compactNavigationCss, /display:flex!important|flex-wrap:nowrap!important|overflow-x:(?:auto|scroll)!important/, "Final navigation breakpoints must wrap instead of scrolling horizontally.");
-assert.equal(17 - 9, 8, "The desktop navigation must center eight buttons beneath the first nine.");
-assert.equal(17 - (2 * 6), 5, "The medium navigation's centered third row must contain five buttons.");
-assert.doesNotMatch(desktopNavigationCss, /--nav-button-width\s*:/, "Individual navigation tools must not override the shared width.");
-assert.doesNotMatch(desktopNavigationCss, /flex-grow\s*:|flex\s*:\s*[^;]*clamp\(/, "Legacy row-expansion rules must not return.");
-
-const desktopFrameRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\] \.navFrame\{([^}]*)\}/g,
-)];
-const desktopFrameRule = { body: desktopFrameRules.at(-1)?.[1] ?? "" };
-assert.ok(desktopFrameRule.body, "The final desktop navigation frame rule must remain available.");
-finalDeclaration(desktopFrameRule, "width", /^min\(calc\(100% - 8px\),1364px\)\s*!important$/, "Desktop navigation frame");
-finalDeclaration(desktopFrameRule, "margin", /^4px auto 14px\s*!important$/, "Desktop navigation frame");
-finalDeclaration(desktopFrameRule, "padding", /^12px\s*!important$/, "Desktop navigation frame");
-const nonCustomDesktopFrameRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame\{([^}]*)\}/g,
-)];
-const nonCustomDesktopFrameRule = { body: nonCustomDesktopFrameRules.at(-1)?.[1] ?? "" };
-assert.ok(nonCustomDesktopFrameRule.body, "Non-Custom themes must share the content-hugging frame.");
-finalDeclaration(nonCustomDesktopFrameRule, "width", /^min\(calc\(100% - 8px\),1364px\)\s*!important$/, "Non-Custom navigation frame");
-finalDeclaration(nonCustomDesktopFrameRule, "margin", /^4px auto 14px\s*!important$/, "Non-Custom navigation frame");
-finalDeclaration(nonCustomDesktopFrameRule, "padding", /^12px\s*!important$/, "Non-Custom navigation frame");
-
-const navigationLabelRules = [...desktopNavigationCss.matchAll(new RegExp(
-  `${navigationButtonSelector}>\\.navLabel\\s*\\{([^}]*)\\}`,
-  "g",
-))];
-const navigationLabelRule = { body: navigationLabelRules.at(-1)?.[1] ?? "" };
-assert.ok(navigationLabelRule.body, "The final desktop navigation-label rule must remain available.");
-for (const [property, value] of [
-  ["justify-content", /^center\s*!important$/],
-  ["text-align", /^center\s*!important$/],
-  ["width", /^100%\s*!important$/],
-]) {
-  finalDeclaration(navigationLabelRule, property, value, "Navigation labels");
-}
-const navigationIconRule = finalNavigationRule(">\\.navIcon", "Navigation medallions");
-finalDeclaration(navigationIconRule, "justify-self", /^center\s*!important$/, "Navigation medallions");
-
-const navigationLockRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\] \.navFrame>\.navPinButton\{([^}]*)\}/g,
-)];
-const navigationLockRule = { body: navigationLockRules.at(-1)?.[1] ?? "" };
-assert.ok(navigationLockRule.body, "The final navigation lock geometry must remain available.");
-finalDeclaration(navigationLockRule, "width", /^26px\s*!important$/, "Navigation lock");
-finalDeclaration(navigationLockRule, "height", /^26px\s*!important$/, "Navigation lock");
-finalDeclaration(navigationLockRule, "right", /^4px\s*!important$/, "Navigation lock");
-finalDeclaration(navigationLockRule, "bottom", /^-30px\s*!important$/, "Navigation lock");
-const navigationLockGlyphRules = [...desktopNavigationCss.matchAll(
-  /body\[data-style\] \.navFrame>\.navPinButton::before\{([^}]*)\}/g,
-)];
-const navigationLockGlyphRule = { body: navigationLockGlyphRules.at(-1)?.[1] ?? "" };
-assert.ok(navigationLockGlyphRule.body, "The final navigation lock glyph geometry must remain available.");
-finalDeclaration(navigationLockGlyphRule, "width", /^16px\s*!important$/, "Navigation lock glyph");
-finalDeclaration(navigationLockGlyphRule, "height", /^16px\s*!important$/, "Navigation lock glyph");
-
-const narrowNavigationBreakpoint = compactNavigationCss.indexOf("@media(max-width:720px){");
-assert.ok(narrowNavigationBreakpoint >= 0, "The narrow navigation breakpoint must remain defined.");
-const narrowNavigationCss = compactNavigationCss.slice(narrowNavigationBreakpoint);
-for (const expected of [
-  /grid-template-columns:repeat\(8,minmax\(0,1fr\)\)!important/,
-  /grid-template-columns:32px minmax\(0,1fr\)!important/,
-  /height:44px!important/,
-  /font-size:12px!important/,
-  /\.navGlyph\{width:32px!important;height:32px!important\}/,
-]) {
-  assert.match(narrowNavigationCss, expected, "Narrow-window navigation must remain smaller than the compact desktop geometry.");
-}
-for (const style of expectedInterfaceStyles.slice(1)) {
-  const rules = [...stylesheet.matchAll(new RegExp(`body\\[data-style="${style}"\\]\\s+\\.navFrame\\{([^}]*)\\}`, "g"))];
-  const finalRule = rules.at(-1)?.[1] ?? "";
-  assert.match(finalRule, /--nav-accent:/, `The ${style} theme must provide its Cartographer's Brass color.`);
-  assert.doesNotMatch(finalRule, /(?:width|height|padding|margin|border-radius|grid-template|font)\s*:/, `The ${style} theme may change navigation colors, not geometry.`);
-}
-const customNavigationRules = [...stylesheet.matchAll(/body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{([^}]*)\}/g)];
-assert.match(
-  customNavigationRules.at(-1)?.[1] ?? "",
-  /(?:^|;)\s*--nav-label\s*:\s*#f4e5c0\s*(?:;|$)/,
-  "Custom light mode must keep bright, readable navigation labels on the dark plaques.",
+assert.doesNotMatch(
+  navigationSprite,
+  /<(?:image|foreignObject|script|style)\b|\b(?:style|on\w+)=/i,
+  "Shared navigation artwork must remain self-contained vector geometry.",
 );
 
-const customOrnamentRules = [...stylesheet.matchAll(
-  /body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{([^}]*)\}/g,
-)];
-assert.ok(customOrnamentRules.length, "The Custom theme must explicitly suppress both legacy center ornaments.");
-assert.match(
-  customOrnamentRules.at(-1)[1],
-  /(?:^|;)\s*visibility\s*:\s*hidden\s*!important\s*(?:;|$)/,
-  "The Custom theme must suppress both legacy center ornaments without collapsing title-bar alignment.",
+// The same Arcane geometry must inherit the active appearance instead of
+// supplying another fixed palette that masks custom themes or presets.
+const arcaneStart = stylesheet.indexOf("/* Arcane Glass navigation.");
+const arcaneEnd = stylesheet.indexOf("/* Weeklies planner:", arcaneStart);
+assert.ok(arcaneStart >= 0 && arcaneEnd > arcaneStart, "The shared Arcane navigation styles must be identifiable.");
+const arcaneStyles = stylesheet.slice(arcaneStart, arcaneEnd);
+const arcanePalette = arcaneStyles.match(
+  /body\[data-style\]\s+\.navFrame\[data-nav-design="arcane-glass"\]\s*\{([^}]+)\}/,
 );
-const customFramePseudoRules = [...stylesheet.matchAll(
-  /body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{([^}]*)\}/g,
-)];
-assert.ok(customFramePseudoRules.length, "The Custom theme must explicitly reset its full-frame navigation pseudos.");
+assert.ok(arcanePalette, "Arcane navigation must share one theme-derived palette.");
+assert.match(arcanePalette[1], /--nav-accent\s*:\s*var\(\s*--a1\s*\)\s*;/, "Navigation accents must inherit the active theme's primary accent.");
+assert.match(arcanePalette[1], /--nav-panel-top\s*:[^;]*var\(\s*--bg1\s*\)/, "The panel's upper surface must derive from the active theme background.");
+assert.match(arcanePalette[1], /--nav-panel-bottom\s*:[^;]*var\(\s*--bg0\s*\)/, "The panel's lower surface must derive from the active theme background.");
+assert.match(arcanePalette[1], /--nav-glyph\s*:[^;]*var\(\s*--nav-accent\s*\)/, "Navigation glyph colour must derive from the theme accent.");
+const accentDeclarations = [...arcaneStyles.matchAll(/--nav-accent\s*:\s*([^;\n}]+)/g)];
+assert.equal(accentDeclarations.length, 1, "Arcane presets must not override the shared accent with fixed colours.");
 assert.match(
-  customFramePseudoRules.at(-1)[1],
-  /(?:^|;)\s*transform\s*:\s*none\s*!important\s*(?:;|$)/,
-  "Custom navigation frame artwork must not inherit the legacy fullscreen diamond rotation.",
+  arcaneStyles,
+  />\s*\.navIcon\s*\{[^}]*\bcolor\s*:\s*var\(\s*--nav-glyph\s*\)/,
+  "The icon container must expose the derived glyph colour.",
 );
+assert.match(arcaneStyles, /\.navGlyph\s*\{[^}]*\bcolor\s*:\s*inherit\b/, "SVG glyphs must inherit the icon container's colour.");
+assert.match(navigationSprite, /\b(?:fill|stroke)="currentColor"/, "SVG artwork must consume the inherited icon colour.");
 
 assert.match(
   source,
@@ -390,6 +202,12 @@ const navigationSource = source.slice(start, end);
 function createClassList() {
   const values = new Set();
   return {
+    add(...names) {
+      for (const name of names) values.add(name);
+    },
+    remove(...names) {
+      for (const name of names) values.delete(name);
+    },
     contains(name) {
       return values.has(name);
     },
@@ -574,4 +392,80 @@ function createHarness(storedValue) {
   assert.equal(harness.state().hidden, true);
 }
 
-console.log("Navigation chrome and all 13 theme button styles verification passed.");
+// Exercise the actual shared click router without a browser or native host.
+// A title-bar control must open the same Settings view as the former tile,
+// preserve page fades, and clear its pressed state after another view opens.
+{
+  const activationStart = source.indexOf("function activateAppView(button){");
+  const activationEnd = source.indexOf('window.addEventListener("resize", syncFixedChromeOffset);', activationStart);
+  assert.ok(activationStart >= 0 && activationEnd > activationStart, "The shared app-view activation block must remain available.");
+  const activationSource = source.slice(activationStart, activationEnd);
+  const buttons = [...expectedIcons.keys()].map((view) => {
+    const attributes = new Map(view === "settingsView" ? [["aria-pressed", "false"]] : []);
+    const handlers = new Map();
+    return {
+      id: view === "settingsView" ? "windowSettings" : "",
+      dataset: { appView: view }, classList: createClassList(), handlers,
+      addEventListener(name, handler) { handlers.set(name, handler); },
+      hasAttribute(name) { return attributes.has(name); },
+      getAttribute(name) { return attributes.get(name) ?? null; },
+      setAttribute(name, value) { attributes.set(name, String(value)); },
+    };
+  });
+  const views = new Map([...expectedIcons.keys()].map((id) => [id, { id, classList: createClassList() }]));
+  const homeButton = buttons.find((button) => button.dataset.appView === "homeView");
+  const settingsControl = buttons.find((button) => button.id === "windowSettings");
+  homeButton.classList.add("active");
+  views.get("homeView").classList.add("active");
+  const initialized = [];
+  const timers = new Map();
+  let nextTimerId = 1;
+  let chromeSyncs = 0;
+  const context = vm.createContext({
+    document: {
+      querySelector(selector) {
+        assert.equal(selector, ".appView.active");
+        return [...views.values()].find((view) => view.classList.contains("active")) ?? null;
+      },
+      querySelectorAll(selector) {
+        assert.equal(selector, "[data-app-view]");
+        return buttons;
+      },
+      getElementById(id) { return id === "windowSettings" ? settingsControl : views.get(id) ?? null; },
+    },
+    appViewTransitionTimer: 0,
+    initializeAppView(id) { initialized.push(id); },
+    syncFixedChromeOffset() { chromeSyncs += 1; },
+    requestAnimationFrame(callback) { callback(); },
+    setTimeout(callback, delay) { const id = nextTimerId++; timers.set(id, { callback, delay }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    playerGuildCancelActiveRequest() { throw new Error("Unrelated Player & Guild requests must not be touched."); },
+  });
+  new vm.Script(activationSource, { filename: scriptPath }).runInContext(context);
+  const finishTransition = () => {
+    assert.equal(timers.size, 1, "Changing pages must retain exactly one pending fade.");
+    const [id, timer] = [...timers.entries()][0];
+    assert.equal(timer.delay, 180, "Title-bar Settings must retain the existing page fade duration.");
+    timers.delete(id);
+    timer.callback();
+  };
+  settingsControl.handlers.get("click")();
+  assert.equal(settingsControl.getAttribute("aria-pressed"), "true", "Opening Settings must mark its cog as pressed.");
+  assert.equal(settingsControl.classList.contains("active"), true);
+  assert.equal(homeButton.classList.contains("active"), false);
+  finishTransition();
+  assert.equal(views.get("settingsView").classList.contains("active"), true);
+  assert.equal(views.get("homeView").classList.contains("active"), false);
+  assert.deepEqual(initialized, ["settingsView"]);
+  settingsControl.handlers.get("click")();
+  assert.equal(timers.size, 0, "Clicking the already-open Settings page must not restart its fade.");
+  homeButton.handlers.get("click")();
+  assert.equal(settingsControl.getAttribute("aria-pressed"), "false", "Leaving Settings must clear the cog's pressed state.");
+  assert.equal(settingsControl.classList.contains("active"), false);
+  finishTransition();
+  assert.equal(views.get("homeView").classList.contains("active"), true);
+  assert.deepEqual(initialized, ["settingsView", "homeView"]);
+  assert.equal(chromeSyncs, 2, "Both title-bar and navigation-tile transitions must refresh chrome offsets.");
+}
+
+console.log("Navigation routes, title-bar Settings clicks, shared glyphs, theme-derived colours, 13 styles, and pin/auto-hide behavior verification passed.");

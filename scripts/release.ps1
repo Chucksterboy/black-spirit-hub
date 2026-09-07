@@ -6,7 +6,11 @@ param(
 
 	[string]$Notes = "",
 
-	[switch]$Draft
+	[switch]$Draft,
+
+	# Build and verify everything without committing, tagging or publishing.
+	# Allows the installed application to be updated before the public release.
+	[switch]$PrepareOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -200,6 +204,7 @@ function Assert-RunsWithoutDotnetRuntime {
 			-FilePath $FilePath `
 			-ArgumentList $Arguments `
 			-WorkingDirectory $WorkingDirectory `
+			-WindowStyle Hidden `
 			-Wait `
 			-PassThru
 		if ($process.ExitCode -ne 0) {
@@ -232,6 +237,7 @@ function Assert-AppPublishFiles {
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
 		"NavigationAssets\nav-icons.svg",
+		"NavigationAssets\arcane-refraction.svg",
 		"gold-coins.png",
 		"Assets\AppIcon\app-icon.ico",
 		"Assets\AppIcon\tray-icon.ico",
@@ -241,6 +247,8 @@ function Assert-AppPublishFiles {
 		"Assets\GrindTracker\grind-spots.js",
 		"Assets\GrindTracker\grind-spots-inner-edania.js",
 		"Assets\GrindTracker\grind-spots-corrections.js",
+		"Assets\GrindTracker\icons-clean\item-66946.webp",
+		"Assets\GrindTracker\icons-clean\item-735302.webp",
 		"Assets\GrindTracker\grind-guides.js",
 		"Assets\GrindTracker\grind-guides-current.js",
 		"Assets\RecipeBook\recipes.json",
@@ -274,6 +282,9 @@ function Assert-AppPublishFiles {
 }
 
 $versionTag = Normalize-Version $Version
+if ($versionTag -notmatch '^v\d+\.\d+\.\d+(?:\.\d+)?$') {
+	throw "Version must contain three or four numeric components."
+}
 $packageVersion = $versionTag.Substring(1)
 $assemblyVersion = Get-Assembly-Version $versionTag
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -286,7 +297,7 @@ $htmlFile = Join-Path $sourceRoot "BlackSpiritHub.Resources.Black_Spirit_Hub.htm
 $assemblyInfoFile = Join-Path $sourceRoot "Properties\AssemblyInfo.cs"
 $updateManifestFile = Join-Path $repoRoot "update.json"
 $sourceUpdateManifestFile = Join-Path $sourceRoot "update.json"
-$artifactRoot = Join-Path $repoRoot "artifacts"
+$artifactRoot = Join-Path $repoRoot ("artifacts\releases\" + $versionTag)
 $appOut = Join-Path $artifactRoot "App Files"
 $installerOut = Join-Path $artifactRoot "Installer"
 $installerReleaseAsset = Join-Path $installerOut "Black-Spirit-Hub-Installer.exe"
@@ -327,6 +338,11 @@ Assert-CredentialNotTracked `
 	-RepoRoot $repoRoot `
 	-GitPath $git `
 	-Credential $bdoAlertsReleaseCredential
+
+# Do not erase prior installers, research or local application backups.
+if (Test-Path -LiteralPath $artifactRoot) {
+	throw "Release output already exists. Preserve or inspect it before retrying: $artifactRoot"
+}
 
 Write-Host "Preparing Black Spirit Hub $versionTag"
 
@@ -373,9 +389,6 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Pre-release verification failed."
 }
 
-if (Test-Path -LiteralPath $artifactRoot) {
-	Remove-Item -LiteralPath $artifactRoot -Recurse -Force
-}
 New-Item -ItemType Directory -Path $appOut -Force | Out-Null
 New-Item -ItemType Directory -Path $installerOut -Force | Out-Null
 
@@ -384,10 +397,23 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Application publish failed."
 }
 
-Get-ChildItem -LiteralPath $appOut -Recurse -File | Where-Object { $_.Extension -in @(".pdb", ".xml") } | Remove-Item -Force
+$publishPrefix = [System.IO.Path]::GetFullPath($appOut).TrimEnd("\") + "\"
+foreach ($debugFile in (Get-ChildItem -LiteralPath $appOut -Recurse -File | Where-Object { $_.Extension -in @(".pdb", ".xml") })) {
+	$debugPath = [System.IO.Path]::GetFullPath($debugFile.FullName)
+	if (!$debugPath.StartsWith($publishPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+		throw "Refusing cleanup outside the application publish: $debugPath"
+	}
+	Remove-Item -LiteralPath $debugPath -Force
+}
 $runtimes = Join-Path $appOut "runtimes"
 if (Test-Path -LiteralPath $runtimes) {
-	Get-ChildItem -LiteralPath $runtimes -Directory | Where-Object { $_.Name -ne "win-x64" } | Remove-Item -Recurse -Force
+	foreach ($runtimeDirectory in (Get-ChildItem -LiteralPath $runtimes -Directory | Where-Object { $_.Name -ne "win-x64" })) {
+		$runtimePath = [System.IO.Path]::GetFullPath($runtimeDirectory.FullName)
+		if (!$runtimePath.StartsWith($publishPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+			throw "Refusing cleanup outside the application publish: $runtimePath"
+		}
+		Remove-Item -LiteralPath $runtimePath -Recurse -Force
+	}
 }
 
 Assert-AppPublishFiles -PublishRoot $appOut
@@ -424,6 +450,14 @@ $manifestJson = $manifest | ConvertTo-Json
 	[System.Text.UTF8Encoding]::new($false)
 )
 Copy-Item -LiteralPath $updateManifestFile -Destination $sourceUpdateManifestFile -Force
+
+if ($PrepareOnly) {
+	Write-Host "Release prepared and verified: $versionTag"
+	Write-Host "Application: $appOut"
+	Write-Host "Installer: $installerReleaseAsset"
+	Write-Host "No commit, tag or GitHub publication was made."
+	return
+}
 
 & $gh auth status | Out-Host
 if ($LASTEXITCODE -ne 0) {

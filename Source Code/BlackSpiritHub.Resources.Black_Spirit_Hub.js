@@ -1958,6 +1958,7 @@ delete GRIND_FIXED_ITEM_PRICES["5960"];
 Object.assign(GRIND_MARKET_ITEM_ID_OVERRIDES,{"edania-distorted-fragment-of-origin":821317,"edania-silent-fragment-of-origin":821318,"edania-crystallized-energy-of-endtimes":821252,"edania-distorted-crystal-of-origin":761802,"edania-silent-crystal-of-origin":761803,"edania-herald-s-crystal":821250,"edania-flawless-herald-s-crystal":821251,"imperfect-lightstone-of-earth":766105,"imperfect-lightstone-of-wind":766106,"sycraia-shard":821347});
 const GRIND_NO_VALUE_ITEM_IDS=new Set(["ancient-creatures-scale","edania-deboreka-accessories","any-artifact","faint-sycraia-s-memory","gentle-sycraia-s-memory","intense-sycraia-s-memory","radiant-sycraia-s-memory","sycraia-underwater-ruins-paint","al-yurads-ring-piece","marnis-research-box","sycrids-scale-piece","void-tainted-whispers","752530","66108","66106","66107","40760","65778","65331","65332","15713","8958","8956","8957","8959","40709","40758","66945","56335","56505","8428","44799","40708","40756","44501","40706","40762","40711","40752","65327","56284","45017","45013","45018","45014"]);
 GRIND_NO_VALUE_ITEM_IDS.add("761726");
+["66946","735302","44270"].forEach(id=>GRIND_NO_VALUE_ITEM_IDS.add(id));
 const GRIND_UNMARKETABLE_ITEM_IDS=new Set(["821461","821462","821463","821464"]);
 function grindNormalizeItemName(value){return String(value||"").toLowerCase().replace(/\[[^\]]+\]/g,"").replace(/[^a-z0-9]+/g," ").trim()}
 function grindAllDrops(){const map=new Map();GRIND_SPOTS.forEach(spot=>(spot.drops||[]).forEach(drop=>{if(!map.has(String(drop.id)))map.set(String(drop.id),drop)}));return[...map.values()]}
@@ -3565,7 +3566,11 @@ function activateAppView(button){
   if(!target||current===target)return;
   if(current?.id==="playerGuildView"&&targetId!=="playerGuildView")playerGuildCancelActiveRequest("The request was cancelled because you left Player & Guild.");
   clearTimeout(appViewTransitionTimer);
-  document.querySelectorAll("[data-app-view]").forEach(x => x.classList.toggle("active", x === button));
+  document.querySelectorAll("[data-app-view]").forEach(x => {
+    const selected=x===button;
+    x.classList.toggle("active",selected);
+    if(x.id==="windowSettings")x.setAttribute("aria-pressed",String(selected));
+  });
   if(current){
     current.classList.add("viewFading");
     appViewTransitionTimer=setTimeout(()=>{

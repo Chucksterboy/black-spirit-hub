@@ -56,9 +56,11 @@ $nodeWarJsTestPath = Join-Path $repoRoot "scripts\verify-node-war.js"
 $couponJsTestPath = Join-Path $repoRoot "scripts\verify-coupons.js"
 $grindResistanceJsTestPath = Join-Path $repoRoot "scripts\verify-grind-resistance.js"
 $grindGuidesJsTestPath = Join-Path $repoRoot "scripts\test-grind-guides.mjs"
+$grindLootJsTestPath = Join-Path $repoRoot "scripts\test-grind-loot.mjs"
 $marketOutfitJsTestPath = Join-Path $repoRoot "scripts\test-market-outfit-frontend.mjs"
 $appBehaviorJsTestPath = Join-Path $repoRoot "scripts\test-app-behavior-js.mjs"
 $navigationChromeJsTestPath = Join-Path $repoRoot "scripts\test-navigation-chrome.mjs"
+$pageHeadlinesJsTestPath = Join-Path $repoRoot "scripts\test-page-headlines.mjs"
 $weekliesJsTestPath = Join-Path $repoRoot "scripts\test-weeklies.mjs"
 $playerGuildJsTestPath = Join-Path $repoRoot "scripts\test-player-guild-js.mjs"
 $eventsTimelineJsTestPath = Join-Path $repoRoot "scripts\test-events-timeline.mjs"
@@ -636,7 +638,7 @@ $projectSource = Get-Content -LiteralPath $project -Raw
 
 $navigationMarkupMatch = [regex]::Match($html, '(?s)<nav class="appNav"[^>]*>.*?</nav>')
 $expectedNavigationViews = @(
-	"homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView", "settingsView",
+	"homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView",
 	"playerGuildView", "grindTrackerView", "resetTimersView", "weekliesView", "eventsView", "bracketsView", "masteryBracketsView",
 	"recipeBookView", "dehkiaFuelView", "lightstoneSetsView"
 )
@@ -647,7 +649,7 @@ $navigationViews = if ($navigationMarkupMatch.Success) {
 if (!$navigationMarkupMatch.Success -or
 	($navigationViews -join "|") -ne ($expectedNavigationViews -join "|") -or
 	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 0) {
-	throw "The Cartographer navigation must retain its exact 9/8 button order."
+	throw "The Arcane Glass navigation must retain its 16-tile order, with Settings in the title bar."
 }
 
 if ($html -notmatch '(?s)<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?</button>\s*<button[^>]*data-app-view="grindTrackerView"' -or
@@ -1703,6 +1705,9 @@ if (!(Test-Path -LiteralPath $grindResistanceJsTestPath -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $grindGuidesJsTestPath -PathType Leaf)) {
 	throw "The executable Grind Zones mechanics and rotations regression test is missing."
 }
+if (!(Test-Path -LiteralPath $grindLootJsTestPath -PathType Leaf)) {
+	throw "The executable Grind Zones current-client loot regression test is missing."
+}
 if (!(Test-Path -LiteralPath $marketOutfitJsTestPath -PathType Leaf)) {
 	throw "The executable Central Market outfit recommendation regression test is missing."
 }
@@ -1711,6 +1716,9 @@ if (!(Test-Path -LiteralPath $appBehaviorJsTestPath -PathType Leaf)) {
 }
 if (!(Test-Path -LiteralPath $navigationChromeJsTestPath -PathType Leaf)) {
 	throw "The executable navigation chrome JavaScript regression test is missing."
+}
+if (!(Test-Path -LiteralPath $pageHeadlinesJsTestPath -PathType Leaf)) {
+	throw "The executable page headline and retained-controls regression test is missing."
 }
 if (!(Test-Path -LiteralPath $weekliesJsTestPath -PathType Leaf)) {
 	throw "The executable Weeklies JavaScript regression test is missing."
@@ -1767,6 +1775,10 @@ if ($nodeCommand) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "Grind Zones mechanics and rotations JavaScript regression tests failed."
 	}
+	& $nodeCommand.Source $grindLootJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Grind Zones current-client loot regression tests failed."
+	}
 	& $nodeCommand.Source $marketOutfitJsTestPath $sourceRoot
 	if ($LASTEXITCODE -ne 0) {
 		throw "Central Market outfit recommendation JavaScript regression tests failed."
@@ -1778,6 +1790,11 @@ if ($nodeCommand) {
 	& $nodeCommand.Source $navigationChromeJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
 		throw "Navigation chrome JavaScript regression tests failed."
+	}
+	# This dependency-free test deliberately uses no local backup or browser QA.
+	& $nodeCommand.Source $pageHeadlinesJsTestPath $sourceRoot
+	if ($LASTEXITCODE -ne 0) {
+		throw "Page headline and retained-controls regression tests failed."
 	}
 	& $nodeCommand.Source $weekliesJsTestPath $scriptPath
 	if ($LASTEXITCODE -ne 0) {
@@ -1825,45 +1842,49 @@ if ($nodeCommand) {
 	}
 }
 else {
-	Write-Host "Node.js was not found; executable UI JavaScript regression checks were skipped."
+	throw "Node.js is required for the executable UI and loot regression checks."
 }
 if ($css -notmatch '\.bossLeadSelect\s*\{\s*box-sizing:border-box;flex:0 0 172px;width:172px;max-width:none;\s*\}' -or
 	$css -notmatch 'body\[data-style\]:not\(\[data-style="custom"\]\) #bossLeadTime\{' -or
 	$css -notmatch 'background-position:calc\(100% - 18px\) 50%,calc\(100% - 12px\) 50%,0 0!important') {
 	throw "The dashboard lead-time selector can shrink and clip multi-digit minute labels."
 }
-if ($css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]\{[^}]*grid-template-columns:40px minmax\(0,1fr\)!important;[^}]*column-gap:8px!important;[^}]*width:100%!important;[^}]*justify-self:stretch!important;[^}]*flex:0 0 160px!important;[^}]*max-width:160px!important;[^}]*height:48px!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navIcon\{[^}]*width:40px!important;[^}]*height:40px!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*grid-column:2!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]>\.navLabel\{[^}]*justify-content:center!important;[^}]*text-align:center!important;') {
-	throw "Cartographer navigation labels can drift away from their shared medallions."
+# Static geometry contracts complement the dependency-free navigation test.
+# Browser/screenshot QA remains an explicit, optional test-navigation-layout.mjs run.
+$arcaneStart = $css.IndexOf("/* Arcane Glass navigation.")
+$arcaneEnd = $css.IndexOf("/* Weeklies planner:", [Math]::Max(0, $arcaneStart))
+if ($arcaneStart -lt 0 -or $arcaneEnd -le $arcaneStart) {
+	throw "The shared Arcane Glass navigation stylesheet is missing."
 }
-if ($css -notmatch '(?s)body\[data-style="custom"\]\s+\.windowTitleBar>\.headerCenterCrest\s*,\s*body\[data-style="custom"\]\s+\.navFrame>\.navCrest\s*\{[^}]*visibility:hidden!important;') {
-	throw "The Custom theme must suppress both legacy center diamond ornaments without shifting title-bar alignment."
+$arcaneCss = $css.Substring($arcaneStart, $arcaneEnd - $arcaneStart)
+$arcaneFrame = 'body\[data-style\] \.navFrame\[data-nav-design="arcane-glass"\]'
+$arcaneButton = $arcaneFrame + ' \.appNav>\.navButton\[data-app-view\]'
+foreach ($contract in @(
+	@{ Name = "compact frame"; Pattern = $arcaneFrame + '\{[^}]*width:min\(calc\(100% - 64px\),976px\)!important;[^}]*height:auto!important;[^}]*overflow:visible!important;' },
+	@{ Name = "equal-width grid"; Pattern = $arcaneFrame + '>\.appNav\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important;[^}]*justify-content:center!important;' },
+	@{ Name = "compact centered tiles"; Pattern = $arcaneButton + '\{[^}]*grid-column:span 2!important;[^}]*grid-template-rows:46px minmax\(0,1fr\)!important;[^}]*justify-items:center!important;[^}]*height:86px!important;' },
+	@{ Name = "centered icon above label"; Pattern = $arcaneButton + '>\.navIcon\{[^}]*grid-column:1!important;grid-row:1!important;[^}]*justify-self:center!important;[^}]*width:46px!important;height:46px!important;' },
+	@{ Name = "centered readable labels"; Pattern = $arcaneButton + '>\.navLabel\{[^}]*grid-column:1!important;grid-row:2!important;[^}]*align-items:center!important;justify-content:center!important;[^}]*text-align:center!important;' },
+	@{ Name = "small outside top-right lock"; Pattern = $arcaneFrame + '>\.navPinButton\{[^}]*right:-30px!important;top:0!important;bottom:auto!important;width:24px!important;height:24px!important;' },
+	@{ Name = "retired nav crest"; Pattern = $arcaneFrame + '>\.navCrest\{display:none!important\}' },
+	@{ Name = "retired custom title crest"; Pattern = 'body\[data-style="custom"\] \.windowTitleBar>\.headerCenterCrest\{visibility:hidden!important\}' },
+	@{ Name = "theme-derived bright label"; Pattern = '--nav-label:color-mix\(in srgb,var\(--nav-accent\) 4%,#fff\);' }
+)) {
+	if ($arcaneCss -notmatch $contract.Pattern) {
+		throw "Arcane Glass navigation lost its $($contract.Name) contract."
+	}
 }
-if ($css -notmatch '(?s)body\[data-style\] \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(18,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
-	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame>\.appNav\s*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(18,minmax\(0,1fr\)\)!important;[^}]*column-gap:8px!important;[^}]*width:min\(100%,1336px\)!important;[^}]*margin:0 auto!important;' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;' -or
-	$css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\) \.navFrame\s*\{[^}]*width:min\(calc\(100% - 8px\),1364px\)!important;[^}]*margin:4px auto 14px!important;[^}]*padding:12px!important;' -or
-	$css -notmatch '(?s)body\[data-style="custom"\]\s+\.navFrame::before\s*,\s*body\[data-style="custom"\]\s+\.navFrame::after\s*\{[^}]*transform:none!important;') {
-	throw "Fullscreen navigation must hug the equal-width rows across every preset without restoring the giant rotated frame ornament."
+foreach ($breakpoint in @(@{ Width = 900; Columns = 12 }, @{ Width = 650; Columns = 8 }, @{ Width = 480; Columns = 6 })) {
+	$pattern = '(?s)@media\(max-width:' + $breakpoint.Width + 'px\)\{.*?' + $arcaneFrame + '>\.appNav\{grid-template-columns:repeat\(' + $breakpoint.Columns + ',minmax\(0,1fr\)\)!important\}'
+	if ($arcaneCss -notmatch $pattern) {
+		throw "Arcane Glass navigation lost responsive wrapping at $($breakpoint.Width)px."
+	}
 }
-$cartographerStart = $css.LastIndexOf("/* Cartographer's Brass navigation.")
-$cartographerCss = if ($cartographerStart -ge 0) { $css.Substring($cartographerStart) } else { "" }
-if ($css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view="homeView"\]\{flex-grow:' -or
-	$css -match 'body\[data-style\] \.navFrame \.appNav>\.navButton\.betaNavButton\[data-app-view="[^"]+"\]\{flex:0 1 clamp\(' -or
-	$css -match '--nav-button-width\s*:' -or
-	$css -notmatch '(?s)@media\(max-width:1291px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important;[^}]*overflow-x:clip!important;[^}]*overflow-y:visible!important' -or
-	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame,[^{]*\{[^}]*width:min\(calc\(100% - 8px\),1028px\)!important;' -or
-	$css -notmatch '(?s)@media\(max-width:1119px\)\{.*?body\[data-style\] \.navFrame>\.appNav,[^{]*\{[^}]*grid-template-columns:repeat\(12,minmax\(0,1fr\)\)!important;[^}]*width:min\(100%,1000px\)!important;[^}]*overflow-x:clip!important;' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(13\)\{grid-column:2/span 2!important\}' -or
-	$css -notmatch 'body\[data-style\] \.navFrame \.appNav>\.navButton\[data-app-view\]:nth-child\(17\)\{grid-column:4/span 2!important\}' -or
-	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*display:flex!important' -or
-	$cartographerCss -match '(?s)\.navFrame>\.appNav[^{]*\{[^}]*overflow-x:(?:auto|scroll)!important') {
-	throw "The equal-width 17-button navigation or its responsive wrapping has regressed."
-}
-if ($css -notmatch 'body\[data-mode="light"\]\[data-style="custom"\]\s+\.navFrame\{--nav-label:#f4e5c0\}') {
-	throw "Custom light mode must keep bright, readable navigation labels on the dark plaques."
+if ($arcaneCss -match 'overflow-x:(?:auto|scroll)!important' -or
+	$arcaneCss -notmatch '(?s)@media\(max-width:900px\)\{.*?:nth-child\(13\)\{grid-column:3/span 2!important\}' -or
+	$arcaneCss -notmatch '(?s)@media\(max-width:650px\)\{.*?:nth-child\(13\)\{grid-column:span 2!important\}' -or
+	$arcaneCss -notmatch '(?s)@media\(max-width:480px\)\{.*?:nth-child\(16\)\{grid-column:3/span 2!important\}') {
+	throw "Arcane Glass navigation must center partial rows without horizontal scrolling."
 }
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
