@@ -5,3 +5,11 @@
 "Source Code/Assets/RecipeBook/icons/item-fallback.svg" text eol=lf
 "Source Code/Assets/game-data-manifest.json" text eol=lf
 "Source Code/ui-assets-manifest.json" text eol=lf
+# These source inputs are verified by their exact bundled bytes. Preserve their
+# existing line endings (including legacy mixed endings) during every checkout.
+"Source Code/Assets/GrindTracker/grind-spots.js" -text
+"Source Code/Assets/GrindTracker/grind-spots-inner-edania.js" -text
+"Source Code/Assets/GrindTracker/grind-spots-corrections.js" -text
+"Source Code/Assets/GrindTracker/grind-guides.js" -text
+"Source Code/Assets/GrindTracker/grind-guides-current.js" -text
+"Source Code/BlackSpiritHub/DehkiaFuelService.cs" -text
