@@ -699,7 +699,6 @@ foreach ($lifeSkillIcon in @("trading.svg", "farming.svg", "barter.svg")) {
 }
 
 if ($html -notmatch 'data-app-view="grindTrackerView"[^>]*>.*?<span class="navLabel">Grind Zones</span>' -or
-	$html -notmatch '<h1>Grind Zones</h1>' -or
 	$html -notmatch 'id="grindChangeZone"[^>]*>Choose Grind Zone</button>' -or
 	$html -notmatch 'id="grindPickerTitle">Choose a Grind Zone</h2>') {
 	throw "The Grind Zones direct-selection labels or change-zone control are missing."
@@ -857,11 +856,8 @@ if ($css -notmatch '(?s)body\[data-style\]:not\(\[data-style="custom"\]\)\s+\.wi
 	throw "The non-custom title bar must keep its window controls in the far-right grid column."
 }
 if ($html -notmatch '<button\s+class="navPinButton"\s+id="navigationPinButton"[^>]+aria-pressed="false"[^>]+aria-label="Keep navigation visible"' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton\s*\{[^}]*right:\s*4px!important;[^}]*bottom:\s*-30px!important;[^}]*width:\s*26px!important;[^}]*height:\s*26px!important;' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame>\.navPinButton::before\s*\{[^}]*width:\s*16px!important;[^}]*height:\s*16px!important;' -or
 	$css -notmatch '(?s)\.navPinButton:focus-visible\s*\{[^}]*outline:' -or
 	$css -notmatch '(?s)\.navPinButton\[aria-pressed="true"\]::before\s*\{[^}]*mask:' -or
-	$css -notmatch '(?s)body\[data-style\] \.navFrame\s*\{[^}]*padding:\s*12px!important;' -or
 	$script -notmatch 'const\s+NAVIGATION_PIN_SETTING="navigationPinned";' -or
 	$script -notmatch 'readSetting\(NAVIGATION_PIN_SETTING,false\)===true' -or
 	$script -notmatch 'persistSetting\(NAVIGATION_PIN_SETTING,navigationPinned\)' -or

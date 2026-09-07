@@ -1,7 +1,7 @@
 {
-  "version": "v0.9.61",
+  "version": "v0.9.62",
   "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.61/Black-Spirit-Hub-Installer.exe",
-  "sha256": "B516AB9EF8B0E3CCE3EAD81798C961B1185D092B112BBB668F767B8907DF2623",
-  "notes": "### What's new\n- Updated 21 Life Skill Lightstone combinations and removed the three retired combinations from the September 3 update.\n- Rebuilt Recipe Book data and lossless item artwork from the current Black Desert client, including the revised Life Skill recipes and items.\n- Refreshed Recipe Book screenshot recognition atlases for the new item catalog.\n- Updated Event Horizon loot plus the latest Event Horizon and Magaia Temple mechanics."
+  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.62/Black-Spirit-Hub-Installer.exe",
+  "sha256": "",
+  "notes": "### What's new\n- New compact Arcane Glass navigation with sharper centered icons, theme-matched colours, smooth hover highlights, and responsive wrapping.\n- Settings now opens from the cog beside the window controls. The smaller navigation lock sits outside the panel's top-right corner.\n- Removed oversized page headings from Home, Trade Distance, Market Analytics, Portrait Replacer, Font Changer, Settings, Player & Guild Search, Grind Zones, Timers, and Mastery Brackets. Existing controls remain in place with content moved upward.\n- Corrected 18 grind-zone loot lists after auditing 23 current and former high-level zones against live patch notes and current client data. Removed retired highest-tier rewards from Zephyros, Star's End, and Sycraia Lower; filled verified missing drops in newer zones; and replaced generic accessory/artifact entries with specific items.\n- Improved price handling for newly listed untradeable rewards.\n\n### Installation\n- Updated Windows application and native installer to v0.9.62.\n- Existing settings, coupon redemption history, and weekly progress are preserved when updating.\n"
 }
