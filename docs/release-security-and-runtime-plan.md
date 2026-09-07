@@ -29,7 +29,8 @@ warnings. See [Microsoft SignTool documentation](https://learn.microsoft.com/en-
 
 Draft releases now stop before publishing `update.json` to `main`. After a draft
 is deliberately published, verify its public installer and final hash before
-promoting the release commit. No new public release is created by this work.
+promoting the release commit. Implementing these safeguards does not itself
+create or publish a release; publication remains an explicit release step.
 
 ## BDO Alerts credential: distribution permission is unresolved
 
