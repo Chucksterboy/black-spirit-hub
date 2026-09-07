@@ -10,10 +10,25 @@ param(
 
 	# Build and verify everything without committing, tagging or publishing.
 	# Allows the installed application to be updated before the public release.
-	[switch]$PrepareOnly
+	[switch]$PrepareOnly,
+
+	[switch]$RequireSigning,
+	[string]$SigningCertificateThumbprint = $env:BSH_SIGNING_CERT_THUMBPRINT,
+	[string]$SigningTimestampUrl = $env:BSH_SIGNING_TIMESTAMP_URL,
+	[ValidateSet('CurrentUser', 'LocalMachine')][string]$SigningCertificateStore = 'CurrentUser'
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($RequireSigning -and [string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
+	throw 'This release requires signing. Configure BSH_SIGNING_CERT_THUMBPRINT and BSH_SIGNING_TIMESTAMP_URL first.'
+}
+if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint) -and [string]::IsNullOrWhiteSpace($SigningTimestampUrl)) {
+	throw 'A signing certificate was selected without an HTTPS timestamp URL. Refusing an unsigned fallback.'
+}
+if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
+	& (Join-Path $PSScriptRoot 'sign-release-file.ps1') -CertificateThumbprint $SigningCertificateThumbprint -TimestampUrl $SigningTimestampUrl -CertificateStore $SigningCertificateStore -ValidateOnly
+}
 
 function Resolve-ToolPath {
 	param(
@@ -236,6 +251,17 @@ function Assert-AppPublishFiles {
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.html",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.css",
 		"BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+		"ui-assets-manifest.json",
+		"Assets\game-data-manifest.json",
+		"Assets\AppBehavior\app-behavior-preferences.js",
+		"Assets\UiRefresh\core.js",
+		"Assets\UiRefresh\core.css",
+		"Assets\UiRefresh\navigation.js",
+		"Assets\UiRefresh\navigation.css",
+		"Assets\UiRefresh\grind-market.js",
+		"Assets\UiRefresh\grind-market.css",
+		"Assets\UiRefresh\weeklies-recipes.js",
+		"Assets\UiRefresh\weeklies-recipes.css",
 		"NavigationAssets\nav-icons.svg",
 		"NavigationAssets\arcane-refraction.svg",
 		"gold-coins.png",
@@ -418,6 +444,11 @@ if (Test-Path -LiteralPath $runtimes) {
 
 Assert-AppPublishFiles -PublishRoot $appOut
 $appExe = Join-Path $appOut "Black Spirit Hub.exe"
+if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
+	& (Join-Path $PSScriptRoot 'sign-release-file.ps1') -FilePath $appExe -CertificateThumbprint $SigningCertificateThumbprint -TimestampUrl $SigningTimestampUrl -CertificateStore $SigningCertificateStore
+} else {
+	Write-Warning 'No publisher certificate is configured. This build is unsigned; checksum verification is still applied.'
+}
 Assert-RunsWithoutDotnetRuntime `
 	-FilePath $appExe `
 	-Arguments @("--offline-smoke-test") `
@@ -442,6 +473,10 @@ if ((Get-Item -LiteralPath $installerReleaseAsset).Length -gt $maxInAppInstaller
 	throw "Installer exceeds the application's 250 MiB safe-download limit."
 }
 
+if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
+	& (Join-Path $PSScriptRoot 'sign-release-file.ps1') -FilePath $installerReleaseAsset -CertificateThumbprint $SigningCertificateThumbprint -TimestampUrl $SigningTimestampUrl -CertificateStore $SigningCertificateStore
+}
+# The updater hash must cover the final signed bytes, not the pre-signing installer.
 $manifest.sha256 = (Get-FileHash -LiteralPath $installerReleaseAsset -Algorithm SHA256).Hash.ToUpperInvariant()
 $manifestJson = $manifest | ConvertTo-Json
 [System.IO.File]::WriteAllText(
@@ -471,7 +506,9 @@ $releasePaths = @(
 	$nativeInstallerSource,
 	$htmlFile,
 	$updateManifestFile,
-	$sourceUpdateManifestFile
+	$sourceUpdateManifestFile,
+	(Join-Path $sourceRoot 'ui-assets-manifest.json'),
+	(Join-Path $sourceRoot 'Assets\game-data-manifest.json')
 )
 & $git -C $repoRoot add -- @releasePaths
 if ($LASTEXITCODE -ne 0) {
@@ -524,6 +561,11 @@ if ($LASTEXITCODE -ne 0) {
 
 # Publish the update manifest only after the versioned installer is available.
 # If tag or release creation fails, main continues advertising the prior release.
+if ($Draft) {
+	Write-Host "Draft created: $versionTag. The public update manifest on main was not changed."
+	Write-Host 'Publish and verify the draft installer before promoting its update manifest to main.'
+	return
+}
 & $git push origin HEAD:main
 if ($LASTEXITCODE -ne 0) {
 	throw "Git push failed. The release asset exists, but the release commit and manifest were not published to main."

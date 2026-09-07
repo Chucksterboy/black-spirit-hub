@@ -229,6 +229,8 @@ internal sealed class CalculatorForm : Form
 	private readonly ConcurrentDictionary<string, CancellationTokenSource> activeBridgeRequests = new(StringComparer.Ordinal);
 
 	private bool minimizeToTray = AppBehaviorSettings.Default.MinimizeToTray;
+	private AppBehaviorSettings appBehaviorSettings = AppBehaviorSettings.Default;
+	private readonly SemaphoreSlim appBehaviorGate = new(1, 1);
 
 	private bool forceCloseFromTray;
 
@@ -1350,7 +1352,9 @@ internal sealed class CalculatorForm : Form
 		try
 		{
 			CancellationToken cancellationToken = lifetimeCancellation.Token;
-			minimizeToTray = (await AppBehaviorSettings.LoadAsync(paths, cancellationToken)).MinimizeToTray;
+			appBehaviorSettings = await AppBehaviorSettings.LoadAsync(paths, cancellationToken);
+			minimizeToTray = appBehaviorSettings.MinimizeToTray;
+			startupSplash.OpenImmediatelyWhenReady = appBehaviorSettings.OpenImmediatelyWhenReady;
 			BlackDesertMarketProvider provider = new BlackDesertMarketProvider(logger);
 			marketService = new MarketAnalyticsService(marketDatabase, provider, logger);
 			marketService.DataChanged += delegate
@@ -2265,13 +2269,53 @@ internal sealed class CalculatorForm : Form
 			FlashTaskbarAttention();
 			return new { flashed = true };
 		case "getAppBehaviorSettings":
-			return new AppBehaviorSettings(minimizeToTray);
+			return appBehaviorSettings;
+		case "getBackgroundMarketStatus":
+			return await new BackgroundMarketUpdateService(paths).GetStatusAsync(appBehaviorSettings.BackgroundMarketUpdatesEnabled, cancellationToken);
+		case "setBackgroundMarketPreference":
+		{
+			if (!payload.TryGetProperty("enabled", out JsonElement value)
+				|| value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+				throw new ArgumentException("A background-update preference is required.");
+			bool enabled = value.GetBoolean();
+			await appBehaviorGate.WaitAsync(cancellationToken);
+			try
+			{
+				// Save OFF first: even a task Windows refuses to remove must not collect.
+				if (!enabled)
+					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { BackgroundMarketUpdatesEnabled = false }, cancellationToken);
+				BackgroundMarketUpdateStatus status = await new BackgroundMarketUpdateService(paths)
+					.ApplyPreferenceAsync(enabled, Environment.ProcessPath ?? string.Empty, cancellationToken);
+				if (enabled && status.Success)
+					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { BackgroundMarketUpdatesEnabled = true }, cancellationToken);
+				return status with { Enabled = appBehaviorSettings.BackgroundMarketUpdatesEnabled };
+			}
+			finally { appBehaviorGate.Release(); }
+		}
 		case "saveAppBehaviorSettings":
 		{
 			bool enabled = ReadMinimizeToTraySetting(payload);
-			AppBehaviorSettings settings = AppBehaviorSettings.Save(paths, new AppBehaviorSettings(enabled));
-			minimizeToTray = settings.MinimizeToTray;
-			return settings;
+			await appBehaviorGate.WaitAsync(cancellationToken);
+			try
+			{
+				appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { MinimizeToTray = enabled }, cancellationToken);
+				minimizeToTray = appBehaviorSettings.MinimizeToTray;
+				return appBehaviorSettings;
+			}
+			finally { appBehaviorGate.Release(); }
+		}
+		case "saveStartupPreference":
+		{
+			if (!payload.TryGetProperty("openImmediatelyWhenReady", out JsonElement value)
+				|| value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+				throw new ArgumentException("A startup preference is required.");
+			await appBehaviorGate.WaitAsync(cancellationToken);
+			try
+			{
+				appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { OpenImmediatelyWhenReady = value.GetBoolean() }, cancellationToken);
+				return appBehaviorSettings;
+			}
+			finally { appBehaviorGate.Release(); }
 		}
 		case "showDesktopNotification":
 		{

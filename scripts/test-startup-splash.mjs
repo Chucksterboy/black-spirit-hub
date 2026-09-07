@@ -40,8 +40,12 @@ assert.equal(minimumDuration, pulseDuration * pulseCount, "Cold-start minimum mu
 assert.equal(exitDuration, 420, "Startup fade must remain approximately 420 ms");
 assert.ok(animationInterval <= 16, "Native animation should target a 60 FPS-class cadence");
 
-assert.match(splash, /return ready && elapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds;/, "Cold exit must require readiness and the full minimum duration");
-assert.match(splash, /return ready\s*&& \(!coldMinimumRequired\s*\|\| coldLaunchElapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds\);/, "Initial recovery must retain the cold minimum while later recovery exits as soon as ready");
+assert.match(splash, /return ready && \(openImmediatelyWhenReady \|\| elapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds\);/, "Cold exit always requires readiness; the minimum duration is optional only for fast start");
+assert.match(splash, /return ready\s*&& \(openImmediatelyWhenReady \|\| !coldMinimumRequired\s*\|\| coldLaunchElapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds\);/, "Recovery always requires readiness and preserves the default cold minimum");
+assert.match(splash, /bool openImmediatelyWhenReady = false/, "Cinematic startup remains the default for existing callers");
+assert.match(splash, /if \(OpenImmediatelyWhenReady\)[\s\S]*?CompleteExit\(/, "Fast startup skips the decorative exit fade after readiness");
+assert.match(program, /StartupSplashWindow\.ShouldBeginColdExit\(0, false, true\)/, "Native smoke tests must reject fast exit before readiness");
+assert.match(program, /StartupSplashWindow\.ShouldBeginRestoringExit\(0, true, false, true\)/, "Native smoke tests must reject fast recovery exit before readiness");
 assert.doesNotMatch(splash, /force.?ready|watchdog|\b8_?000\b|TimeSpan\.FromSeconds\(8\)/i, "The startup overlay must not contain a fail-open watchdog");
 assert.doesNotMatch(splash, /Task\.Delay/, "Splash lifecycle must stay on its UI-thread timer");
 assert.match(splash, /System\.Windows\.Forms\.Timer \{ Interval = AnimationIntervalMilliseconds \}/, "Animation must use a responsive WinForms timer");

@@ -3,3 +3,5 @@
 "Source Code/Assets/RecipeBook/recipes.json" text eol=lf
 "Source Code/Assets/RecipeBook/filter-report.json" text eol=lf
 "Source Code/Assets/RecipeBook/icons/item-fallback.svg" text eol=lf
+"Source Code/Assets/game-data-manifest.json" text eol=lf
+"Source Code/ui-assets-manifest.json" text eol=lf

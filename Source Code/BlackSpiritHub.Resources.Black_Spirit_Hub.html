@@ -7,6 +7,10 @@
 
 
 <link rel="stylesheet" href="BlackSpiritHub.Resources.Black_Spirit_Hub.css?v=v0.9.62">
+<link rel="stylesheet" href="Assets/UiRefresh/core.css">
+<link rel="stylesheet" href="Assets/UiRefresh/navigation.css">
+<link rel="stylesheet" href="Assets/UiRefresh/grind-market.css">
+<link rel="stylesheet" href="Assets/UiRefresh/weeklies-recipes.css">
 </head>
 
 <body data-mode="dark" data-theme="ocean" data-background="aurora" data-style="fantasy">
@@ -1193,6 +1197,18 @@
             <label class="switch" title="Loading close-button behavior"><input id="minimizeToTrayEnabled" type="checkbox" disabled /><span class="slider"></span></label>
           </div>
           <div class="settingRow">
+            <div class="settingCopy"><strong>Open immediately when ready</strong><span>Skip the cinematic introduction's extra wait and fade on your next launch. Turn off to keep the full introduction.</span></div>
+            <label class="switch" title="Open immediately when ready"><input id="openImmediatelyWhenReady" aria-label="Open immediately when ready" type="checkbox" disabled /><span class="slider"></span></label>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Update market history while Black Spirit Hub is closed</strong><span>Allow an hourly Windows background check for EU market history. Turning this off does not affect updates while the app is open.</span><span id="backgroundMarketStatus" role="status" aria-live="polite">Loading background update status…</span><span id="backgroundMarketLastRun"></span></div>
+            <label class="switch" title="Update market history while the app is closed"><input id="backgroundMarketUpdatesEnabled" aria-label="Update market history while Black Spirit Hub is closed" type="checkbox" disabled /><span class="slider"></span></label>
+          </div>
+          <div class="settingRow">
+            <div class="settingCopy"><strong>Background update status</strong><span>Refresh after changing Windows Task Scheduler settings.</span></div>
+            <button id="refreshBackgroundMarketStatus" type="button" class="btn">Refresh status</button>
+          </div>
+          <div class="settingRow">
             <div class="settingCopy"><strong>Toast duration</strong><span>How long notifications remain visible</span></div>
             <select id="toastDuration" class="settingSelect"><option value="3">3 seconds</option><option value="5" selected>5 seconds</option><option value="8">8 seconds</option><option value="12">12 seconds</option></select>
           </div>
@@ -1232,7 +1248,12 @@
 <script src="Assets/GrindTracker/grind-spots-corrections.js?v=v0.9.62"></script>
 <script src="Assets/GrindTracker/grind-guides.js?v=v0.9.62"></script>
 <script src="Assets/GrindTracker/grind-guides-current.js?v=v0.9.62"></script>
+<script src="Assets/AppBehavior/app-behavior-preferences.js"></script>
 <script src="BlackSpiritHub.Resources.Black_Spirit_Hub.js?v=v0.9.62"></script>
+<script src="Assets/UiRefresh/core.js"></script>
+<script src="Assets/UiRefresh/navigation.js"></script>
+<script src="Assets/UiRefresh/grind-market.js"></script>
+<script src="Assets/UiRefresh/weeklies-recipes.js"></script>
 
 </body>
 </html>

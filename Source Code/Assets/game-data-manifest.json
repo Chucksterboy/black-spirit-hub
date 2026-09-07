@@ -1,0 +1,638 @@
+{
+  "schemaVersion": 1,
+  "kind": "bundled-game-data-inventory",
+  "revision": "e69fb1d4f5ee9923af7dc5e26747651a54e8b7299b3da8c16d090482277d1e92",
+  "policy": {
+    "delivery": "bundled-only",
+    "automaticDataDownloads": false,
+    "trust": "Hashes detect changes; they do not establish factual correctness, freshness, publisher identity or a trusted download.",
+    "review": "Changed datasets require explicit source-backed review of the affected dataset and every listed dependency. Regeneration alone is not approval.",
+    "excluded": "User saves, live market prices, event feeds and coupon feeds are runtime data, not this bundled catalog. Images have separate asset manifests."
+  },
+  "datasets": [
+    {
+      "id": "trade-nodes-and-bonuses",
+      "revision": "2175b028e4837ccb42e128b09c7f0cbda1a134b8cfafcb0a30c5996c2a6573a4",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Legacy localized node names; migrate to client node IDs before accepting external packs.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const NODES =",
+          "end": "const el =",
+          "bytes": 83490,
+          "sha256": "11d38f53542a7e62b248d847cc2fb9eb340f12036cf6ce864403ff9a57442757",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "bundled-legacy-data",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Original node coordinate and formula provenance is not recorded per record."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Coordinate source and trading formulas need a recorded authoritative audit."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "grind-zones-and-loot",
+      "revision": "9c63360288beccb69f4636ae2354f83038389649681fa3227fd28003bb5af3df",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Stable application spot.id; drops use client item IDs or retained legacy aliases.",
+      "inputs": [
+        {
+          "path": "Assets/GrindTracker/grind-spots.js",
+          "bytes": 197632,
+          "sha256": "ea8579433f8e645c481d124cc53b4bda9ee4e74c23aad7bf26ab5eadfc70fc83"
+        },
+        {
+          "path": "Assets/GrindTracker/grind-spots-inner-edania.js",
+          "bytes": 24320,
+          "sha256": "bdd818ccbc123fb766efcd848aea3f75bd83660ec63fc88902b0669a18a201a8"
+        },
+        {
+          "path": "Assets/GrindTracker/grind-spots-corrections.js",
+          "bytes": 8137,
+          "sha256": "6a75510f77c58b38187fe323c3dff5c8d2bffb92adbf201c552a7b9253d2ac8b"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "installed-client-fixture",
+          "repositoryPath": "tests/fixtures/grind-loot-client-20260903.json",
+          "snapshotDate": "2026-09-03"
+        },
+        {
+          "kind": "official-patch",
+          "url": "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10514&countryType=en-US",
+          "publishedDate": "2026-08-27"
+        },
+        {
+          "kind": "official-patch",
+          "url": "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10451&countryType=en-US",
+          "publishedDate": "2026-08-13"
+        }
+      ],
+      "patchDate": "2026-09-03",
+      "verification": {
+        "status": "partial",
+        "verifiedAt": null,
+        "note": "23 zones' advertised obtainable items were cross-checked against the September 3 client and official removals. This does not verify all zone stats, prices or an exhaustive server loot pool."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "grind-price-identities",
+          "grind-caps-and-resistances",
+          "grind-guides"
+        ],
+        "checks": [
+          "Check added/removed drop IDs and any renamed or replacement trash item.",
+          "Review market aliases, fixed/vendor prices, unmarketable flags and reference fallback prices.",
+          "Review recommended stats and cap/resistance mappings for each affected stable zone ID.",
+          "Review the zone's mechanics, route and source links; unchanged values still need an explicit disposition."
+        ]
+      }
+    },
+    {
+      "id": "grind-price-identities",
+      "revision": "f4a6af7abffc93102553f773f2cb4332ea9d917d6d9a19fbcff96e8fdea53f36",
+      "region": [
+        "EU"
+      ],
+      "identity": "Client item IDs plus explicit legacy alias map; runtime EU market prices are not bundled values.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const GRIND_FIXED_ITEM_PRICES=",
+          "end": "function grindNormalizeItemName(",
+          "bytes": 5068,
+          "sha256": "29700fc45f50349e5f6559b6545349e7e8515aa3e5ca85a008d5d996da3d03b7",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "bundled-legacy-data",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Fixed prices, alias IDs and fallback prices; not a live market snapshot."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Known legacy trash identity/value discrepancies remain. Hash regeneration must not label prices verified."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "grind-zones-and-loot"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "grind-caps-and-resistances",
+      "revision": "63eae994ae923d1b61ca8dd106752611becd19be6618fd73ccd32ced25e2e917",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Legacy normalized zone names; not all caps have authoritative provenance.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const grindSpotCcOverrides=",
+          "end": "function grindPowerText(",
+          "bytes": 8693,
+          "sha256": "76ad6bfc17175fb36761190205af24745f70e103dc0b68a8b3e4495505b561af",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "bundled-legacy-data",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Explicit overrides plus estimated fallback calculations."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Estimated AP/DP fallback and name-keyed overrides require a separate factual review."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "grind-zones-and-loot",
+          "grind-guides"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "grind-guides",
+      "revision": "5cf0bb869554fead5528cd0f97aaa9d5287224735fd371fd4e0b4ec5c75cbfde",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Guide spotId references the application spot.id.",
+      "inputs": [
+        {
+          "path": "Assets/GrindTracker/grind-guides.js",
+          "bytes": 36326,
+          "sha256": "d08d6150dddffe6da02f9a551dc208ba359011566af32c6ca5ad6ee71f0c8702"
+        },
+        {
+          "path": "Assets/GrindTracker/grind-guides-current.js",
+          "bytes": 53177,
+          "sha256": "f7a640c48c5a6c0a474581b023c8d8b5f4514ef4c28cd498e8875543b2e6db73"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "per-record-citations",
+          "path": "Assets/GrindTracker/grind-guides.js",
+          "note": "Each guide retains publisher, URL and source date; official and community references are mixed."
+        },
+        {
+          "kind": "per-record-citations",
+          "path": "Assets/GrindTracker/grind-guides-current.js"
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "partial",
+        "verifiedAt": null,
+        "note": "Coverage tests check structure and routes, not independent correctness of every cited mechanic."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "grind-zones-and-loot",
+          "grind-caps-and-resistances"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "recipe-catalog",
+      "revision": "7efda142d9f7fc8d65d836b409c0b3ca03df10d75ea713bf13cfbe8d7a5e2618",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Client item IDs; stable recipe IDs retain recipe type and variant distinctions.",
+      "inputs": [
+        {
+          "path": "Assets/RecipeBook/recipes.json",
+          "bytes": 5162993,
+          "sha256": "c44321984b9b882f180df68d052fc509e1586685d6a888202a80dcc37d568f33"
+        },
+        {
+          "path": "Assets/RecipeBook/filter-report.json",
+          "bytes": 625766,
+          "sha256": "d30919a1001cc004fa49bd97640c3f36722b07105ca55a0f543246988496bd57"
+        },
+        {
+          "path": "Assets/RecipeBook/manifest.json",
+          "bytes": 1207322,
+          "sha256": "603981cbf4c32041ebc1db3091fe71f83e513e3753dab0c4ddbc2d5754a50e60"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "embedded-client-provenance",
+          "path": "Assets/RecipeBook/recipes.json",
+          "jsonPointer": "/source"
+        },
+        {
+          "kind": "official-patch",
+          "url": "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US",
+          "publishedDate": "2026-09-03"
+        }
+      ],
+      "patchDate": "2026-09-03",
+      "verification": {
+        "status": "partial",
+        "verifiedAt": null,
+        "note": "Installed-client extraction and patch filtering retain source hashes. Unresolved yields and fallback artwork are not asserted verified."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "recipe-substitution-groups",
+          "lightstone-sets",
+          "dehkia-fuel-rules"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "recipe-substitution-groups",
+      "revision": "05ebbe32d4cb2ee72e2d949ea6674f43309cbb3709e27e7845d9c0b08e40a35d",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Stable curated substitution group IDs; exact item ID and enhancement inventories remain distinct.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "/* RECIPE_BOOK_CORE_START */",
+          "end": "/* RECIPE_BOOK_CORE_END */",
+          "bytes": 33996,
+          "sha256": "3fd84a84710fbbdf07cc315e3d8a574a9210e422a69a8a2dc7450fa4887eae09",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "curated-application-rules",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Reviewed ingredient substitution groups and recipe interpretation; validated with repository fixtures."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "partial",
+        "verifiedAt": null,
+        "note": "Algorithm and fixture checks do not establish every recipe's current in-game outcome."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "recipe-catalog"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "ap-dp-brackets",
+      "revision": "878b87581c22b52972699cd69bf182c3e5ae4168b113736b83cd4d307a2cf9fd",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Stat type and inclusive bracket range, with explicit high-stat formulas.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const AP_LOWER_BRACKETS=",
+          "end": "const bracketState=",
+          "bytes": 2876,
+          "sha256": "d3e003d820c4de5b7b655c6c11d29027d6bd5ba4cc9daba05903060e13c107eb",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "bundled-application-tables",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Per-value external provenance is not recorded; test-brackets-js validates known boundaries."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Keep range/formula regression coverage; add authoritative row provenance before certifying this dataset."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "grind-caps-and-resistances"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "mastery-brackets",
+      "revision": "b0f38f1d32acf5e85b35cb05f660be73a2c8c3b9df2b8f6bb6f4c8493e16b7f7",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Life skill and mastery threshold; some rows are generated curves, not client-table values.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const MASTERY_LEVELS=",
+          "end": "function masteryNumber(",
+          "bytes": 5158,
+          "sha256": "d1fa3e422b393497b2a0a0172aaf3537003ec1f7f72d39ed2898b957ff01165e",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "application-generated-curves",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Current formulas are not verified client tables."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Known Cooking values differ from the September 3 client. This foundation deliberately does not claim to fix or certify mastery values."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "recipe-catalog",
+          "lightstone-sets"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "lightstone-sets",
+      "revision": "afc7b63e1f80b2ee0708626ab7c62569c91098b6cc5554a38f6169193ca99463",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Legacy set names plus type; a future external pack must introduce stable record IDs with rename migration.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const LIGHTSTONE_SETS=",
+          "end": "const lightstoneState=",
+          "bytes": 49414,
+          "sha256": "91496c8a6961ce95a9dbf61bfa5c1ac1eec0f49abc4a0ead8cf34a9995e7fdc3",
+          "encoding": "utf8-lf-section"
+        },
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const AMPLIFIED_LIGHTSTONE_EFFECTS=",
+          "end": "const LIGHTSTONE_COLOR_PALETTE=",
+          "bytes": 1353,
+          "sha256": "d20f605209fd821dc9c83ba18356e60ed2fe07ace4fdd47bdcb4f5af04548596",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "per-record-attribution",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Baseline sets name the official NA/EU Adventurer's Guide."
+        },
+        {
+          "kind": "official-patch",
+          "url": "https://www.naeu.playblackdesert.com/en-US/News/Detail?groupContentNo=10550&countryType=en-US",
+          "publishedDate": "2026-09-03"
+        }
+      ],
+      "patchDate": "2026-09-03",
+      "verification": {
+        "status": "partial",
+        "verifiedAt": null,
+        "note": "September 3 Life Skill patch overrides are recorded; not all older combat/amplified values are individually reverified."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "mastery-brackets",
+          "recipe-catalog"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "boss-schedule-fallback",
+      "revision": "3c4380a43c653d88960004a350c96403a39104ab15d59ade5718e4e78a6b6fee",
+      "region": [
+        "EU"
+      ],
+      "identity": "Server-local weekday/time and boss name; live snapshots use separate source/fetched timestamps.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const BUNDLED_HOME_BOSS_TIMES =",
+          "end": "const HOME_EVENT_BOSS_COLORS =",
+          "bytes": 1915,
+          "sha256": "a31c105fc380f72b73c2b59c1c59e54230f76ecbad8ae83528becaddd69f172e",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "runtime-provider",
+          "url": "https://api.bdoalerts.net/api/boss-schedule/eu",
+          "note": "Provider configured in BossScheduleService; this does not date or certify the bundled fallback."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Bundled fallback has no recorded last-verification date. Region/timezone and event changes require explicit review."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "reset-policies",
+          "weekly-activities"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "reset-policies",
+      "revision": "6a1086302488a6ef97485e80ce7f1f671b55ae3cc699c8c244a432b08f2c4738",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Reset config key and explicit time policy; server-specific exceptions require review.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const RESET_TIMER_CONFIG =",
+          "end": "const RESET_TIMER_ICON_SVGS =",
+          "bytes": 912,
+          "sha256": "620921d7a900673bd390a2c1b7a8fd9412e3bc2fd03272218a3a9203fce03fbb",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "curated-application-rules",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Reset definitions are bundled; original per-policy source dates are not recorded."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "UTC policies and server-local schedules must be checked separately."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "weekly-activities",
+          "boss-schedule-fallback"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "weekly-activities",
+      "revision": "3acde4111b3cc17900b33727d41a52a493e788f0879fc0ac575b730f70474b16",
+      "region": [
+        "NA",
+        "EU"
+      ],
+      "identity": "Stable curated task.id and reset policy key; completion stored against each cycle.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const WEEKLY_RESET_POLICIES=",
+          "end": "const WEEKLY_CATALOG_BY_ID=",
+          "bytes": 8147,
+          "sha256": "150a64eac111342370cf9c8c15c6a1436916e2e59ef0aeb445c4d6769b878a6b",
+          "encoding": "utf8-lf-section"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "curated-application-catalog",
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "note": "Activity names and reset policies from the existing planner; per-record external provenance is not yet retained."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Reset workflow tests prevent state regressions but do not verify every current quest requirement."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "reset-policies",
+          "grind-guides"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    },
+    {
+      "id": "dehkia-fuel-rules",
+      "revision": "d6a071aff81e80e6888122e6e9bdbac7f76e9981fe5bd95683b98ab3cefe298f",
+      "region": [
+        "EU"
+      ],
+      "identity": "Client accessory item ID and enhancement; EU price/stock fetched separately.",
+      "inputs": [
+        {
+          "path": "BlackSpiritHub.Resources.Black_Spirit_Hub.js",
+          "start": "const DEHKIA_CATALOG=",
+          "end": "const DEHKIA_MARKET_ROW_COUNT=",
+          "bytes": 1189,
+          "sha256": "1ae20105442f89da424313bed16e9930b444b6009b7926f8e63e90c1544c567b",
+          "encoding": "utf8-lf-section"
+        },
+        {
+          "path": "BlackSpiritHub/DehkiaFuelService.cs",
+          "bytes": 25286,
+          "sha256": "641e8dd571c98312f4ba76030440307be0ca9f04266d4a5e749727d2ca61e279"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "bundled-client-identities",
+          "path": "Assets/DehkiaFuel/manifest.json",
+          "note": "Icon source profiles and accessory IDs are recorded; icon retrieval date does not verify fuel yields."
+        }
+      ],
+      "patchDate": null,
+      "verification": {
+        "status": "review-required",
+        "verifiedAt": null,
+        "note": "Native and frontend fuel yields must stay consistent and need factual rechecking when game rules change."
+      },
+      "reviewOnChange": {
+        "relatedDatasetIds": [
+          "recipe-catalog"
+        ],
+        "checks": [
+          "Recheck affected identities, values and downstream consumers against recorded authoritative sources."
+        ]
+      }
+    }
+  ],
+  "pendingReviews": [],
+  "reviewRecords": []
+}

@@ -1,0 +1,60 @@
+/* Reversible UI trial. All rules leave the previous layout untouched when off. */
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshWeeklyFocusEmpty,.bshRecipeToolbar,.bshRecipeCardActions,.bshRecipeDrawer){--accent:var(--a1,#bfa3ff);--panel:var(--surface,#161524)}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar){display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;padding:14px 0;margin:0 0 12px;font-size:var(--ui-body-size,14px);color:var(--text,#f3f5f7)}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar)[hidden],body[data-ui-refresh="on"] .bshWeeklyFocusEmpty[hidden],body[data-ui-refresh="on"] .weeklyTaskCard[hidden]{display:none!important}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar,.bshWeeklyFocusEmpty,.bshRecipeDrawer) button{min-height:var(--ui-control-height,40px);padding:9px 14px;border:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 55%,transparent);border-radius:6px;background:color-mix(in srgb,var(--panel,#161524) 92%,var(--accent,#bfa3ff));color:var(--text,#f3f5f7);font-size:var(--ui-body-size,14px);line-height:1.35;cursor:pointer;clip-path:none;transition:background .18s ease,border-color .18s ease,box-shadow .18s ease}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar,.bshWeeklyFocusEmpty,.bshRecipeDrawer) button:hover{border-color:var(--accent,#bfa3ff);background:color-mix(in srgb,var(--panel,#161524) 78%,var(--accent,#bfa3ff))}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar,.bshRecipeDrawer) button[aria-pressed="true"]{color:var(--accent,#bfa3ff);background:color-mix(in srgb,var(--panel,#161524) 80%,var(--accent,#bfa3ff));border-color:var(--accent,#bfa3ff)}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar,.bshRecipeDrawer) button:disabled{opacity:.45;cursor:default}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar,.bshRecipeDrawer) :is(button,input,select):focus-visible{outline:2px solid var(--accent,#bfa3ff);outline-offset:3px}
+body[data-ui-refresh="on"] :is(.bshWeeklyFocusToolbar,.bshRecipeToolbar) select{min-height:var(--ui-control-height,40px);min-width:155px;max-width:320px;border:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 48%,transparent);border-radius:6px;padding:8px 30px 8px 12px;font-size:var(--ui-body-size,14px);color:var(--text,#f3f5f7);background-color:var(--panel,#161524);clip-path:none}
+body[data-ui-refresh="on"] .bshUiInlineSelect{display:inline-flex;align-items:center;gap:9px}
+body[data-ui-refresh="on"] .bshUiCheck{display:inline-flex;align-items:center;gap:9px;cursor:pointer;min-height:var(--ui-control-height,40px)}
+body[data-ui-refresh="on"] .bshUiCheck input{appearance:auto!important;width:18px!important;height:18px!important;margin:0!important;accent-color:var(--accent,#bfa3ff);flex:0 0 18px;transform:none!important}
+body[data-ui-refresh="on"] .bshWeeklyFocusCount{margin-left:auto;color:var(--muted,#c5c5cf);font-size:var(--ui-caption-size,12px)}
+body[data-ui-refresh="on"] .bshWeeklyFocusEmpty{display:grid;justify-items:center;gap:9px;text-align:center;padding:34px 20px;background:color-mix(in srgb,var(--panel,#161524) 92%,transparent);border:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 30%,transparent);border-radius:10px;margin-bottom:16px}
+body[data-ui-refresh="on"] .bshWeeklyFocusEmpty>span{font-size:32px;color:#83dfb5}
+body[data-ui-refresh="on"] .bshWeeklyFocusEmpty strong{font-size:var(--ui-title-size,18px);color:var(--text,#f3f5f7)}
+body[data-ui-refresh="on"] .bshWeeklyFocusEmpty p{margin:0 0 7px;color:var(--muted,#c5c5cf);font-size:var(--ui-body-size,14px)}
+body[data-ui-refresh="on"] .bshWeeklyDoneLabel{display:block;margin-top:7px;color:#a5eac6;font-size:var(--ui-caption-size,12px);font-weight:700;letter-spacing:.02em}
+body[data-ui-refresh="on"] .weeklyTaskCard.isDone{opacity:.72}
+body[data-ui-refresh="on"] .bshRecipeToolbar>span{color:var(--muted,#c5c5cf);font-size:var(--ui-caption-size,12px)}
+body[data-ui-refresh="on"] #recipeBookView .recipeBookCardTitle h3{font-size:var(--ui-title-size,18px)!important;line-height:1.35!important;white-space:normal!important;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] #recipeBookView .recipeBookIngredientCopy strong{font-size:var(--ui-body-size,14px)!important;line-height:1.4!important;white-space:normal!important;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] #recipeBookView :is(.recipeBookCardTitle small,.recipeBookIngredientCopy small,.recipeBookIngredientStock small){font-size:var(--ui-caption-size,12px)!important;line-height:1.45!important}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr))!important;gap:12px!important;align-items:start}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid>.recipeBookCard{padding:15px!important;min-height:0!important;height:auto!important;border-radius:9px!important}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid>.recipeBookCard>header{margin:0!important;min-height:70px;align-items:center!important;padding:0!important;gap:12px!important}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid>.recipeBookCard>:is(ul,.recipeBookIngredientHead,.recipeBookCraftPlanner){display:none!important}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid .recipeBookCardTitle h3{font-size:var(--ui-title-size,18px)!important;line-height:1.3!important;white-space:normal!important;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid .recipeBookCardTitle small{font-size:var(--ui-caption-size,12px)!important;line-height:1.45!important}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid .recipeBookCraftCount{min-width:0!important;max-width:88px;flex-shrink:0}
+body[data-ui-refresh="on"] .bshRecipeCompactGrid .recipeBookCraftCount strong{font-size:var(--ui-title-size,18px)!important;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] .bshRecipeCardActions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 18%,transparent)}
+body[data-ui-refresh="on"] .bshRecipeCardActions button{min-height:var(--ui-control-height,40px);padding:8px 10px;white-space:normal;border:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 35%,transparent);border-radius:5px;color:var(--text,#f3f5f7);background:color-mix(in srgb,var(--panel,#161524) 90%,var(--accent,#bfa3ff));font-size:var(--ui-body-size,14px);line-height:1.3;clip-path:none;cursor:pointer}
+body[data-ui-refresh="on"] .bshRecipeCardActions button:hover{border-color:var(--accent,#bfa3ff)}
+body[data-ui-refresh="on"] .bshRecipeCardActions button[aria-pressed="true"]{color:var(--accent,#bfa3ff)}
+body[data-ui-refresh="on"] .bshRecipeCardActions button:focus-visible{outline:2px solid var(--accent,#bfa3ff);outline-offset:3px}
+body[data-ui-refresh="on"] dialog.bshRecipeDrawer{position:fixed;inset:16px 16px 16px auto;box-sizing:border-box;margin:0;width:min(600px,calc(100vw - 32px));max-width:none;height:calc(100dvh - 32px);max-height:none;overflow:hidden;padding:0;border:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 55%,transparent);border-radius:12px;color:var(--text,#f3f5f7);background:var(--panel,#14131f);box-shadow:0 24px 100px #000b;opacity:0;transform:translateX(22px);transition:opacity .18s ease,transform .18s ease}
+body[data-ui-refresh="on"] dialog.bshRecipeDrawer::backdrop{background:#03040a99;backdrop-filter:blur(3px)}
+body[data-ui-refresh="on"] dialog.bshRecipeDrawer{--rb-accent:var(--a1);--rb-accent2:var(--a2);--rb-line:color-mix(in srgb,var(--a1) 29%,var(--border));--rb-card:var(--surface);--rb-card2:var(--surface2);--rb-craft-accent:var(--a1);--rb-craft-strong:var(--a2);--rb-owned:var(--text);--rb-consumed:var(--a1);--rb-remaining:var(--a2);--rb-planner:var(--a1)}
+body[data-ui-refresh="on"] dialog.bshRecipeDrawer.isOpen{opacity:1;transform:translateX(0)}
+body[data-ui-refresh="on"] .bshRecipeDrawerSurface{height:100%;display:flex;flex-direction:column;min-height:0}
+body[data-ui-refresh="on"] .bshRecipeDrawerHeader{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px;border-bottom:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 25%,transparent);flex-shrink:0}
+body[data-ui-refresh="on"] .bshRecipeDrawerHeader span{font-size:var(--ui-caption-size,12px);color:var(--muted,#c5c5cf)}
+body[data-ui-refresh="on"] .bshRecipeDrawerHeader h2{font-size:var(--ui-title-size,18px)!important;line-height:1.35;margin:4px 0 0;color:var(--text,#f3f5f7)!important}
+body[data-ui-refresh="on"] .bshRecipeDrawerHeader h2::after{display:none!important}
+body[data-ui-refresh="on"] .bshRecipeDrawerHeader>button{font-family:system-ui,sans-serif;flex:0 0 40px;font-size:26px;line-height:1;padding:0;width:40px;height:40px}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody{padding:18px;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookCard{padding:0!important;height:auto!important;border:0!important;background:none!important;box-shadow:none!important;transform:none!important}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookCard>header{grid-template-columns:64px minmax(0,1fr) auto!important}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookCard::before,body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookCard::after{display:none!important}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookCard h3{font-size:var(--ui-title-size,18px)!important;color:var(--text,#f3f5f7)!important;line-height:1.35}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody .recipeBookIngredientCopy strong{font-size:var(--ui-body-size,14px)!important;color:var(--text,#f3f5f7)!important;white-space:normal!important;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] .bshRecipeDrawerBody :is(.recipeBookIngredientCopy small,.recipeBookCardTitle small,.recipeBookIngredientStock){font-size:var(--ui-caption-size,12px)!important;line-height:1.5}
+body[data-ui-refresh="on"] .bshRecipeDrawerSurface>footer{padding:12px 20px;border-top:1px solid color-mix(in srgb,var(--accent,#bfa3ff) 22%,transparent);flex-shrink:0}
+body[data-ui-refresh="on"] :is(.bshRecipeDrawerSurface>footer p,.bshRecipeResourceHint){margin:0;color:var(--muted,#c5c5cf);font-size:var(--ui-caption-size,12px);line-height:1.5}
+body[data-ui-refresh="on"] .bshRecipeResourceHint{margin:18px 0 10px}
+@media(max-width:760px){body[data-ui-refresh="on"] .bshWeeklyFocusCount{margin-left:0;width:100%}body[data-ui-refresh="on"] .bshRecipeToolbar{gap:8px}body[data-ui-refresh="on"] dialog.bshRecipeDrawer{inset:8px;width:calc(100vw - 16px);height:calc(100dvh - 16px)}body[data-ui-refresh="on"] .bshRecipeDrawerHeader{padding:14px}}
+body[data-ui-refresh="on"][data-motion="reduced"] :is(.bshRecipeDrawer,.bshWeeklyFocusToolbar button,.bshRecipeToolbar button){transition:none!important;animation:none!important}
+@media(prefers-reduced-motion:reduce){body[data-ui-refresh="on"] :is(.bshRecipeDrawer,.bshWeeklyFocusToolbar button,.bshRecipeToolbar button){transition:none!important;animation:none!important}}

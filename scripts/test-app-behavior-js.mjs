@@ -50,6 +50,8 @@ function createHarness(initialBridge) {
   };
   const context = vm.createContext({
     appearanceEl: { minimizeToTray: toggle },
+    renderStartupAndBackgroundPreferences() {},
+    refreshBackgroundMarketStatus() { return Promise.resolve(); },
     bridgeCall(command, payload) {
       return Promise.resolve().then(() => bridge(command, payload));
     },

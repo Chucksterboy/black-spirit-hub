@@ -1,0 +1,114 @@
+/* All new geometry is scoped to the optional refresh. Arcane Glass tiles,
+   their theme palette, the title-bar settings cog and outside lock are kept. */
+body[data-ui-refresh="on"] .bshNavToolbar {
+  position:relative; z-index:3; display:flex; align-items:center; gap:8px;
+  margin:0 0 8px; min-width:0; font:600 var(--ui-caption-size,12px)/1.3 "Segoe UI",sans-serif;
+}
+body[data-ui-refresh="on"] .bshNavToolbar .bshNavModes {display:flex;gap:2px;flex:0 0 auto}
+body[data-ui-refresh="on"] .bshNavToolbar button {
+  display:inline-flex!important; align-items:center!important; justify-content:center!important;
+  gap:6px!important; min-height:28px!important; height:auto!important; width:auto!important;
+  padding:4px 9px!important; border:1px solid transparent!important; border-radius:4px!important;
+  clip-path:none!important; background:none!important; color:var(--nav-label)!important;
+  font:inherit!important; letter-spacing:normal!important; text-transform:none!important;
+  box-shadow:none!important; transform:none!important; cursor:pointer;
+}
+body[data-ui-refresh="on"] .bshNavToolbar button::before,
+body[data-ui-refresh="on"] .bshNavToolbar button::after {display:none!important}
+body[data-ui-refresh="on"] .bshNavToolbar button:hover,
+body[data-ui-refresh="on"] .bshNavToolbar button[aria-pressed="true"] {
+  border-color:var(--nav-accent-deep)!important; background:var(--nav-card-top)!important;
+}
+body[data-ui-refresh="on"] .bshNavToolbar button[aria-pressed="true"] {box-shadow:inset 0 -2px var(--nav-accent)!important}
+body[data-ui-refresh="on"] .bshNavToolbar button:disabled {opacity:.45!important;cursor:default}
+body[data-ui-refresh="on"] .bshNavToolbar button:focus-visible,
+body[data-ui-refresh="on"] .bshNavDialog :is(button,input):focus-visible {outline:2px solid var(--a1)!important;outline-offset:2px!important}
+body[data-ui-refresh="on"] .bshNavToolbar .bshNavCustomizeTrigger {margin-left:auto!important}
+body[data-ui-refresh="on"] .bshNavToolbar kbd {font:inherit;border:1px solid var(--nav-accent-deep);border-radius:3px;padding:0 4px;white-space:nowrap}
+body[data-ui-refresh="on"][data-style] .navFrame[data-nav-design="arcane-glass"] .appNav>.navButton.bshNavFiltered[data-app-view] {display:none!important}
+body[data-ui-refresh="on"][data-style] .navFrame[data-nav-design="arcane-glass"]>.appNav.bshNavPersonalized {display:flex!important;flex-wrap:wrap!important;justify-content:center!important}
+body[data-ui-refresh="on"][data-style] .navFrame[data-nav-design="arcane-glass"] .appNav.bshNavPersonalized>.navButton[data-app-view] {width:114px!important;flex:0 0 114px!important}
+.bshNavToolbar[hidden],body:not([data-ui-refresh="on"]) :is(.bshNavToolbar,.bshNavDialog) {display:none!important}
+body[data-ui-refresh="on"] dialog.bshNavDialog {
+  box-sizing:border-box!important; position:fixed!important; inset:0!important; z-index:100000!important;
+  width:min(660px,calc(100vw - 40px))!important; max-width:calc(100vw - 40px)!important;
+  max-height:min(760px,calc(100dvh - 72px))!important; height:fit-content!important;
+  margin:auto!important; padding:24px!important; overflow:auto!important;
+  border:1px solid color-mix(in srgb,var(--a1) 50%,var(--border2))!important; border-radius:10px!important;
+  background:linear-gradient(var(--surface),var(--surface)),var(--bg0)!important; color:var(--text,#edf6ff)!important;
+  box-shadow:0 24px 90px #0009!important; clip-path:none!important;
+  font:400 var(--ui-body-size,14px)/1.5 "Segoe UI",sans-serif!important;
+  animation:bshNavDialogIn .18s ease-out;
+}
+body[data-ui-refresh="on"] dialog.bshNavDialog:not([open]) {display:none!important}
+body[data-ui-refresh="on"] dialog.bshNavDialog[open] {display:block!important}
+body[data-ui-refresh="on"] dialog.bshNavDialog::backdrop {background:#030811b5;backdrop-filter:blur(6px);animation:bshNavBackdropIn .18s ease-out}
+body[data-ui-refresh="on"] dialog.bshNavDialog.bshNavClosing {animation:bshNavDialogOut .13s ease-in forwards}
+body[data-ui-refresh="on"] dialog.bshNavDialog.bshNavClosing::backdrop {animation:bshNavBackdropOut .13s ease-in forwards}
+body[data-ui-refresh="on"] .bshNavDialog :is(h2,p) {margin:0!important;color:inherit!important;text-shadow:none!important}
+body[data-ui-refresh="on"] .bshNavDialog h2 {font:700 var(--ui-title-size,18px)/1.25 "Segoe UI",sans-serif!important;letter-spacing:normal!important;text-transform:none!important}
+body[data-ui-refresh="on"] .bshNavDialog h2::after,
+body[data-ui-refresh="on"] .bshNavDialog h2::before {display:none!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavDialogHead {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavDialogHead p {margin-top:6px!important;color:var(--muted)!important}
+body[data-ui-refresh="on"] .bshNavDialog button {
+  position:relative!important; display:inline-flex!important; align-items:center!important; justify-content:center!important;
+  gap:8px!important; min-height:var(--ui-control-height,40px)!important; height:auto!important; width:auto!important;
+  margin:0!important; padding:8px 12px!important; border:1px solid var(--border2)!important; border-radius:5px!important;
+  color:var(--text)!important; background:var(--surface2)!important; box-shadow:none!important;
+  font:600 var(--ui-body-size,14px)/1.3 "Segoe UI",sans-serif!important; text-transform:none!important;
+  letter-spacing:normal!important; clip-path:none!important; transform:none!important; cursor:pointer;
+  transition:background .15s,border-color .15s;
+}
+body[data-ui-refresh="on"] .bshNavDialog button::before,
+body[data-ui-refresh="on"] .bshNavDialog button::after {display:none!important}
+body[data-ui-refresh="on"] .bshNavDialog button:hover {border-color:var(--a1)!important;background:color-mix(in srgb,var(--a1) 10%,var(--surface2))!important}
+body[data-ui-refresh="on"] .bshNavDialog button:disabled {opacity:.3!important;cursor:default!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavDialogHead>button {width:40px!important;flex:0 0 40px;font-size:22px!important;padding:4px!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshCommandField {display:flex!important;align-items:center;gap:10px;border:1px solid var(--border2);border-radius:4px;padding:0 14px;background:var(--field-bg);clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask:none!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshCommandField>span {font-size:24px;color:var(--a1)}
+body[data-ui-refresh="on"] .bshNavDialog .bshCommandField:focus-within {border-color:var(--a1);box-shadow:0 0 0 2px color-mix(in srgb,var(--a1) 16%,transparent)}
+/* The ID deliberately outranks legacy focused theme artwork and shared field frames. */
+body[data-ui-refresh="on"][data-style] .bshNavDialog #bshCommandInput {width:100%!important;min-width:0!important;min-height:48px!important;margin:0!important;padding:8px 0!important;border:0!important;border-radius:0!important;box-shadow:none!important;outline:0!important;background:transparent!important;background-image:none!important;color:var(--text)!important;caret-color:var(--text);font:400 var(--ui-body-size,14px)/1.4 "Segoe UI",sans-serif!important;clip-path:none!important;-webkit-clip-path:none!important;mask:none!important;-webkit-mask:none!important}
+body[data-ui-refresh="on"][data-style] .bshNavDialog #bshCommandInput::placeholder {color:var(--muted)!important;opacity:1!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshCommandStatus {min-height:20px;margin:12px 0!important;color:var(--muted)!important;font-size:var(--ui-caption-size,12px)}
+body[data-ui-refresh="on"] .bshCommandResults {display:grid;gap:4px;max-height:min(450px,48dvh);overflow:auto;padding:2px}
+body[data-ui-refresh="on"] .bshNavDialog button.bshCommandResult {display:grid!important;grid-template-columns:28px minmax(0,1fr) 20px!important;gap:12px!important;text-align:left!important;justify-content:stretch!important;border-color:transparent!important;background:transparent!important;padding:10px!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshCommandResult[aria-selected="true"] {border-color:color-mix(in srgb,var(--a1) 40%,transparent)!important;background:color-mix(in srgb,var(--a1) 10%,var(--surface2))!important}
+body[data-ui-refresh="on"] .bshCommandResult :is(strong,small) {display:block;overflow-wrap:anywhere}
+body[data-ui-refresh="on"] .bshCommandResult strong {font-size:var(--ui-body-size,14px);color:var(--text)!important}
+body[data-ui-refresh="on"] .bshCommandResult small {font-size:var(--ui-caption-size,12px);font-weight:400;color:var(--muted)!important;margin-top:3px}
+body[data-ui-refresh="on"] .bshCommandKind {font-size:22px;text-align:center;color:var(--a1)!important}
+body[data-ui-refresh="on"] .bshCommandEnter {opacity:.35}
+body[data-ui-refresh="on"] .bshCommandResult[aria-selected="true"] .bshCommandEnter {opacity:1;color:var(--a1)}
+body[data-ui-refresh="on"] .bshCommandFoot {display:flex;flex-wrap:wrap;gap:14px;border-top:1px solid var(--border);margin-top:16px;padding-top:12px;color:var(--muted);font-size:var(--ui-caption-size,12px)}
+body[data-ui-refresh="on"] .bshCommandFoot kbd {font:inherit;border:1px solid var(--border2);border-radius:3px;padding:1px 4px}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavCustomizeHint {margin-bottom:12px!important;color:var(--muted)!important}
+body[data-ui-refresh="on"] .bshNavCustomizeList {display:grid;gap:6px;max-height:47dvh;overflow:auto;padding:3px}
+body[data-ui-refresh="on"] .bshNavCustomizeRow {display:grid;grid-template-columns:40px minmax(0,1fr) 40px 40px;gap:10px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2)}
+body[data-ui-refresh="on"] .bshNavCustomizeRow :is(strong,small) {display:block;color:var(--text)!important}
+body[data-ui-refresh="on"] .bshNavCustomizeRow small {margin-top:2px;font-size:var(--ui-caption-size,12px);color:var(--muted)!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavCustomizeRow button {padding:5px!important;font-size:20px!important}
+body[data-ui-refresh="on"] .bshNavDialog button.bshNavStar[aria-pressed="true"] {color:var(--a1)!important;border-color:var(--a1)!important;background:color-mix(in srgb,var(--a1) 12%,var(--surface2))!important}
+body[data-ui-refresh="on"] .bshNavDialog .bshNavCustomizeStatus {min-height:22px;margin:10px 0!important;color:var(--a1)!important;font-size:var(--ui-caption-size,12px)}
+body[data-ui-refresh="on"] .bshNavCustomizeFoot {display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border)}
+body[data-ui-refresh="on"] .bshNavCustomizeFoot>span {flex:1}
+body[data-ui-refresh="on"] .bshNavDialog button.bshNavPrimary {background:color-mix(in srgb,var(--a1) 22%,var(--surface2))!important;border-color:var(--a1)!important}
+@keyframes bshNavDialogIn {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bshNavDialogOut {to{opacity:0;transform:translateY(6px)}}
+@keyframes bshNavBackdropIn {from{opacity:0}to{opacity:1}}
+@keyframes bshNavBackdropOut {to{opacity:0}}
+@media(max-width:650px) {
+  body[data-ui-refresh="on"] .bshNavToolbar {flex-wrap:wrap;gap:4px}
+  body[data-ui-refresh="on"] .bshNavToolbar .bshNavCustomizeTrigger {margin-left:auto!important}
+  body[data-ui-refresh="on"] dialog.bshNavDialog {padding:16px!important}
+  body[data-ui-refresh="on"] .bshNavCustomizeRow {gap:6px;grid-template-columns:36px minmax(0,1fr) 36px 36px}
+}
+body[data-ui-refresh="on"][data-motion="reduced"] .bshNavDialog,
+body[data-ui-refresh="on"][data-motion="reduced"] .bshNavDialog::backdrop,
+body[data-ui-refresh="on"][data-motion="reduced"] .bshNavDialog * {animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce) {
+  body[data-ui-refresh="on"] .bshNavDialog,
+  body[data-ui-refresh="on"] .bshNavDialog::backdrop,
+  body[data-ui-refresh="on"] .bshNavDialog * {animation:none!important;transition:none!important}
+}

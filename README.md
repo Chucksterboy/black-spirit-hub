@@ -34,7 +34,14 @@ The script:
 
 End users do not need to install .NET. The app carries its own .NET runtime; the
 installer is native and does not bundle a second copy. Release machines need the
-.NET 8 SDK and Inno Setup 6.
+.NET 8 SDK, Node.js 24, and Inno Setup 6. Node generates the bundled UI asset
+manifest during builds; it is not required on end-user machines.
+
+Maintenance references: [game-data review workflow](docs/game-data-maintenance.md)
+and [publisher signing / runtime migration plan](docs/release-security-and-runtime-plan.md).
+Use `scripts/verify.ps1` for the nonvisual regression suite. To require publisher
+signing for a release, configure the certificate as documented and use
+`scripts/release.ps1 -Version VERSION -RequireSigning`.
 
 GitHub CLI must be logged in before releasing:
 

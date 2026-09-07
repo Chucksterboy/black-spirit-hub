@@ -26,6 +26,8 @@
     <None Update="BlackSpiritHub.Resources.Black_Spirit_Hub.html" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="BlackSpiritHub.Resources.Black_Spirit_Hub.css" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="BlackSpiritHub.Resources.Black_Spirit_Hub.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Remove="ui-assets-manifest.json" />
+    <None Include="ui-assets-manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Update="BlackSpiritHub.Resources.gold-coins.png" Link="gold-coins.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
@@ -38,6 +40,9 @@
     <ItemGroup>
       <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
     </ItemGroup>
+  </Target>
+  <Target Name="GenerateUiAssetManifest" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="node &quot;$(MSBuildProjectDirectory)\..\scripts\generate-ui-asset-manifest.mjs&quot; &quot;$(MSBuildProjectDirectory)&quot;" />
   </Target>
   <Target
     Name="GenerateBdoAlertsApiKeyMetadata"

@@ -332,6 +332,8 @@ function initializeAppBehaviorSettings({showError=false}={}){
       const settings=requireAppBehaviorSettings(await bridgeCall("getAppBehaviorSettings"));
       appBehaviorSavedValue=settings.minimizeToTray;
       toggle.checked=settings.minimizeToTray;
+      renderStartupAndBackgroundPreferences(settings);
+      void refreshBackgroundMarketStatus();
       appBehaviorSettingsLoaded=true;
       toggle.closest(".switch")?.setAttribute("title","Minimize to system tray");
       return true;
@@ -375,6 +377,7 @@ appearanceEl.minimizeToTray?.addEventListener("change",async()=>{
     toggle.disabled=!appBehaviorSettingsLoaded;
   }
 });
+
 
 appearanceEl.backgroundStrength?.addEventListener("input", () => {
   const current = loadAppearance();
@@ -1256,7 +1259,7 @@ async function initializeMarket() {
 
 async function refreshMarketState() {
   try {
-    await loadMarketRegionState(getMarketRegion(), false);
+    if(await loadMarketRegionState(getMarketRegion(), false) === false) return;
     renderTrackedItems();
     if(marketState.selected) {
       const stillTracked = marketState.items.find(item =>
@@ -1755,12 +1758,13 @@ function renderWeeklyDashboard(now=new Date()){
   if(weekliesEl.nextReset){weekliesEl.nextReset.textContent=next?weeklyFormatCountdown(next.target-now):"All clear";weekliesEl.nextReset.dataset.weeklyCountdownState=next?weeklyCountdownState(next.target-now):"standard"}
   if(weekliesEl.nextResetLabel)weekliesEl.nextResetLabel.textContent=next?`${weeklyPolicyLabel(next.task)} · ${next.target.toLocaleString([],{weekday:"short",hour:"2-digit",minute:"2-digit"})} local`:tasks.length?"No pending reset":"Choose activities to begin";
   if(weekliesEl.dashboardList)weekliesEl.dashboardList.innerHTML=tasks.length?`<div class="weekliesDashboardGrid">${tasks.map(task=>weeklyCardMarkup(task,now)).join("")}</div>`:'<div class="weekliesDashboardEmpty"><span aria-hidden="true">✓</span><strong>Your route is empty</strong><p>Choose the activities you want to track. You can change them whenever your goals change.</p><button class="weekliesPrimaryButton" type="button" data-weekly-open-settings>Choose weeklies</button></div>';
-  weekliesRuntime.lastRenderCycle=tasks.map(task=>`${task.id}:${weeklyTaskIsDone(task,now)}:${weeklyTaskRenderSignature(task,now)}`).join("|")
+  weekliesRuntime.lastRenderCycle=tasks.map(task=>`${task.id}:${weeklyTaskIsDone(task,now)}:${weeklyTaskRenderSignature(task,now)}`).join("|");
+  globalThis.BshWeekliesRecipes?.afterWeeklyRender(now)
 }
 function renderWeeklies(){const dashboard=weeklySettings.onboardingComplete;if(weekliesEl.onboarding)weekliesEl.onboarding.hidden=dashboard;if(weekliesEl.dashboard)weekliesEl.dashboard.hidden=!dashboard;if(weekliesEl.dashboardActions)weekliesEl.dashboardActions.hidden=!dashboard;if(dashboard)renderWeeklyDashboard();else{weekliesRuntime.onboardingSelected=new Set(weeklySettings.selectedIds);renderWeekliesOnboarding()}}
 function weeklyTransitionToDashboard(){if(!weekliesEl.onboarding||!weekliesEl.dashboard){renderWeeklies();return}weekliesEl.onboarding.classList.add("isLeaving");setTimeout(()=>{weekliesEl.onboarding.hidden=true;weekliesEl.onboarding.classList.remove("isLeaving");weekliesEl.dashboard.hidden=false;weekliesEl.dashboard.classList.add("isEntering");if(weekliesEl.dashboardActions)weekliesEl.dashboardActions.hidden=false;renderWeeklyDashboard();requestAnimationFrame(()=>weekliesEl.dashboard?.classList.remove("isEntering"));},weeklyMotionDelay(180))}
-function toggleWeeklyDone(taskId){const task=WEEKLY_CATALOG_BY_ID.get(taskId);if(!task)return;const wasDone=weeklyTaskIsDone(task);if(wasDone)delete weeklySettings.doneById[taskId];else weeklySettings.doneById[taskId]=weeklyTaskPeriodKey(task);persistWeeklyState();weeklyAnnounce(`${task.name} marked ${wasDone?"not done":"done"}.`)}
-function markAllWeekliesDone(){const now=new Date(),tasks=weeklySelectedTasks();for(const task of tasks){if(!weeklyTaskIsDone(task,now))weeklySettings.doneById[task.id]=weeklyTaskPeriodKey(task,now)}persistWeeklyState();weeklyAnnounce(`All ${tasks.length} selected activities are marked done.`);NotificationService.ShowSuccess("Every selected activity is marked complete for its current cycle.","Weeklies complete")}
+function toggleWeeklyDone(taskId){const task=WEEKLY_CATALOG_BY_ID.get(taskId);if(!task)return;globalThis.BshWeekliesRecipes?.weeklyTouched(taskId);const wasDone=weeklyTaskIsDone(task);if(wasDone)delete weeklySettings.doneById[taskId];else weeklySettings.doneById[taskId]=weeklyTaskPeriodKey(task);persistWeeklyState();weeklyAnnounce(`${task.name} marked ${wasDone?"not done":"done"}.`)}
+function markAllWeekliesDone(){const now=new Date(),tasks=weeklySelectedTasks();globalThis.BshWeekliesRecipes?.beforeAllDone(tasks,now);for(const task of tasks){if(!weeklyTaskIsDone(task,now))weeklySettings.doneById[task.id]=weeklyTaskPeriodKey(task,now)}persistWeeklyState();weeklyAnnounce(`All ${tasks.length} selected activities are marked done.`);NotificationService.ShowSuccess("Every selected activity is marked complete for its current cycle.","Weeklies complete")}
 function weeklySetPickerSelection(context,taskId){const selected=context==="settings"?weekliesRuntime.settingsSelected:weekliesRuntime.onboardingSelected;if(!WEEKLY_CATALOG_BY_ID.has(taskId))return;selected.has(taskId)?selected.delete(taskId):selected.add(taskId);if(context==="settings")renderWeekliesSettingsPicker();else renderWeekliesOnboarding()}
 function renderWeekliesSettingsPicker(){renderWeeklyPicker(weekliesEl.settingsList,weekliesRuntime.settingsSelected,weekliesRuntime.settingsQuery,"all","settings");if(weekliesEl.settingsCount)weekliesEl.settingsCount.textContent=String(weekliesRuntime.settingsSelected.size);if(weekliesEl.saveSettings)weekliesEl.saveSettings.disabled=false}
 function openWeekliesSettings(){if(!weekliesEl.overlay||!weekliesEl.dialog)return;clearTimeout(weekliesRuntime.overlayTimer);weekliesRuntime.settingsReturnFocus=document.activeElement;weekliesRuntime.settingsSelected=new Set(weeklySettings.selectedIds);weekliesRuntime.settingsQuery="";if(weekliesEl.settingsSearch)weekliesEl.settingsSearch.value="";if(weekliesEl.reminderEnabled)weekliesEl.reminderEnabled.checked=weeklySettings.notificationsEnabled;if(weekliesEl.reminderDays){weekliesEl.reminderDays.value=String(weeklySettings.reminderDays);weekliesEl.reminderDays.disabled=!weeklySettings.notificationsEnabled}renderWeekliesSettingsPicker();weekliesEl.overlay.hidden=false;document.body.classList.add("weekliesDialogOpen");requestAnimationFrame(()=>{weekliesEl.overlay?.classList.add("isOpen");weekliesEl.dialog?.focus()})}
@@ -3279,6 +3283,7 @@ function recipeBookRenderCraftables(){
   recipeBookEl.craftableGrid.innerHTML=total?recipeBookState.craftables.slice(start,end).map(recipeBookCraftableCardMarkup).join(""):`<div class="recipeBookEmpty"><span aria-hidden="true">✦</span><strong>${resourceCount?"Nothing is fully craftable yet":"No craftables yet"}</strong><p>${resourceCount?"Add the missing ingredients or increase the quantities in My Resources.":"Add the materials you own under My Resources."}</p><button type="button" data-recipe-book-section-link="resources">Open My Resources</button></div>`;
   if(recipeBookEl.craftablePagination){recipeBookEl.craftablePagination.hidden=pages<=1||!total;recipeBookEl.craftablePrevious.disabled=recipeBookState.craftablePage<=1;recipeBookEl.craftableNext.disabled=recipeBookState.craftablePage>=pages}
   if(recipeBookEl.craftablePages)recipeBookEl.craftablePages.innerHTML=recipeBookPageWindow(recipeBookState.craftablePage,pages).map(page=>page==="ellipsis"?'<i aria-hidden="true">…</i>':`<button type="button" data-craftable-page="${page}" class="${page===recipeBookState.craftablePage?"active":""}" ${page===recipeBookState.craftablePage?'aria-current="page"':""} aria-label="Craftables page ${page}">${page}</button>`).join("");
+  globalThis.BshWeekliesRecipes?.afterCraftableRender();
 }
 function recipeBookCardMarkup(recipe,tokens){
   const data=recipeBookState.data,output=data.items[recipe.outputId],typeLabel=recipeBookTypeLabel(recipe.type),outputEnhancement=recipeBookEnhancementLabel(recipe.outputEnhancement),yieldLabel=recipeBookOutputYieldLabel(recipe);
@@ -3302,6 +3307,7 @@ function recipeBookRender({focusResults=false}={}){
   recipeBookHideTooltip();
   const data=recipeBookState.data;if(!data)return;
   recipeBookState.filtered=recipeBookFilterRecipes(data,{query:recipeBookState.query,mode:recipeBookState.mode,type:recipeBookState.type});
+  recipeBookState.filtered=globalThis.BshWeekliesRecipes?.recipeFilter(recipeBookState.filtered)??recipeBookState.filtered;
   const total=recipeBookState.filtered.length,totalPages=Math.max(1,Math.ceil(total/RECIPE_BOOK_PAGE_SIZE));
   recipeBookState.page=Math.min(Math.max(1,recipeBookState.page),totalPages);
   const start=(recipeBookState.page-1)*RECIPE_BOOK_PAGE_SIZE,end=Math.min(start+RECIPE_BOOK_PAGE_SIZE,total),tokens=recipeBookSearchTokens(recipeBookState.query);
@@ -3316,6 +3322,7 @@ function recipeBookRender({focusResults=false}={}){
   if(recipeBookEl.pageNumbers)recipeBookEl.pageNumbers.innerHTML=recipeBookPageWindow(recipeBookState.page,totalPages).map(page=>page==="ellipsis"?'<i aria-hidden="true">…</i>':`<button type="button" data-recipe-book-page="${page}" class="${page===recipeBookState.page?"active":""}" ${page===recipeBookState.page?'aria-current="page"':""} aria-label="Page ${page}">${page}</button>`).join("");
   if(recipeBookEl.clear)recipeBookEl.clear.hidden=!recipeBookState.query;
   if(focusResults)document.querySelector(".recipeBookResultsHead")?.scrollIntoView({behavior:document.body.dataset.motion==="reduced"?"auto":"smooth",block:"start"});
+  globalThis.BshWeekliesRecipes?.afterRecipeRender();
 }
 function recipeBookApplySearch({focusResults=false}={}){
   recipeBookState.query=recipeBookEl.search?.value||"";
@@ -3720,17 +3727,25 @@ function selectTrackedItem(item) {
 
 async function loadAnalytics() {
   if(!marketState.selected) return;
+  const selected = marketState.selected;
+  const request = marketState.analyticsRequest = (marketState.analyticsRequest || 0) + 1;
+  globalThis.BshGrindMarket?.setAnalyticsState("loading");
   try {
     setMarketStatus("Loading item analytics...");
-    marketState.analytics = await bridgeCall("getAnalytics", {
-      itemId:marketState.selected.itemId,
-      enhancement:marketState.selected.enhancement,
+    const analytics = await bridgeCall("getAnalytics", {
+      itemId:selected.itemId,
+      enhancement:selected.enhancement,
       region:getMarketRegion(),
       days:Number(marketEl.range.value)
     });
+    if(request !== marketState.analyticsRequest || marketState.selected?.itemId !== selected.itemId || marketState.selected?.enhancement !== selected.enhancement) return;
+    marketState.analytics = analytics;
+    globalThis.BshGrindMarket?.setAnalyticsState("ready");
     renderAnalytics();
     setMarketStatus("Ready");
   } catch(error) {
+    if(request !== marketState.analyticsRequest || marketState.selected?.itemId !== selected.itemId || marketState.selected?.enhancement !== selected.enhancement) return;
+    globalThis.BshGrindMarket?.setAnalyticsState("error", error.message);
     setMarketStatus(error.message, true);
   }
 }
@@ -3770,6 +3785,7 @@ function renderAnalytics() {
 function clearMarketDetail() {
   marketState.selected = null;
   marketState.analytics = null;
+  globalThis.BshGrindMarket?.setAnalyticsState("ready");
   marketEl.empty.hidden = false;
   marketEl.detail.hidden = true;
   renderTrackedItems();
@@ -3795,15 +3811,23 @@ async function loadMarketRegionState(region = getMarketRegion(), updateStatus = 
     const selectedRegion = "eu";
     const requestNumber = ++marketState.outfitRequestNumber;
     const state = await bridgeCall("getRegionState", { region:selectedRegion });
-    if(requestNumber !== marketState.outfitRequestNumber || getMarketRegion() !== selectedRegion) return;
+    if(requestNumber !== marketState.outfitRequestNumber || getMarketRegion() !== selectedRegion) return false;
     marketState.items = state.items || [];
     marketState.outfits = state.outfits || null;
-    clearMarketDetail();
+    // Refresh the selected record without closing the chart the user is viewing.
+    // Read the selection after the request in case it changed while loading.
+    const selected = marketState.selected;
+    const stillTracked = selected && marketState.items.find(item =>
+      item.itemId === selected.itemId && item.enhancement === selected.enhancement);
+    if(stillTracked) marketState.selected = stillTracked;
+    else clearMarketDetail();
     renderTrackedItems();
     renderOutfitReport();
     if(updateStatus) setMarketStatus(outfitSalesStatusMessage(state.outfits, selectedRegion));
+    return true;
   } catch(error) {
     setMarketStatus(error.message, true);
+    return false;
   }
 }
 
@@ -4022,6 +4046,7 @@ function fmtSilver(value) {
 }
 
 function drawLineChart(canvas, points, valueFormatter) {
+  if(globalThis.BshGrindMarket?.drawChart(canvas, points, valueFormatter)) return;
   const parent = canvas.parentElement;
   const tooltip = parent.querySelector(".graphTooltip");
   const width = Math.max(320, Math.floor(canvas.clientWidth));

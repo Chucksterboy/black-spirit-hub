@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Source Code/BlackSpiritHub/MarketCollectorTaskManager.cs" Link="MarketCollectorTaskManager.cs" />
+    <Compile Include="../../Source Code/BlackSpiritHub/BackgroundMarketUpdateService.cs" Link="BackgroundMarketUpdateService.cs" />
+    <Compile Include="../../Source Code/BlackSpiritHub/AtomicFile.cs" Link="AtomicFile.cs" />
+    <Compile Include="../../Source Code/BlackSpiritHub/AppBehaviorSettings.cs" Link="AppBehaviorSettings.cs" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12" />
+  </ItemGroup>
+</Project>

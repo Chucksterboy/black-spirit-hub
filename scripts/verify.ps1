@@ -76,6 +76,27 @@ $recipeBookBuildScriptPath = Join-Path $repoRoot "scripts\build-recipe-book-data
 $dehkiaFuelIconVerifyScriptPath = Join-Path $repoRoot "scripts\verify-dehkia-fuel-icons.ps1"
 $classIconRefreshScriptPath = Join-Path $repoRoot "scripts\update-class-icons.ps1"
 
+# These maintenance/workflow checks are mandatory, including on -SkipBuild.
+# A data generator may describe a change, but must never approve it by itself.
+$foundationNode = Get-Command node -ErrorAction SilentlyContinue
+if (!$foundationNode) { throw 'Node.js is required for the asset and game-data integrity checks.' }
+& $foundationNode.Source (Join-Path $PSScriptRoot 'build-game-data-manifest.mjs') --check
+if ($LASTEXITCODE -ne 0) { throw 'Bundled game-data provenance or dependency review checks failed.' }
+foreach ($testName in @('test-game-data-manifest.mjs', 'test-ui-asset-manifest.mjs', 'test-workflow-journeys.mjs', 'test-startup-background-preferences.mjs', 'test-release-safeguards.mjs', 'test-ui-refresh-core.mjs', 'test-ui-navigation.mjs', 'test-ui-grind-market.mjs', 'test-ui-weeklies-recipes.mjs')) {
+	$testRoot = if ($testName -eq 'test-release-safeguards.mjs') { $repoRoot } else { $sourceRoot }
+	& $foundationNode.Source (Join-Path $PSScriptRoot $testName) $testRoot
+	if ($LASTEXITCODE -ne 0) { throw "Foundation regression failed: $testName" }
+}
+$uiRefreshScripts = foreach ($moduleName in @('core', 'navigation', 'grind-market', 'weeklies-recipes')) {
+	$modulePath = Join-Path $sourceRoot "Assets\UiRefresh\$moduleName.js"
+	& $foundationNode.Source --check $modulePath
+	if ($LASTEXITCODE -ne 0) { throw "UI refresh syntax check failed: $moduleName" }
+	Get-Content -LiteralPath $modulePath -Raw
+}
+$uiRefreshSource = $uiRefreshScripts -join [Environment]::NewLine
+& $dotnet run --project (Join-Path $repoRoot 'tests\BackgroundMarketControls\BackgroundMarketControls.csproj') --configuration Release
+if ($LASTEXITCODE -ne 0) { throw 'Background market-control regression tests failed.' }
+
 if (!$SkipBuild) {
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
 	if ($LASTEXITCODE -ne 0) { throw "Application build failed." }
@@ -1423,7 +1444,7 @@ if ($duplicates) {
 	throw "Duplicate JavaScript function declarations: $($duplicates.Name -join ', ')"
 }
 $unusedFunctions = foreach ($functionName in $functionNames) {
-	$references = [regex]::Matches($script, "\b$([regex]::Escape($functionName))\b").Count
+	$references = [regex]::Matches(($script + [Environment]::NewLine + $uiRefreshSource), "\b$([regex]::Escape($functionName))\b").Count
 	if ($references -eq 1) { $functionName }
 }
 if ($unusedFunctions) {
@@ -1432,12 +1453,14 @@ if ($unusedFunctions) {
 
 $calculatorSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\CalculatorForm.cs") -Raw
 $programSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\Program.cs") -Raw
+$uiAssetManifestSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\UiAssetManifest.cs") -Raw
 if ($html -notmatch '<button class="homeExternalLink" data-open-url="https://www\.blackdesertfoundry\.com/category/all-news/global/">English Labs</button>' -or
 	$calculatorSource -notmatch '"www\.blackdesertfoundry\.com"') {
 	throw "The English Labs dashboard link or its native external-host permission is missing."
 }
-if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "NavigationAssets"\),\s*Path\.Combine\(paths\.Root, "NavigationAssets"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "GrindTracker"\),\s*Path\.Combine\(paths\.Root, "Assets", "GrindTracker"\)\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "MasteryIcons"\),\s*paths\.MasteryIconsPath\);\s*.*?CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "DehkiaFuel"\),\s*Path\.Combine\(paths\.Root, "Assets", "DehkiaFuel"\)\);\s*bool assetsReady') {
-	throw "NavigationAssets, GrindTracker, MasteryIcons, and DehkiaFuel must self-heal before the version-stamp early return."
+if ($programSource -notmatch '(?s)private static void PrepareUiFiles\(AppPaths paths\).*?CopyFileIfChanged\(scriptSource, scriptTarget\);.*?UiAssetManifest.Sync\(baseDirectory, paths.Root\);.*?File.ReadAllText\(versionStampPath\)' -or
+	$projectSource -notmatch 'Include="ui-assets-manifest.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"') {
+	throw "Core UI and manifest-managed assets must self-heal independently of the app version stamp; the manifest must ship."
 }
 if ($projectSource -notmatch '<None Update="NavigationAssets\\\*\*\\\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />') {
 	throw "The shared navigation SVG sprite is not included in build and publish output."
@@ -1450,7 +1473,7 @@ if ($calculatorSource -notmatch 'private const string LocalAppHost = "app\.bdo\.
 	$calculatorSource -notmatch '(?s)private bool TryResolveLocalWebResource\(.*?candidate\.StartsWith\(rootPrefix, StringComparison\.OrdinalIgnoreCase\)' -or
 	$calculatorSource -notmatch 'Access-Control-Allow-Origin: https://\{LocalAppHost\}' -or
 	$calculatorSource -match 'SetVirtualHostNameToFolderMapping|--allow-file-access-from-files' -or
-	$programSource -notmatch '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets"\),\s*Path\.Combine\(paths\.Root, "Assets"\),\s*"RecipeBook"\);' -or
+	$uiAssetManifestSource -notmatch 'relative.Equals\("Assets/RecipeBook", StringComparison.OrdinalIgnoreCase\)\) yield break;' -or
 	$programSource -match '(?s)CopyDirectoryIfPresent\(\s*Path\.Combine\(baseDirectory, "Assets", "RecipeBook"\)') {
 	throw "Local UI and Recipe Book resources must use the contained HTTPS resource handler without duplicate per-user assets."
 }
@@ -2051,7 +2074,9 @@ if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
 	$programSource -notmatch 'SendShutdownRequestToExistingInstance' -or
 	$programSource -notmatch '--install-market-task' -or
 	$programSource -notmatch '--remove-market-task' -or
-	$marketCollectorTaskSource -notmatch '/SC HOURLY /MO 1 /RL LIMITED /F' -or
+	$marketCollectorTaskSource -notmatch '"/SC",\s*"HOURLY",\s*"/MO",\s*"1",\s*"/RL",\s*"LIMITED"' -or
+	$marketCollectorTaskSource -notmatch '"/IT"' -or
+	$marketCollectorTaskSource -notmatch '"/F"' -or
 	$marketCollectorTaskSource -match '/XML' -or
 	$marketCollectorTaskSource -notmatch '--market-scheduled-update') {
 	throw "Native installer update compatibility, uninstall integration, or market collector scheduling is incomplete."
@@ -2099,8 +2124,9 @@ if ($programSource -notmatch 'RunMarketStorageMaintenanceSmokeTestAsync' -or
 if ($html -match '<option\s+value="365">\s*1 year\s*</option>') {
 	throw "Tracked market history is retained for 90 days, so the retired one-year history option must not be shown."
 }
+$preferenceModule = Get-Content -LiteralPath (Join-Path $sourceRoot 'Assets\AppBehavior\app-behavior-preferences.js') -Raw
 $bridgeCommands = @(
-	[regex]::Matches($script, 'bridgeCall\(\s*["'']([^"'']+)["'']') |
+	[regex]::Matches(($script + [Environment]::NewLine + $preferenceModule + [Environment]::NewLine + $uiRefreshSource), 'bridgeCall\(\s*["'']([^"'']+)["'']') |
 		ForEach-Object { $_.Groups[1].Value }
 ) + @("initializeEvents", "refreshEvents")
 $hostCommands = [regex]::Matches($calculatorSource, 'case\s+"([^"]+)"\s*:') |
@@ -2188,5 +2214,7 @@ if ($LASTEXITCODE -ne 0) { throw "Product data migration smoke test failed with 
 if ($LASTEXITCODE -ne 0) { throw "Weekly planner persistence smoke test failed with exit code $LASTEXITCODE." }
 & $dotnet $appDll --app-behavior-smoke-test
 if ($LASTEXITCODE -ne 0) { throw "App behavior persistence smoke test failed with exit code $LASTEXITCODE." }
+& $dotnet $appDll --ui-assets-smoke-test
+if ($LASTEXITCODE -ne 0) { throw "UI asset manifest smoke test failed with exit code $LASTEXITCODE." }
 
 Write-Host "Verification passed: build, offline smoke test, DOM wiring, data integrity, UI assets, performance budgets, cancellation, and duplicate-function checks."

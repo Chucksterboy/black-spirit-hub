@@ -66,6 +66,7 @@ internal sealed class StartupSplashWindow : Form
 	private StartupSplashState exitSourceState = StartupSplashState.Intro;
 	private string statusMessage = "Preparing Black Spirit Hub...";
 	private bool applicationReady;
+	internal bool OpenImmediatelyWhenReady { get; set; }
 	private bool coldLaunchStarted;
 	private bool coldLaunchCompleted;
 	private bool nativeOpacitySupported = true;
@@ -118,18 +119,19 @@ internal sealed class StartupSplashWindow : Form
 
 	internal bool ReducedMotion => reducedMotion;
 
-	internal static bool ShouldBeginColdExit(long elapsedMilliseconds, bool ready)
+	internal static bool ShouldBeginColdExit(long elapsedMilliseconds, bool ready, bool openImmediatelyWhenReady = false)
 	{
-		return ready && elapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds;
+		return ready && (openImmediatelyWhenReady || elapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds);
 	}
 
 	internal static bool ShouldBeginRestoringExit(
 		long coldLaunchElapsedMilliseconds,
 		bool coldMinimumRequired,
-		bool ready)
+		bool ready,
+		bool openImmediatelyWhenReady = false)
 	{
 		return ready
-			&& (!coldMinimumRequired
+			&& (openImmediatelyWhenReady || !coldMinimumRequired
 				|| coldLaunchElapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds);
 	}
 
@@ -179,12 +181,12 @@ internal sealed class StartupSplashWindow : Form
 		applicationReady = true;
 		long elapsed = animationClock.ElapsedMilliseconds;
 		if (((state is StartupSplashState.Intro or StartupSplashState.Holding)
-				&& ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady))
+				&& ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady, OpenImmediatelyWhenReady))
 			|| (state == StartupSplashState.Restoring
 				&& ShouldBeginRestoringExit(
 					coldLaunchClock.ElapsedMilliseconds,
 					ColdMinimumRequired,
-					applicationReady)))
+					applicationReady, OpenImmediatelyWhenReady)))
 		{
 			BeginExit(elapsed);
 		}
@@ -325,18 +327,18 @@ internal sealed class StartupSplashWindow : Form
 		switch (state)
 		{
 			case StartupSplashState.Intro when coldLaunchClock.ElapsedMilliseconds >= MinimumColdLaunchDurationMilliseconds:
-				if (ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady))
+				if (ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady, OpenImmediatelyWhenReady))
 					BeginExit(elapsed);
 				else
 					state = StartupSplashState.Holding;
 				break;
-			case StartupSplashState.Holding when ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady):
+			case StartupSplashState.Holding when ShouldBeginColdExit(coldLaunchClock.ElapsedMilliseconds, applicationReady, OpenImmediatelyWhenReady):
 				BeginExit(elapsed);
 				break;
 			case StartupSplashState.Restoring when ShouldBeginRestoringExit(
 				coldLaunchClock.ElapsedMilliseconds,
 				ColdMinimumRequired,
-				applicationReady):
+				applicationReady, OpenImmediatelyWhenReady):
 				BeginExit(elapsed);
 				break;
 			case StartupSplashState.Exiting:
@@ -364,6 +366,13 @@ internal sealed class StartupSplashWindow : Form
 	{
 		if (state == StartupSplashState.Exiting)
 			return;
+
+		// Fast startup still waits for a usable page, but adds no cinematic hold or fade.
+		if (OpenImmediatelyWhenReady)
+		{
+			CompleteExit();
+			return;
+		}
 
 		exitSourceState = state;
 		state = StartupSplashState.Exiting;

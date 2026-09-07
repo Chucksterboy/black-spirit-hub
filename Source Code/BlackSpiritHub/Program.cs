@@ -32,6 +32,11 @@ internal static class Program
 	{
 		ApplicationConfiguration.Initialize();
 		Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+		if (args.Any(a => string.Equals(a, "--ui-assets-smoke-test", StringComparison.OrdinalIgnoreCase)))
+		{
+			Environment.Exit(UiAssetManifestSmokeTest.Run());
+			return;
+		}
 		if (args.Length > 0
 			&& string.Equals(args[0], "--recipe-book-ocr-fixture-test", StringComparison.OrdinalIgnoreCase))
 		{
@@ -232,6 +237,13 @@ internal static class Program
 		}
 		if (args.Any(a => string.Equals(a, "--install-market-task", StringComparison.OrdinalIgnoreCase)))
 		{
+			AppPaths installPaths = AppPaths.Create();
+			if (!AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(installPaths, CancellationToken.None).GetAwaiter().GetResult())
+			{
+				// Upgrades must not re-enable a collector the user explicitly disabled.
+				MarketCollectorTaskManager.RemoveKnownTasks();
+				return;
+			}
 			string executablePath = Environment.ProcessPath
 				?? Path.Combine(AppContext.BaseDirectory, "Black Spirit Hub.exe");
 			bool installed = MarketCollectorTaskManager.Install(executablePath, out string details);
@@ -248,9 +260,22 @@ internal static class Program
 			MarketCollectorTaskManager.RemoveKnownTasks();
 			return;
 		}
+		bool runScheduledMarketUpdate = args.Any(a => string.Equals(a, "--market-scheduled-update", StringComparison.OrdinalIgnoreCase));
+		// A second normal launch only restores the existing window. It must not
+		// migrate or inspect assets before discovering that another instance owns UI.
+		// Headless collector and smoke/installer commands retain independent lifetimes.
+		using Mutex singleInstanceMutex = runScheduledMarketUpdate ? null
+			: new Mutex(initiallyOwned: false, SingleInstanceMutexName);
+		using Mutex previousSingleInstanceMutex = runScheduledMarketUpdate ? null
+			: new Mutex(initiallyOwned: false, PreviousSingleInstanceMutexName);
+		if (!runScheduledMarketUpdate && (!TryOwnMutex(singleInstanceMutex) || !TryOwnMutex(previousSingleInstanceMutex)))
+		{
+			SendRestoreRequestToExistingInstance();
+			return;
+		}
 		AppPaths appPaths3 = AppPaths.Create();
 		appPaths3.EnsureDirectories();
-		PrepareUiFiles(appPaths3);
+		if (!runScheduledMarketUpdate) PrepareUiFiles(appPaths3);
 		using AppLogger logger3 = new AppLogger(appPaths3.LogPath);
 		Application.ThreadException += (_, e) => logger3.Error("Unhandled UI exception.", e.Exception);
 		AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -260,20 +285,12 @@ internal static class Program
 				logger3.Error("Unhandled app exception.", exception);
 			}
 		};
-		if (args.Any((string a) => string.Equals(a, "--market-scheduled-update", StringComparison.OrdinalIgnoreCase)))
+		if (runScheduledMarketUpdate)
 		{
 			Environment.Exit(RunScheduledMarketUpdateAsync(appPaths3, logger3).GetAwaiter().GetResult());
 		}
 		else
 		{
-			using Mutex singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool ownsSingleInstance);
-			using Mutex previousSingleInstanceMutex = new Mutex(initiallyOwned: true, PreviousSingleInstanceMutexName, out bool ownsPreviousSingleInstance);
-			if (!ownsSingleInstance || !ownsPreviousSingleInstance)
-			{
-				SendRestoreRequestToExistingInstance();
-				return;
-			}
-
 			using CancellationTokenSource singleInstanceServer = new CancellationTokenSource();
 			using CalculatorForm form = new CalculatorForm(appPaths3, logger3);
 			_ = RunSingleInstanceServerAsync(form, singleInstanceServer.Token);
@@ -406,19 +423,58 @@ internal static class Program
 
 	private static async Task<int> RunScheduledMarketUpdateAsync(AppPaths paths, AppLogger logger)
 	{
+		using CancellationTokenSource collectorCancellation = new();
+		Task preferenceWatch = Task.CompletedTask;
 		try
 		{
+			if (!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(paths, collectorCancellation.Token))
+			{
+				logger.Info("Scheduled market collector skipped: background updates are disabled.");
+				return 0;
+			}
+			// Also stop an already-running collector when the user turns the setting off.
+			preferenceWatch = WatchBackgroundMarketPreferenceAsync(paths, collectorCancellation, logger);
 			MarketDatabase database = new MarketDatabase(paths.DatabasePath);
 			using BlackDesertMarketProvider provider = new BlackDesertMarketProvider(logger);
 			using MarketAnalyticsService service = new MarketAnalyticsService(database, provider, logger);
-			await service.InitializeAsync(CancellationToken.None, startForegroundUpdates: false);
-			await service.RefreshDueMarketSamplesAsync(MarketAnalyticsService.DefaultCollectorInterval, "Windows scheduled task", CancellationToken.None);
+			await service.InitializeAsync(collectorCancellation.Token, startForegroundUpdates: false);
+			await service.RefreshDueMarketSamplesAsync(MarketAnalyticsService.DefaultCollectorInterval, "Windows scheduled task", collectorCancellation.Token);
+			await new BackgroundMarketUpdateService(paths).RecordCompletedCheckAsync(collectorCancellation.Token);
+			return 0;
+		}
+		catch (OperationCanceledException) when (collectorCancellation.IsCancellationRequested)
+		{
+			logger.Info("Scheduled market collector stopped after background updates were disabled or could not be checked.");
 			return 0;
 		}
 		catch (Exception exception)
 		{
 			logger.Error("Scheduled market collector failed.", exception);
 			return 1;
+		}
+		finally
+		{
+			collectorCancellation.Cancel();
+			try { await preferenceWatch; } catch (OperationCanceledException) { }
+		}
+	}
+
+	private static async Task WatchBackgroundMarketPreferenceAsync(AppPaths paths, CancellationTokenSource collectorCancellation, AppLogger logger)
+	{
+		try
+		{
+			while (!collectorCancellation.IsCancellationRequested)
+			{
+				await Task.Delay(TimeSpan.FromSeconds(2), collectorCancellation.Token);
+				if (!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(paths, collectorCancellation.Token))
+					collectorCancellation.Cancel();
+			}
+		}
+		catch (OperationCanceledException) when (collectorCancellation.IsCancellationRequested) { }
+		catch (Exception error)
+		{
+			logger.Error("Could not verify the background-update preference; stopping the collector.", error);
+			collectorCancellation.Cancel();
 		}
 	}
 
@@ -503,6 +559,12 @@ internal static class Program
 			{
 			}
 		}
+	}
+
+	private static bool TryOwnMutex(Mutex mutex)
+	{
+		try { return mutex.WaitOne(0); }
+		catch (AbandonedMutexException) { return true; }
 	}
 
 	private static async Task<int> RunWeeklyPlannerSmokeTestAsync()
@@ -698,10 +760,37 @@ internal static class Program
 			paths.EnsureDirectories();
 
 			AppBehaviorSettings defaults = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
-			if (!defaults.MinimizeToTray)
+			if (!defaults.MinimizeToTray || defaults.OpenImmediatelyWhenReady || !defaults.BackgroundMarketUpdatesEnabled)
 			{
 				return 111;
 			}
+			// Existing preference documents must preserve the cinematic startup and
+			// established background behavior when the new fields are absent.
+			File.WriteAllText(paths.AppBehaviorSettingsPath, "{\"minimizeToTray\":false}");
+			AppBehaviorSettings legacy = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
+			if (legacy.MinimizeToTray || legacy.OpenImmediatelyWhenReady || !legacy.BackgroundMarketUpdatesEnabled)
+				return 287;
+			AppBehaviorSettings allPreferences = new(false, true, false);
+			AppBehaviorSettings.SaveAsync(paths, allPreferences, CancellationToken.None).GetAwaiter().GetResult();
+			if (AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult() != allPreferences)
+				return 288;
+			// The subsequent atomic save retains the complete earlier preference set.
+			AppBehaviorSettings.Save(paths, new(true, false, true));
+			File.WriteAllText(paths.AppBehaviorSettingsPath, "broken json");
+			if (AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult() != allPreferences)
+				return 289;
+			if (StartupSplashWindow.ShouldBeginColdExit(0, false, true)
+				|| StartupSplashWindow.ShouldBeginColdExit(100_000, false, false)
+				|| StartupSplashWindow.ShouldBeginColdExit(2_699, true)
+				|| !StartupSplashWindow.ShouldBeginColdExit(2_700, true)
+				|| !StartupSplashWindow.ShouldBeginColdExit(0, true, true)
+				|| StartupSplashWindow.ShouldBeginRestoringExit(0, true, false, true)
+				|| StartupSplashWindow.ShouldBeginRestoringExit(100_000, false, false, true)
+				|| StartupSplashWindow.ShouldBeginRestoringExit(2_699, true, true)
+				|| !StartupSplashWindow.ShouldBeginRestoringExit(2_700, true, true)
+				|| !StartupSplashWindow.ShouldBeginRestoringExit(0, false, true)
+				|| !StartupSplashWindow.ShouldBeginRestoringExit(0, true, true, true))
+				return 290;
 
 			AppBehaviorSettings.Save(paths, new AppBehaviorSettings(false));
 			AppBehaviorSettings disabled = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
@@ -1050,52 +1139,12 @@ internal static class Program
 		CopyFileIfChanged(htmlSource, paths.HtmlPath);
 		CopyFileIfChanged(cssSource, cssTarget);
 		CopyFileIfChanged(scriptSource, scriptTarget);
-		// The navigation sprite is deliberately shared by every theme. Keep it
-		// content-aware so same-version test builds cannot retain stale glyphs.
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "NavigationAssets"),
-			Path.Combine(paths.Root, "NavigationAssets"));
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "Assets", "AppIcon"),
-			Path.Combine(paths.Root, "Assets", "AppIcon"));
-		// Grind data and artwork can change between builds that share an app version.
-		// Keep this comparatively small feature folder content-aware so the WebView
-		// never serves stale or missing icons from its per-user runtime directory.
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "Assets", "GrindTracker"),
-			Path.Combine(paths.Root, "Assets", "GrindTracker"));
-		// Player & Guild reuses the mastery icon set, including icons that can be
-		// introduced between builds without an application-version bump. Keep the
-		// small folder content-aware so a current version stamp cannot hide new or
-		// updated life-skill artwork from the per-user WebView directory.
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "Assets", "MasteryIcons"),
-			paths.MasteryIconsPath);
-		// Dehkia Fuel artwork was introduced in a same-version build. Copy this
-		// compact feature folder before honoring the version stamp so installed
-		// users receive every accessory and crystal icon immediately.
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "Assets", "DehkiaFuel"),
-			Path.Combine(paths.Root, "Assets", "DehkiaFuel"));
-		bool assetsReady = Directory.Exists(Path.Combine(paths.Root, "Assets"))
-			&& Directory.Exists(paths.ThemeAssetsPath)
-			&& File.Exists(versionStampPath)
-			&& string.Equals(File.ReadAllText(versionStampPath).Trim(), AppVersion.Current, StringComparison.Ordinal);
-		if (assetsReady)
-		{
-			return;
-		}
-
-		CopyFileIfChanged(Path.Combine(baseDirectory, "gold-coins.png"), Path.Combine(paths.Root, "gold-coins.png"));
-		// Recipe Book is served directly from its immutable installed folder through
-		// a dedicated WebView2 virtual host. Excluding it here avoids a second ~20 MB
-		// per-user copy while all other mutable UI assets keep their existing flow.
-		CopyDirectoryIfPresent(
-			Path.Combine(baseDirectory, "Assets"),
-			Path.Combine(paths.Root, "Assets"),
-			"RecipeBook");
-		CopyDirectoryIfPresent(Path.Combine(baseDirectory, "ThemeAssets"), paths.ThemeAssetsPath);
-		File.WriteAllText(versionStampPath, AppVersion.Current);
+		// Versioned content identity + per-file metadata avoids hashing unchanged
+		// artwork on warm starts, while missing assets and same-version hotfixes heal.
+		// Core files above remain byte-compared. Recipe Book stays immutable-hosted.
+		_ = UiAssetManifest.Sync(baseDirectory, paths.Root);
+		if (!File.Exists(versionStampPath) || File.ReadAllText(versionStampPath) != AppVersion.Current)
+			File.WriteAllText(versionStampPath, AppVersion.Current);
 		TryDeleteFile(Path.Combine(paths.Root, "BlackSpiritHub.Resources.Black_Spirit_Hub.html"));
 	}
 
