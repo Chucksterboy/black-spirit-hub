@@ -1,8 +1,8 @@
 #ifndef AppVersion
-  #define AppVersion "0.9.63"
+  #define AppVersion "0.9.64"
 #endif
 #ifndef AppFileVersion
-  #define AppFileVersion "0.9.63.0"
+  #define AppFileVersion "0.9.64.0"
 #endif
 #ifndef AppFilesDir
   #define AppFilesDir "..\..\..\artifacts\App Files"
