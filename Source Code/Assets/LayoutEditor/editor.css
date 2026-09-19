@@ -1,0 +1,183 @@
+
+#bdo-layout-studio{--ed-bg:light-dark(#f2f3f1,#1b1e20);--ed-panel:light-dark(#fafbf8,#222629);--ed-raised:light-dark(#e9ede7,#2c3235);--ed-text:light-dark(#303632,#e2e7e3);--ed-muted:light-dark(#606c64,#a1ada6);--ed-line:light-dark(#d9dfd8,#343c3d);--ed-gold:light-dark(#79602c,#ceb989);--ed-gold-wash:light-dark(#eee8da,#34332c);--ed-blue:light-dark(#277895,#93becb);--ed-selection:#83b7db;color:var(--ed-text);font:13px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif;position:relative;isolation:isolate;-webkit-font-smoothing:antialiased}
+#bdo-layout-studio *{box-sizing:border-box}
+#bdo-layout-studio button,#bdo-layout-studio input,#bdo-layout-studio select{font:inherit;color:inherit}
+#bdo-layout-studio button{cursor:pointer;touch-action:manipulation}
+#bdo-layout-studio button:not(.ed-slot),#bdo-layout-studio input,#bdo-layout-studio select{transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}
+#bdo-layout-studio button svg{width:15px;height:15px;display:block;pointer-events:none;flex:none}
+#bdo-layout-studio button:disabled{cursor:default;opacity:.38}
+#bdo-layout-studio button:focus-visible,#bdo-layout-studio input:focus-visible,#bdo-layout-studio select:focus-visible{outline:2px solid var(--ed-selection);outline-offset:3px}
+#bdo-layout-studio .ed-shell{border:1px solid var(--ed-line);border-radius:12px;overflow:hidden;background:var(--ed-bg)}
+#bdo-layout-studio .ed-emblem{width:30px;height:30px;display:grid;grid-template-columns:repeat(2,8px);grid-template-rows:repeat(2,8px);align-content:center;justify-content:center;gap:3px;color:var(--ed-gold);background:var(--ed-gold-wash);border-radius:9px}
+#bdo-layout-studio .ed-emblem span{border:1px solid currentColor;border-radius:2px}
+#bdo-layout-studio .ed-brand-name{font-size:17px;font-weight:500;letter-spacing:-.4px}
+#bdo-layout-studio .ed-header-actions{display:flex;align-items:center;gap:12px}
+#bdo-layout-studio .ed-save-state{font-size:12px;color:var(--ed-muted);white-space:nowrap}
+#bdo-layout-studio .ed-save-state[data-dirty="true"]{color:var(--ed-gold)}
+#bdo-layout-studio .ed-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 11px;min-height:32px;border:1px solid var(--ed-line);border-radius:8px;background:var(--ed-raised);font-size:12px;line-height:1.35;white-space:nowrap}
+#bdo-layout-studio .ed-btn:hover:not(:disabled){background:color-mix(in srgb,var(--ed-text) 7%,var(--ed-raised));border-color:color-mix(in srgb,var(--ed-gold) 45%,var(--ed-line))}
+#bdo-layout-studio .ed-primary{background:var(--ed-gold);border-color:transparent;color:light-dark(#fffdf8,#242720);font-weight:600}
+#bdo-layout-studio .ed-primary:hover:not(:disabled){background:color-mix(in srgb,var(--ed-gold) 90%,white);border-color:transparent;box-shadow:0 2px 8px #0002}
+#bdo-layout-studio .ed-card-name{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bdo-layout-studio .ed-main{min-width:0}
+#bdo-layout-studio .ed-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;border-top:1px solid var(--ed-line);border-bottom:1px solid var(--ed-line);background:var(--ed-panel)}
+#bdo-layout-studio .ed-tools{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+#bdo-layout-studio .ed-check{display:flex;align-items:center;gap:5px;min-height:28px;white-space:nowrap;font-size:11px;color:var(--ed-muted);cursor:pointer}
+#bdo-layout-studio .ed-check input{margin:0;width:13px;height:13px;accent-color:var(--ed-gold);cursor:pointer}
+#bdo-layout-studio .ed-check .ed-cd-label{color:var(--ed-gold)}
+#bdo-layout-studio .ed-check .ed-q-label{color:var(--ed-blue)}
+#bdo-layout-studio .ed-view-tools{display:flex;gap:5px;align-items:center;flex-wrap:wrap;max-width:100%}
+#bdo-layout-studio .ed-guide-hint{display:inline-flex;align-items:center;gap:5px;min-height:28px;margin-right:4px;padding-right:9px;border-right:1px solid var(--ed-line);color:var(--ed-muted);font-size:11px;white-space:nowrap;cursor:help}
+#bdo-layout-studio .ed-guide-hint svg{width:16px;height:16px;flex:none}
+#bdo-layout-studio .ed-guide-hint.is-held{color:var(--ed-gold)}
+#bdo-layout-studio .ed-guide-hint.is-held[data-mode="blue"]{color:var(--ed-blue)}
+#bdo-layout-studio .ed-icon-btn{width:28px;height:28px;min-height:28px;padding:0;display:grid;place-items:center;font-size:17px;border:1px solid transparent;background:transparent;border-radius:7px;color:var(--ed-muted)}
+#bdo-layout-studio .ed-icon-btn:hover:not(:disabled){color:var(--ed-text);background:var(--ed-raised)}
+#bdo-layout-studio .ed-panel-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:28px;padding:4px 8px;border:1px solid var(--ed-line);border-radius:7px;background:transparent;font-size:11px;line-height:1.35;color:var(--ed-muted);white-space:nowrap}
+#bdo-layout-studio .ed-panel-btn:hover{color:var(--ed-text);background:var(--ed-raised)}
+#bdo-layout-studio .ed-zoom{width:65px;min-height:28px;font-size:11px;background:transparent;border:1px solid var(--ed-line);padding:4px 6px;border-radius:7px;color:var(--ed-muted)}
+#bdo-layout-studio .ed-viewport{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#101715;touch-action:none;user-select:none;cursor:crosshair}
+#bdo-layout-studio .ed-world{position:absolute;transform-origin:0 0;left:0;top:0;isolation:isolate;background:#14231f}
+#bdo-layout-studio .ed-background{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;filter:brightness(.88)}
+#bdo-layout-studio .ed-scene-shade{position:absolute;inset:0;background:linear-gradient(180deg,#00000010 0%,transparent 65%,#00000024 100%);pointer-events:none}
+#bdo-layout-studio .ed-slot{position:absolute;appearance:none;border:2px solid #bfa16b;background-color:#191c1d;background-repeat:no-repeat;border-radius:2px;padding:0;z-index:3;cursor:grab;box-shadow:0 1px 4px #000b;overflow:visible}
+#bdo-layout-studio .ed-slot[data-family="quick"]{border-color:#83b7c4}
+#bdo-layout-studio .ed-slot[aria-pressed="true"]{outline:3px solid #73b7ff;outline-offset:2px;z-index:5;box-shadow:0 0 0 5px #25486a80}
+#bdo-layout-studio .ed-slot:active{cursor:grabbing}
+#bdo-layout-studio .ed-slot-number{position:absolute;bottom:-1px;right:-1px;min-width:12px;padding:0 2px;text-align:center;line-height:1.2;color:#fff2d2;background:#191915e6;border-radius:1px;font-weight:500;pointer-events:none;transform-origin:bottom right}
+#bdo-layout-studio .ed-slot[data-family="quick"] .ed-slot-number{color:#d2f5ff;background:#0e2025ee}
+#bdo-layout-studio .ed-slot[hidden]{display:none}
+#bdo-layout-studio .ed-marquee{position:absolute;border:1px solid #71b6ff;background:#398bea33;pointer-events:none;z-index:7}
+#bdo-layout-studio .ed-guide{position:absolute;pointer-events:none;background:#69c7fd;z-index:6;box-shadow:0 0 2px #0008}
+#bdo-layout-studio .ed-axis-guide{position:absolute;pointer-events:none;background:#ceb989;z-index:7;box-shadow:0 0 2px #0009}
+#bdo-layout-studio .ed-axis-guide span{position:absolute;white-space:nowrap;font:11px/1.4 system-ui,sans-serif;padding:3px 7px;border:1px solid #ceb98966;border-radius:5px;background:#202729ed;color:#ecdbb7;box-shadow:0 2px 6px #0003}
+#bdo-layout-studio .ed-mini{position:absolute;right:32px;top:30px;width:354px;height:306px;border:2px solid #d0bc8999;background:#1a241be6;box-shadow:0 4px 15px #0006;pointer-events:none;color:#e6e2c9;overflow:hidden}
+#bdo-layout-studio .ed-mini-title{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:11px 14px;background:#1b211bd9;font-size:25px;z-index:1}
+#bdo-layout-studio .ed-mini-terrain{position:absolute;inset:0;background:repeating-linear-gradient(20deg,transparent 0 46px,#8d9d7440 47px 49px,transparent 50px 91px),repeating-linear-gradient(105deg,#152a1e55 0 64px,#8a805920 66px 102px),radial-gradient(ellipse at 40% 30%,#66764477,transparent 56%)}
+#bdo-layout-studio .ed-mini-ring{position:absolute;border:2px solid #cdc49a66;width:200px;height:200px;border-radius:50%;left:77px;top:65px}
+#bdo-layout-studio .ed-mini-ring:before,#bdo-layout-studio .ed-mini-ring:after{content:'';position:absolute;background:#d4c99b55}
+#bdo-layout-studio .ed-mini-ring:before{top:99px;left:-20px;width:236px;height:1px}
+#bdo-layout-studio .ed-mini-ring:after{left:99px;top:-20px;width:1px;height:236px}
+#bdo-layout-studio .ed-mini-marker{position:absolute;left:166px;top:144px;color:#e5c673;font-size:40px;text-shadow:0 2px 5px #000}
+#bdo-layout-studio .ed-mini-north{position:absolute;top:45px;left:170px;font-size:22px}
+#bdo-layout-studio .ed-view-badge{position:absolute;bottom:10px;right:12px;color:#d7e1d7;background:#18221dc9;backdrop-filter:blur(8px);border:1px solid #eef4d620;border-radius:6px;padding:4px 7px;pointer-events:none;font-size:10px;z-index:9}
+#bdo-layout-studio .ed-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;pointer-events:none}
+#bdo-layout-studio .ed-more-toggle{width:30px;min-width:30px;height:32px;border:1px solid var(--ed-line);background:transparent;border-radius:8px}
+#bdo-layout-studio .ed-more-toggle[aria-expanded="true"]{color:var(--ed-gold);background:var(--ed-gold-wash)}
+#bdo-layout-studio .ed-more-menu{position:fixed;inset:auto;margin:0;min-width:184px;max-width:calc(100vw - 16px);padding:5px;border:1px solid var(--ed-line);border-radius:10px;background:var(--ed-panel);color:var(--ed-text);box-shadow:0 10px 30px #0004;font:12px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif}
+#bdo-layout-studio .ed-more-menu:popover-open{display:grid;gap:2px}
+#bdo-layout-studio .ed-more-menu .ed-text-btn{padding:8px 10px;min-height:32px;text-align:left;font-size:12px}
+#bdo-layout-studio .ed-more-menu [hidden]{display:none}
+#bdo-layout-studio .ed-text-btn{border:0;padding:5px 7px;background:transparent;border-radius:6px;font-size:11px;line-height:1.35;color:var(--ed-muted);white-space:nowrap}
+#bdo-layout-studio .ed-text-btn:hover{color:var(--ed-text);background:var(--ed-raised)}
+#bdo-layout-studio .ed-dialog{color:var(--ed-text);background:var(--ed-panel);border:1px solid var(--ed-line);border-radius:15px;padding:22px;width:min(368px,calc(100% - 32px));box-shadow:0 16px 60px #0005,0 2px 12px #0003}
+#bdo-layout-studio .ed-dialog::backdrop{background:#0c121660;backdrop-filter:blur(4px)}
+#bdo-layout-studio .ed-dialog h2{font-size:18px;font-weight:550;letter-spacing:-.3px;margin:0 0 6px}
+#bdo-layout-studio .ed-dialog-description{font-size:12px;line-height:1.6;color:var(--ed-muted);margin:0 0 18px}
+#bdo-layout-studio .ed-dialog input{background:var(--ed-bg);border:1px solid var(--ed-line);border-radius:8px;padding:9px 11px;width:100%;margin-top:7px;font-size:13px}
+#bdo-layout-studio .ed-dialog label{font-size:12px}
+#bdo-layout-studio .ed-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:17px}
+#bdo-layout-studio .ed-apply-confirm-dialog{width:min(420px,calc(100% - 32px))}
+#bdo-layout-studio .ed-apply-confirm-dialog[open]{animation:edApplyConfirmIn .18s ease-out}
+#bdo-layout-studio .ed-apply-confirm-dialog[open]::backdrop{animation:edApplyConfirmBackdropIn .18s ease-out}
+#bdo-layout-studio .ed-apply-confirm-dialog.ed-apply-confirm-closing{animation:edApplyConfirmOut .13s ease-in forwards}
+#bdo-layout-studio .ed-apply-confirm-dialog.ed-apply-confirm-closing::backdrop{animation:edApplyConfirmBackdropOut .13s ease-in forwards}
+@keyframes edApplyConfirmIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes edApplyConfirmOut{to{opacity:0;transform:translateY(6px) scale(.99)}}
+@keyframes edApplyConfirmBackdropIn{from{opacity:0}to{opacity:1}}
+@keyframes edApplyConfirmBackdropOut{to{opacity:0}}
+#bdo-layout-studio .ed-apply-error-dialog{width:min(410px,calc(100% - 32px))}
+#bdo-layout-studio .ed-apply-error-dialog h2{color:var(--ed-gold)}
+#bdo-layout-studio .ed-apply-error-reason{font-size:13px;line-height:1.65;margin:14px 0;color:var(--ed-text);overflow-wrap:anywhere}
+#bdo-layout-studio .ed-apply-error-code{font-size:10px;color:var(--ed-muted);overflow-wrap:anywhere}
+#bdo-layout-studio .ed-form-error{color:light-dark(#a53d31,#f5a298);font-size:12px;margin-top:9px}
+#bdo-layout-studio .ed-form-error:empty{display:none}
+
+#bdo-layout-studio .ed-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:9px 16px;border-bottom:1px solid var(--ed-line);background:var(--ed-bg)}
+#bdo-layout-studio .ed-brand{display:flex;align-items:center;gap:9px;min-width:0;flex:0 1 auto}
+#bdo-layout-studio .ed-brand-info{min-width:0}
+#bdo-layout-studio .ed-brand-name{font-size:15px;font-weight:500;letter-spacing:-.25px;white-space:nowrap}
+#bdo-layout-studio .ed-editing{display:block;max-width:26ch;color:var(--ed-muted);font-size:11px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+#bdo-layout-studio .ed-header-display{display:flex;align-items:center;gap:12px;flex:0 0 auto;padding:3px 9px;border:1px solid var(--ed-line);border-radius:9px;background:var(--ed-panel)}
+#bdo-layout-studio .ed-resolution,#bdo-layout-studio .ed-header-scale{display:flex;align-items:center;gap:6px;color:var(--ed-muted);font-size:11px;white-space:nowrap}
+#bdo-layout-studio .ed-header-scale{padding-left:12px;border-left:1px solid var(--ed-line)}
+#bdo-layout-studio .ed-header-display input{appearance:textfield;width:6ch;min-width:0;padding:4px 2px;text-align:center;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--ed-text);font-size:12px;font-variant-numeric:tabular-nums;line-height:1.35}
+#bdo-layout-studio .ed-header-display input:hover{background:var(--ed-raised)}
+#bdo-layout-studio .ed-header-display input:focus{background:var(--ed-bg)}
+#bdo-layout-studio .ed-header-display input::-webkit-inner-spin-button,#bdo-layout-studio .ed-header-display input::-webkit-outer-spin-button{appearance:none;margin:0}
+#bdo-layout-studio .ed-header-scale input{width:4.5ch}
+#bdo-layout-studio .ed-header-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px;flex:0 0 auto;max-width:100%}
+#bdo-layout-studio .ed-save-actions{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto}
+#bdo-layout-studio .ed-header-actions .ed-btn{min-height:32px;padding:6px 11px;font-size:12px}
+#bdo-layout-studio .ed-header-actions .ed-transfer-btn{padding-inline:9px;background:transparent}
+#bdo-layout-studio .ed-save-state{font-size:11px;margin-right:2px}
+#bdo-layout-studio .ed-workspace{display:block}
+#bdo-layout-studio .ed-commandbar{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;padding:9px 16px;background:var(--ed-panel);border-bottom:1px solid var(--ed-line);flex-shrink:0}
+#bdo-layout-studio .ed-presets-wrap{padding:0;min-width:0;max-width:100%;flex:0 1 auto}
+#bdo-layout-studio .ed-active-presets{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+#bdo-layout-studio .ed-preset-card{display:flex;align-items:center;width:max-content;max-width:100%;min-width:0;border:1px solid var(--ed-line);border-radius:9px;background:var(--ed-bg);padding-right:3px;transition:background-color .15s,border-color .15s;position:relative}
+#bdo-layout-studio .ed-preset-card:hover{border-color:color-mix(in srgb,var(--ed-muted) 45%,var(--ed-line))}
+#bdo-layout-studio .ed-preset-card.is-editing{border-color:color-mix(in srgb,var(--ed-gold) 55%,var(--ed-line));background:var(--ed-gold-wash)}
+#bdo-layout-studio .ed-preset-card.ed-drop{border-color:var(--ed-selection);background:color-mix(in srgb,var(--ed-selection) 15%,var(--ed-panel))}
+#bdo-layout-studio .ed-preset{display:flex;align-items:center;gap:7px;min-width:0;flex:0 1 auto;padding:6px 8px;min-height:36px;border:0;border-radius:8px;background:transparent;text-align:left;cursor:grab}
+#bdo-layout-studio .ed-preset-number{display:grid;place-items:center;width:20px;height:20px;flex:0 0 20px;font-size:10px;border:1px solid var(--ed-line);border-radius:5px;color:var(--ed-muted);background:transparent}
+#bdo-layout-studio .is-editing .ed-preset-number{border-color:transparent;color:var(--ed-gold);background:color-mix(in srgb,var(--ed-gold) 12%,transparent)}
+#bdo-layout-studio .ed-card-name{font-size:12px;font-weight:500;min-width:0;max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bdo-layout-studio .ed-preset-picker,#bdo-layout-studio .ed-preset-rename{width:28px;height:28px;flex:0 0 28px;padding:0;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--ed-muted);line-height:1}
+#bdo-layout-studio .ed-preset-rename svg{width:13px;height:13px}
+#bdo-layout-studio .ed-preset-picker:hover,#bdo-layout-studio .ed-preset-rename:hover,#bdo-layout-studio .ed-preset-picker[aria-expanded="true"]{background:color-mix(in srgb,var(--ed-text) 7%,transparent);color:var(--ed-gold)}
+#bdo-layout-studio .ed-dragging{opacity:.45}
+#bdo-layout-studio .ed-toolbar{padding:0;flex:1 1 545px;min-width:0;max-width:100%;gap:8px 18px;border:0;background:transparent}
+#bdo-layout-studio .ed-background-tools{display:inline-flex;align-items:center;gap:1px;padding:0 5px;margin:0 2px;border-left:1px solid var(--ed-line);border-right:1px solid var(--ed-line)}
+#bdo-layout-studio .ed-background-tools .is-custom{color:var(--ed-gold)}
+#bdo-layout-studio .ed-fullscreen-btn{margin-left:3px}
+#bdo-layout-studio .ed-layout-picker{position:absolute;z-index:50;border:1px solid var(--ed-line);border-radius:12px;background:var(--ed-panel);box-shadow:0 10px 32px #0004,0 2px 6px #0002;overflow:hidden;color:var(--ed-text)}
+#bdo-layout-studio .ed-layout-picker[hidden]{display:none}
+#bdo-layout-studio .ed-picker-heading{padding:11px 12px 8px;font-size:11px;color:var(--ed-muted);border-bottom:1px solid var(--ed-line)}
+#bdo-layout-studio .ed-picker-options{display:grid;gap:2px;padding:5px;max-height:300px;overflow-y:auto}
+#bdo-layout-studio .ed-layout-row{display:flex;align-items:center;gap:2px;border-radius:7px;padding-right:3px;min-width:0}
+#bdo-layout-studio .ed-layout-row:has([aria-checked="true"]){background:var(--ed-gold-wash)}
+#bdo-layout-studio .ed-layout-option{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:1;min-width:0;min-height:34px;padding:7px 9px;border:0;border-radius:7px;background:transparent;text-align:left;font-size:12px}
+#bdo-layout-studio .ed-layout-delete{display:grid;place-items:center;width:28px;height:28px;flex:0 0 28px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ed-muted)}
+#bdo-layout-studio .ed-layout-delete:hover,#bdo-layout-studio .ed-layout-delete:focus-visible{background:light-dark(#f7e5e1,#44302f);color:light-dark(#a53d31,#f0aaa1)}
+#bdo-layout-studio .ed-layout-option:hover,#bdo-layout-studio .ed-layout-option:focus-visible{background:var(--ed-raised)}
+#bdo-layout-studio .ed-layout-option[aria-checked="true"]{background:var(--ed-gold-wash);color:var(--ed-gold)}
+#bdo-layout-studio .ed-option-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+#bdo-layout-studio .ed-option-meta{font-size:11px;color:var(--ed-muted);white-space:nowrap;flex:0 0 auto}
+#bdo-layout-studio .ed-fullscreen-controls{display:none;position:absolute;right:16px;top:16px;z-index:30;gap:12px;align-items:center;padding:6px 6px 6px 12px;border:1px solid #ffffff25;border-radius:10px;background:#202729da;backdrop-filter:blur(12px);box-shadow:0 4px 20px #0003;color:#e2e7e3;font-size:12px;cursor:default}
+#bdo-layout-studio .ed-fullscreen-controls button{border:1px solid #ffffff25;border-radius:7px;background:#364043;color:#e2e7e3;padding:6px 9px;font-size:12px}
+#bdo-layout-studio .ed-fullscreen-controls span[data-fullscreen-label]{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bdo-layout-studio .ed-viewport:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;background:#101715}
+#bdo-layout-studio .ed-viewport:fullscreen .ed-fullscreen-controls{display:flex}
+@media(max-width:1050px){#bdo-layout-studio .ed-save-state{display:none}#bdo-layout-studio .ed-header{gap:12px}#bdo-layout-studio .ed-editing{max-width:21ch}}
+@media(max-width:900px){#bdo-layout-studio .ed-header{flex-wrap:wrap;gap:9px 12px}#bdo-layout-studio .ed-brand{order:1;flex:1 1 120px}#bdo-layout-studio .ed-header-display{order:2}#bdo-layout-studio .ed-header-actions{order:3;margin-left:auto}#bdo-layout-studio .ed-display-label{display:none}#bdo-layout-studio .ed-commandbar{gap:9px 16px}#bdo-layout-studio .ed-tools{gap:9px}}
+@media(max-width:740px){#bdo-layout-studio .ed-emblem{display:none}}
+@media(max-width:620px){#bdo-layout-studio .ed-header{padding:9px 12px;gap:9px}#bdo-layout-studio .ed-brand{flex:1 1 100px}#bdo-layout-studio .ed-header-actions{gap:5px}#bdo-layout-studio .ed-header-actions .ed-btn{padding-inline:8px}#bdo-layout-studio .ed-header-display{flex:0 0 auto;max-width:100%;gap:8px;padding-inline:7px}#bdo-layout-studio .ed-header-scale{padding-left:8px}#bdo-layout-studio .ed-editing{max-width:15ch}#bdo-layout-studio .ed-commandbar{padding:9px 12px;gap:9px}#bdo-layout-studio .ed-active-presets{gap:6px}#bdo-layout-studio .ed-card-name{max-width:17ch}#bdo-layout-studio .ed-tools{gap:9px}#bdo-layout-studio .ed-view-tools{gap:4px}#bdo-layout-studio .ed-toolbar{gap:8px}#bdo-layout-studio .ed-fullscreen-controls{top:8px;right:8px;max-width:calc(100% - 16px)}}
+@media(prefers-reduced-motion:reduce){#bdo-layout-studio button,#bdo-layout-studio input,#bdo-layout-studio select,#bdo-layout-studio .ed-preset-card,#bdo-layout-studio .ed-apply-confirm-dialog,#bdo-layout-studio .ed-apply-confirm-dialog::backdrop{animation:none!important;transition:none!important}}
+/* The app fits its host window. Game coordinates are uniformly fitted inside it. */
+html,body{margin:0;width:100%;height:100%;background:light-dark(#f2f3f1,#1b1e20)}
+#bdo-layout-studio{height:100dvh;min-height:440px}
+#bdo-layout-studio .ed-shell{height:100%;display:flex;flex-direction:column;border-radius:0;border:0}
+#bdo-layout-studio .ed-header,#bdo-layout-studio .ed-toolbar,#bdo-layout-studio .ed-presets-wrap{flex-shrink:0}
+#bdo-layout-studio .ed-workspace,#bdo-layout-studio .ed-main{display:flex;flex:1;min-height:0;flex-direction:column}
+#bdo-layout-studio .ed-viewport{flex:1;min-height:150px;aspect-ratio:auto}
+#bdo-layout-studio [data-retry][hidden]{display:none}
+#bdo-layout-studio [data-retry]{color:var(--ed-gold)}
+#bdo-layout-studio .ed-viewport:fullscreen{flex:none;min-height:0}
+#bdo-layout-studio .ed-slot{display:grid;place-items:center;background:linear-gradient(145deg,#514839,#1d211f);border:1.5px solid #cbb47f;box-shadow:inset 0 0 0 2px #0005,0 1px 4px #0009}
+#bdo-layout-studio .ed-slot[data-family="quick"]{background:linear-gradient(145deg,#2b4850,#172023);border-color:#7cbcd0}
+#bdo-layout-studio .ed-slot[data-game-hidden="true"]{border-style:dashed;opacity:.65}
+#bdo-layout-studio .ed-slot-number{inset:0;display:grid;place-items:center;min-width:0;padding:0;background:transparent!important;border:0;color:#f5e6c7;font-weight:600;line-height:1}
+#bdo-layout-studio .ed-slot[data-family="quick"] .ed-slot-number{color:#d9f1f7}
+#bdo-layout-studio .ed-empty-state{display:none;position:absolute;inset:0;z-index:9;place-items:center;padding:24px;background:#1017159c;cursor:default}
+#bdo-layout-studio .ed-empty-card{max-width:430px;padding:20px 24px;background:#1c2326ed;border:1px solid #576361;border-radius:9px;text-align:center;box-shadow:0 10px 40px #0005;color:#ebede8}
+#bdo-layout-studio .ed-empty-card strong{font-size:16px;font-weight:500;display:block;margin-bottom:7px}
+#bdo-layout-studio .ed-empty-card p{font-size:12px;color:#b9c3be;line-height:1.6;margin:0;overflow-wrap:anywhere}
+#bdo-layout-studio.ed-unloaded .ed-empty-state{display:grid}
+#bdo-layout-studio.ed-unloaded .ed-slot,#bdo-layout-studio.ed-unloaded .ed-mini,#bdo-layout-studio.ed-unloaded .ed-view-badge{visibility:hidden}
+#bdo-layout-studio .ed-source-note{font-size:12px;color:var(--ed-muted);margin:0 0 14px;overflow-wrap:anywhere}
+#bdo-layout-studio .ed-account-select{width:100%;padding:9px;border-radius:5px;border:1px solid var(--ed-line);background:var(--ed-bg)}
+#bdo-layout-studio .ed-source-dialog{width:min(540px,94%);max-height:80vh;overflow:auto}
+#bdo-layout-studio .ed-source-dialog pre{font:11px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ed-muted);margin:0}
+#bdo-layout-studio [data-source-info][hidden]{display:none}
+#bdo-layout-studio [data-load-bdo]{color:var(--ed-gold)}

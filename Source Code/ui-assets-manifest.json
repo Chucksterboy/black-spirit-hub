@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleId": "65bfff081f187aa47422c6cd974d9df249994ed6be526334458448defcac1923",
+  "bundleId": "fc39a31a62fb11a85092a769ec73e945775c9b5589cc82d3f262f467409af04b",
   "files": [
     {
       "path": "Assets/Alarm.mp3",
@@ -9,8 +9,8 @@
     },
     {
       "path": "Assets/AppBehavior/app-behavior-preferences.js",
-      "length": 5170,
-      "sha256": "3ff003087d1fda12b3d5a2f179f371ded20a0ccf9c211188d9508af5f2f7dfd7"
+      "length": 5251,
+      "sha256": "44273782ccff115d71bc122d8e4371bafa7514bc1cf7290d355e45b5baf4f24c"
     },
     {
       "path": "Assets/AppIcon/app-icon-ui.png",
@@ -2738,6 +2738,61 @@
       "sha256": "4e60c4a065364a56f0a4ea19bcac7882bdb551a0cc1fb5b9fb1d95a96aa2dceb"
     },
     {
+      "path": "Assets/LayoutEditor/app.js",
+      "length": 66078,
+      "sha256": "f08d84710af21e9ed26b940c2bbf2256f3c0dca7fda6ee22fbdf805366757c3c"
+    },
+    {
+      "path": "Assets/LayoutEditor/assets/background.jpg",
+      "length": 191185,
+      "sha256": "97df5758f6e6a1c11169404c0aecba14a7b27f9d885983b7a9a8a16f02b72a33"
+    },
+    {
+      "path": "Assets/LayoutEditor/bridge.js",
+      "length": 2968,
+      "sha256": "0431211304aa471cab93ae4d7dc0faf188a5b1f667627553673a30c05a3420d9"
+    },
+    {
+      "path": "Assets/LayoutEditor/editor.css",
+      "length": 24535,
+      "sha256": "413c7a249a4b582dfd08d21ddb11d8cecdbceeb3bfb7d6d7eca44c8dfaa38ef6"
+    },
+    {
+      "path": "Assets/LayoutEditor/embed.js",
+      "length": 9884,
+      "sha256": "a37c47b76790fda9640bc8855130f4cc58d03d527aba6ef86e5d995f82784281"
+    },
+    {
+      "path": "Assets/LayoutEditor/engine.js",
+      "length": 17702,
+      "sha256": "d7ac5862855a487a6d5b2bec6face35f0f67a965a06324a6971332b1fab41a4c"
+    },
+    {
+      "path": "Assets/LayoutEditor/game-import.js",
+      "length": 14761,
+      "sha256": "18de3e2fc59c53fc78b2aa6b67679e70a4004b58c439dc7f1f30e55e34a735ec"
+    },
+    {
+      "path": "Assets/LayoutEditor/game-library.js",
+      "length": 2879,
+      "sha256": "0be6380f0fdf383c810cb1e456d9de508166daaa104eca29bb79c7f2f4654d01"
+    },
+    {
+      "path": "Assets/LayoutEditor/game-write.js",
+      "length": 11625,
+      "sha256": "22153e183bce9f609aaa59b4732d4ccffa91a1c8c8b6b00cad89523215788cfd"
+    },
+    {
+      "path": "Assets/LayoutEditor/icon.svg",
+      "length": 354,
+      "sha256": "d5cc6d5ca65a325e29ed651568251f85b686a2415ac73a918ad597ad9ed15d29"
+    },
+    {
+      "path": "Assets/LayoutEditor/index.html",
+      "length": 11917,
+      "sha256": "b5e7d9a5c7edf27c6108b03077e3a678297a30aa4365f135b7e84270bb8256ea"
+    },
+    {
       "path": "Assets/MasteryIcons/alchemy.png",
       "length": 799,
       "sha256": "74ead86777d8d44fc91b8707ae69ea190fa5eed833ee8a1defc88453b76e9d19"
@@ -2794,43 +2849,43 @@
     },
     {
       "path": "Assets/UiRefresh/core.css",
-      "length": 9138,
-      "sha256": "751b05aef15bd3ee85c4ba08f1b8b5d5aa44d83edb2b056b80430da3c1f15763"
+      "length": 9224,
+      "sha256": "aa8203664a7486ad4e432de3bb0f15b7951526e76d445e416cda64ffa7588f5f"
     },
     {
       "path": "Assets/UiRefresh/core.js",
-      "length": 14715,
-      "sha256": "1054d02222c1a0a92166149e7f098c1e4ea0d65c1ed6ef77861b4925456c5c3b"
+      "length": 14940,
+      "sha256": "d18eadf24dd326027d3a12ae8c3bcdd5cacbf674e7ecb1e08d0ae02f790e56df"
     },
     {
       "path": "Assets/UiRefresh/grind-market.css",
-      "length": 10085,
-      "sha256": "be5ba85c690d02201d835211f158dfccfb1b2bc9f6ae1763bbe47dbc49535b1f"
+      "length": 10183,
+      "sha256": "b5b691d6d99eef62166c3307726d77c73a5283d08652fe39f4677c2ccf320d17"
     },
     {
       "path": "Assets/UiRefresh/grind-market.js",
-      "length": 32693,
-      "sha256": "7984d98765c984b0e14d10eb3af9a116a56163b6141a00e56e59c0fdb42a62a6"
+      "length": 33230,
+      "sha256": "ea6dcdc1c6b2033120697c8e7e2e7f340ceb89900c51915777976784de3333bf"
     },
     {
       "path": "Assets/UiRefresh/navigation.css",
-      "length": 12032,
-      "sha256": "32a61492991afb3cdc5546ddf3658484870d2593f1b94c2543cc08b434d6e4ad"
+      "length": 12146,
+      "sha256": "6ccc28b11913aa65868138814dbf472d94a7d53b8d909412cdc992075cca79b7"
     },
     {
       "path": "Assets/UiRefresh/navigation.js",
-      "length": 24112,
-      "sha256": "a8ec0303ac653aa513cbd27733e4b58067392b523dedef5050ead445ea34d601"
+      "length": 24920,
+      "sha256": "c3da3c167fb29a294a1634c62947d54831b328814e8382c22bb3f2bbef03bb28"
     },
     {
       "path": "Assets/UiRefresh/weeklies-recipes.css",
-      "length": 11175,
-      "sha256": "86c1d91904b6e854a4c6b83d53e44c9d6f58df3a273f7a9b95d64db6d087a612"
+      "length": 11235,
+      "sha256": "e851582c10229fb0c1f95ffd268cf90f0bf485df5289b948cb6d76d269d08f34"
     },
     {
       "path": "Assets/UiRefresh/weeklies-recipes.js",
-      "length": 24073,
-      "sha256": "b06fbb9dea6e81b9f6d72472b71ec3324f5159b0dffdc439be432e8653dd5961"
+      "length": 24406,
+      "sha256": "8718201bd2c0d4b0e5ec16e3298df0de7e392bd92ab0feb8af29ea956653677e"
     },
     {
       "path": "Assets/game-data-manifest.json",
@@ -2839,13 +2894,13 @@
     },
     {
       "path": "NavigationAssets/arcane-refraction.svg",
-      "length": 318,
-      "sha256": "e8d9e222c8786c0619d40a95bb39a55a9508a15efdadf6669fc9ece25fc038e2"
+      "length": 321,
+      "sha256": "42663409424c87767711e6600534ed653ee62260bca6077c5e8a434f3675fc2b"
     },
     {
       "path": "NavigationAssets/nav-icons.svg",
-      "length": 8468,
-      "sha256": "79f0ee02d4aaeeb69978720462d7057a5b79a0957def9e595836ad7160ebcd6a"
+      "length": 8598,
+      "sha256": "81ab8211dafcb4d2d69b9baac56c0a61df7c83032bc0d9841c23f6a177a547ee"
     },
     {
       "path": "ThemeAssets/Abyssal/center-crest.png",

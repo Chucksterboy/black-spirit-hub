@@ -12,6 +12,13 @@
     const safe = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     const uniqueIds = list => Array.isArray(list) ? [...new Set(list.filter(id => typeof id === "string" && ids.includes(id)))] : [];
     const order = uniqueIds(safe.order), favorites = uniqueIds(safe.favorites);
+    // Earlier releases stored the original navigation order before UI Layouts
+    // existed. Keep that saved order, but place the newly introduced tool next
+    // to Grind Zones rather than appending it as an isolated final tile.
+    if (order.length && !order.includes("uiLayoutsView") && ids.includes("uiLayoutsView")) {
+      const grindIndex = order.indexOf("grindTrackerView");
+      order.splice(grindIndex >= 0 ? grindIndex + 1 : order.length, 0, "uiLayoutsView");
+    }
     return {order:[...order, ...ids.filter(id => !order.includes(id))], favorites, favoritesOnly:safe.favoritesOnly === true && favorites.length > 0};
   }
 

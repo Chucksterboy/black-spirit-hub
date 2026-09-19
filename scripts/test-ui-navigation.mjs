@@ -14,19 +14,24 @@ vm.runInContext(source, context, {filename:"navigation.js"});
 const core = context.BshNavigationRefresh;
 const clone = value => JSON.parse(JSON.stringify(value));
 const tools = [...html.matchAll(/class="navButton[^\"]*" data-app-view="([^"]+)"[\s\S]*?<span class="navLabel">([^<]+)<\/span>/g)].map(match => ({id:match[1], name:match[2].replaceAll("&amp;", "&")}));
-assert.equal(tools.length, 16, "All sixteen navigation tiles must remain discoverable");
+assert.equal(tools.length, 17, "All seventeen navigation tiles must remain discoverable");
 assert.equal(tools.some(tool => tool.id === "settingsView"), false, "Settings must remain in the title bar, not reappear as a tile");
 
 const defaults = clone(core.normalizePreferences(null, tools));
 assert.deepEqual(defaults, {order:tools.map(tool => tool.id), favorites:[], favoritesOnly:false});
+const legacyOrder = tools.filter(tool => tool.id !== "uiLayoutsView").map(tool => tool.id);
+const migrated = clone(core.normalizePreferences({order:legacyOrder}, tools));
+assert.equal(migrated.order.indexOf("uiLayoutsView"), migrated.order.indexOf("grindTrackerView") + 1, "Legacy saved navigation must insert UI Layouts after Grind Zones");
+const explicitUiLast = clone(core.normalizePreferences({order:[...legacyOrder, "uiLayoutsView"]}, tools));
+assert.equal(explicitUiLast.order.at(-1), "uiLayoutsView", "Explicit UI Layouts placement must be preserved");
 for (const invalid of ["bad", true, 42, [], {order:"homeView", favorites:null, favoritesOnly:true}]) {
   assert.deepEqual(clone(core.normalizePreferences(invalid, tools)), defaults);
 }
 const saved = {order:["weekliesView", "unknown", "weekliesView", 17], favorites:["weekliesView", "unknown", "weekliesView"], favoritesOnly:true};
 const normalized = clone(core.normalizePreferences(saved, tools));
 assert.equal(normalized.order[0], "weekliesView");
-assert.equal(normalized.order.length, 16);
-assert.equal(new Set(normalized.order).size, 16);
+assert.equal(normalized.order.length, 17);
+assert.equal(new Set(normalized.order).size, 17);
 assert.deepEqual(normalized.favorites, ["weekliesView"]);
 assert.equal(normalized.favoritesOnly, true);
 assert.equal(core.normalizePreferences({favorites:[], favoritesOnly:true}, tools).favoritesOnly, false, "Empty favorites cannot hide every tool");
@@ -43,8 +48,8 @@ const recipeData = {
 };
 const zones = [{id:78, name:"Zephyros Castle", zone:"Edania", primaryTrash:"Hardened Lava Chunk"}, {id:80, name:"Aphrodon Temple", zone:"Inner Edania"}];
 const index = core.buildIndex([...tools, {id:"settingsView", name:"Settings", aliases:"volume startup text size"}], zones, recipeData);
-assert.equal(index.length, 22);
-assert.equal(core.searchEntries(index, "").length, 17, "Empty search shows tools, including title-bar Settings");
+assert.equal(index.length, 23);
+assert.equal(core.searchEntries(index, "").length, 18, "Empty search shows tools, including title-bar Settings");
 assert.equal(core.searchEntries(index, "volume")[0].id, "settingsView");
 assert.equal(core.searchEntries(index, "zeph castle")[0].id, "78");
 assert.equal(core.searchEntries(index, "hardened lava")[0].id, "78");

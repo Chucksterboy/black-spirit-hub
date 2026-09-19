@@ -75,10 +75,10 @@ try {
   const styles = await page.locator("#interfaceStyle option").evaluateAll((elements) => elements.map((element) => element.value));
   assert.equal(styles.length, 13);
   const widths = [
-    [1440, [8, 8]], [1080, [8, 8]], [901, [8, 8]],
-    [900, [6, 6, 4]], [651, [6, 6, 4]],
-    [650, [4, 4, 4, 4]], [481, [4, 4, 4, 4]],
-    [480, [3, 3, 3, 3, 3, 1]], [360, [3, 3, 3, 3, 3, 1]],
+    [1440, [9, 8]], [1080, [9, 8]], [901, [9, 8]],
+    [900, [6, 6, 5]], [651, [6, 6, 5]],
+    [650, [4, 4, 4, 4, 1]], [481, [4, 4, 4, 4, 1]],
+    [480, [3, 3, 3, 3, 3, 2]], [360, [3, 3, 3, 3, 3, 2]],
   ];
   const readLayout = async () => page.evaluate(() => {
     const rectangle = (element) => {
@@ -143,7 +143,7 @@ try {
       }, style);
       const layout = await readLayout();
       const context = style + " at " + width + "px";
-      assert.equal(layout.buttons.length, 16, context);
+      assert.equal(layout.buttons.length, 17, context);
       assert.ok(layout.frame.x >= -1 && layout.frame.right <= width + 1, context + " frame must fit the viewport.");
       assert.ok(layout.overflow.scroll <= layout.overflow.client + 1, context + " must wrap without horizontal navigation scrolling.");
       assert.ok(layout.pin.x >= layout.frame.right, context + " pin must sit outside the right edge.");
@@ -170,7 +170,7 @@ try {
         assert.doesNotMatch(button.background, /url\(/i, context + " buttons must use the shared glass surface.");
       }
       assert.deepEqual(rows.map((row) => row.length), rowCounts, context + " responsive rows");
-      for (const row of rows) near((row[0].box.x + row.at(-1).box.right) / 2, layout.nav.x + layout.nav.width / 2, context + " centered rows");
+      for (const row of rows) near(row[0].box.x, layout.nav.x, context + " rows must use the grid start edge");
       const currentGeometry = geometry(layout);
       if (referenceGeometry) assert.deepEqual(currentGeometry, referenceGeometry, context + " themes must preserve button shape, typography and icon placement.");
       else referenceGeometry = currentGeometry;
@@ -181,7 +181,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(() => { document.body.dataset.style = "custom"; document.body.dataset.mode = "light"; });
   const customLight = await readLayout();
-  assert.equal(customLight.buttons.length, 16);
+  assert.equal(customLight.buttons.length, 17);
   assert.equal(customLight.crestVisible, false);
   for (const [reducedMotion, appMotion] of [["no-preference", "full"], ["no-preference", "reduced"], ["reduce", "full"]]) {
     await page.emulateMedia({ reducedMotion });

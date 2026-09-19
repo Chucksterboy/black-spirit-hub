@@ -71,6 +71,11 @@ const expectedIcons = new Map([
   ["dehkiaFuelView", "nav-icon-dehkia-fuel"],
   ["lightstoneSetsView", "nav-icon-lightstone-sets"],
 ]);
+const expectedNavigationViews = [
+  "homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView",
+  "playerGuildView", "grindTrackerView", "uiLayoutsView", "resetTimersView", "weekliesView", "eventsView",
+  "bracketsView", "masteryBracketsView", "recipeBookView", "dehkiaFuelView", "lightstoneSetsView",
+];
 const appNavMarkup = markup.match(/<nav\b[^>]*class="appNav"[^>]*>([\s\S]*?)<\/nav>/);
 assert.ok(appNavMarkup, "The application navigation markup must remain available.");
 const expectedNavigationIcons = new Map([...expectedIcons].filter(([view]) => view !== "settingsView"));
@@ -79,8 +84,8 @@ const navigationButtons = [...appNavMarkup[1].matchAll(
 )];
 assert.deepEqual(
   navigationButtons.map((match) => match[1]),
-  [...expectedNavigationIcons.keys()],
-  "The 16 navigation tiles must retain their order, with Settings moved to the title bar.",
+  expectedNavigationViews,
+  "The 17 navigation tiles must retain their order, with UI Layouts after Grind Zones and Settings in the title bar.",
 );
 const settingsButton = markup.match(/<button\b(?=[^>]*\bid="windowSettings")([^>]*)>([\s\S]*?)<\/button>/);
 assert.ok(settingsButton, "Settings must remain accessible through a title-bar button.");
@@ -113,19 +118,25 @@ assert.deepEqual(
 );
 const assetVersions = new Set();
 for (const [view, buttonMarkup] of navigationButtons.map((match) => [match[1], match[2]])) {
-  const iconId = expectedIcons.get(view);
-  const references = [...buttonMarkup.matchAll(/<use\b[^>]*\bhref="([^"]+)"/g)];
-  assert.equal(references.length, 1, view + " must render exactly one shared vector glyph.");
-  const reference = new URL(references[0][1], "https://navigation.test/");
-  assert.equal(reference.pathname, "/NavigationAssets/nav-icons.svg", view + " must use the shared sprite.");
-  assert.equal(reference.hash, "#" + iconId, view + " must retain its intended icon mapping.");
-  assert.ok(reference.searchParams.get("v"), view + " must version the shared navigation asset.");
-  assetVersions.add(reference.searchParams.get("v"));
-  assert.match(
-    navigationSprite,
-    new RegExp('<symbol\\b(?=[^>]*\\bid="' + iconId + '")(?=[^>]*\\bviewBox="0 0 64 64")[^>]*>'),
-    iconId + " must use the common 64px coordinate system.",
-  );
+  if (view === "uiLayoutsView") {
+    assert.doesNotMatch(buttonMarkup, /<use\b/, "UI Layouts must keep its self-contained layout-grid glyph.");
+    assert.match(buttonMarkup, /<svg\b(?=[^>]*\bviewBox="0 0 64 64")(?=[^>]*\bstroke="currentColor")[^>]*>/, "UI Layouts must use a theme-aware inline vector glyph.");
+    assert.match(buttonMarkup, /<rect\b(?=[^>]*\bx="9")(?=[^>]*\by="12")[^>]*>/, "UI Layouts must retain its layout-grid outline.");
+  } else {
+    const iconId = expectedIcons.get(view);
+    const references = [...buttonMarkup.matchAll(/<use\b[^>]*\bhref="([^"]+)"/g)];
+    assert.equal(references.length, 1, view + " must render exactly one shared vector glyph.");
+    const reference = new URL(references[0][1], "https://navigation.test/");
+    assert.equal(reference.pathname, "/NavigationAssets/nav-icons.svg", view + " must use the shared sprite.");
+    assert.equal(reference.hash, "#" + iconId, view + " must retain its intended icon mapping.");
+    assert.ok(reference.searchParams.get("v"), view + " must version the shared navigation asset.");
+    assetVersions.add(reference.searchParams.get("v"));
+    assert.match(
+      navigationSprite,
+      new RegExp('<symbol\\b(?=[^>]*\\bid="' + iconId + '")(?=[^>]*\\bviewBox="0 0 64 64")[^>]*>'),
+      iconId + " must use the common 64px coordinate system.",
+    );
+  }
   assert.match(
     markup,
     new RegExp('<[^>]+\\bid="' + view + '"'),
@@ -400,7 +411,8 @@ function createHarness(storedValue) {
   const activationEnd = source.indexOf('window.addEventListener("resize", syncFixedChromeOffset);', activationStart);
   assert.ok(activationStart >= 0 && activationEnd > activationStart, "The shared app-view activation block must remain available.");
   const activationSource = source.slice(activationStart, activationEnd);
-  const buttons = [...expectedIcons.keys()].map((view) => {
+  const appViews = [...expectedIcons.keys(), "uiLayoutsView"];
+  const buttons = appViews.map((view) => {
     const attributes = new Map(view === "settingsView" ? [["aria-pressed", "false"]] : []);
     const handlers = new Map();
     return {
@@ -412,7 +424,7 @@ function createHarness(storedValue) {
       setAttribute(name, value) { attributes.set(name, String(value)); },
     };
   });
-  const views = new Map([...expectedIcons.keys()].map((id) => [id, { id, classList: createClassList() }]));
+  const views = new Map(appViews.map((id) => [id, { id, classList: createClassList() }]));
   const homeButton = buttons.find((button) => button.dataset.appView === "homeView");
   const settingsControl = buttons.find((button) => button.id === "windowSettings");
   homeButton.classList.add("active");

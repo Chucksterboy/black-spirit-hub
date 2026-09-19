@@ -3420,7 +3420,7 @@ function initializeRecipeBook(){
 
 let appViewTransitionTimer=null;
 let activeAppViewId=document.querySelector(".appView.active")?.id||"homeView";
-const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","weekliesView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",dehkiaFuelView:"Assets/CinematicBackgrounds/cinematic-09.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg",recipeBookView:"Assets/CinematicBackgrounds/cinematic-06.jpg"});
+const CINEMATIC_BACKGROUNDS=["homeView","calculatorView","marketView","portraitView","fontChangerView","couponsView","eventsView","grindTrackerView","settingsView","resetTimersView","weekliesView","bracketsView","masteryBracketsView"].reduce((map,view,index)=>{map[view]=`Assets/CinematicBackgrounds/cinematic-${String(Math.min(index+1,10)).padStart(2,"0")}.jpg`;return map;},{playerGuildView:"Assets/CinematicBackgrounds/cinematic-08.jpg",dehkiaFuelView:"Assets/CinematicBackgrounds/cinematic-09.jpg",lightstoneSetsView:"Assets/CinematicBackgrounds/cinematic-10.jpg",recipeBookView:"Assets/CinematicBackgrounds/cinematic-06.jpg",uiLayoutsView:"Assets/CinematicBackgrounds/cinematic-10.jpg"});
 function updateCinematicBackground(viewId){const url=CINEMATIC_BACKGROUNDS[viewId]||CINEMATIC_BACKGROUNDS.homeView;document.body.style.setProperty("--cinematic-bg",`url("${url}")`)}
 function tickActiveAppView(){if(document.hidden)return;if(activeAppViewId==="homeView")updateHomeTimers(normalizedHomeSettings());else if(activeAppViewId==="resetTimersView")renderResetTimers(normalizedResetSettings());else if(activeAppViewId==="weekliesView")tickWeeklies();else if(activeAppViewId==="eventsView"&&eventsState.events.length)updateEventTimelineClock()}
 clearInterval(window.__bdoActiveViewTicker);
@@ -3566,8 +3566,10 @@ function initializeAppView(viewId){
   if(viewId === "masteryBracketsView") initializeMasteryBrackets();
   if(viewId === "recipeBookView") initializeRecipeBook();
   if(viewId === "lightstoneSetsView") initializeLightstoneSets();
+	if(viewId === "uiLayoutsView") initializeUiLayouts();
   if(viewId === "settingsView") initializeAppBehaviorSettings({showError:true});
 }
+function initializeUiLayouts(){const frame=document.getElementById("layoutEditorFrame");if(!frame||frame.dataset.loaded==="true")return;const source=frame.dataset.editorSrc;if(!source)return;frame.src=source;frame.dataset.loaded="true";}
 function activateAppView(button){
   const targetId=button.dataset.appView,current=document.querySelector(".appView.active"),target=document.getElementById(targetId);
   if(!target||current===target)return;

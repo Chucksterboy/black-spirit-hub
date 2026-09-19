@@ -613,7 +613,18 @@ internal sealed class InstallerForm : Form
 		"Assets/RecipeBook/ocr/LICENSE-PADDLEOCR.txt",
 		"Assets/RecipeBook/ocr/MODEL-NOTICE-PPOCRV5.txt",
 		"Assets/RecipeBook/ocr/LICENSE-ONNXRUNTIME.txt",
-		"Assets/RecipeBook/ocr/THIRD-PARTY-NOTICES-ONNXRUNTIME.txt"
+		"Assets/RecipeBook/ocr/THIRD-PARTY-NOTICES-ONNXRUNTIME.txt",
+		"Assets/LayoutEditor/index.html",
+		"Assets/LayoutEditor/editor.css",
+		"Assets/LayoutEditor/app.js",
+		"Assets/LayoutEditor/bridge.js",
+		"Assets/LayoutEditor/embed.js",
+		"Assets/LayoutEditor/engine.js",
+		"Assets/LayoutEditor/game-import.js",
+		"Assets/LayoutEditor/game-library.js",
+		"Assets/LayoutEditor/game-write.js",
+		"Assets/LayoutEditor/icon.svg",
+		"Assets/LayoutEditor/assets/background.jpg"
 	};
 
 	internal static void ValidatePayloadArchive(ZipArchive archive)

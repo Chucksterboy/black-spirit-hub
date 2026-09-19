@@ -660,7 +660,7 @@ $projectSource = Get-Content -LiteralPath $project -Raw
 $navigationMarkupMatch = [regex]::Match($html, '(?s)<nav class="appNav"[^>]*>.*?</nav>')
 $expectedNavigationViews = @(
 	"homeView", "calculatorView", "marketView", "portraitView", "fontChangerView", "couponsView",
-	"playerGuildView", "grindTrackerView", "resetTimersView", "weekliesView", "eventsView", "bracketsView", "masteryBracketsView",
+	"playerGuildView", "grindTrackerView", "uiLayoutsView", "resetTimersView", "weekliesView", "eventsView", "bracketsView", "masteryBracketsView",
 	"recipeBookView", "dehkiaFuelView", "lightstoneSetsView"
 )
 $navigationViews = if ($navigationMarkupMatch.Success) {
@@ -670,7 +670,7 @@ $navigationViews = if ($navigationMarkupMatch.Success) {
 if (!$navigationMarkupMatch.Success -or
 	($navigationViews -join "|") -ne ($expectedNavigationViews -join "|") -or
 	([regex]::Matches($navigationMarkupMatch.Value, '<span class="navRowBreak" aria-hidden="true"></span>')).Count -ne 0) {
-	throw "The Arcane Glass navigation must retain its 16-tile order, with Settings in the title bar."
+	throw "The Arcane Glass navigation must retain its 17-tile order, with UI Layouts after Grind Zones and Settings in the title bar."
 }
 
 if ($html -notmatch '(?s)<button[^>]*data-app-view="playerGuildView".*?<span class="navLabel">Player &amp; Guild Search</span>.*?</button>\s*<button[^>]*data-app-view="grindTrackerView"' -or
@@ -1879,8 +1879,8 @@ $arcaneCss = $css.Substring($arcaneStart, $arcaneEnd - $arcaneStart)
 $arcaneFrame = 'body\[data-style\] \.navFrame\[data-nav-design="arcane-glass"\]'
 $arcaneButton = $arcaneFrame + ' \.appNav>\.navButton\[data-app-view\]'
 foreach ($contract in @(
-	@{ Name = "compact frame"; Pattern = $arcaneFrame + '\{[^}]*width:min\(calc\(100% - 64px\),976px\)!important;[^}]*height:auto!important;[^}]*overflow:visible!important;' },
-	@{ Name = "equal-width grid"; Pattern = $arcaneFrame + '>\.appNav\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(16,minmax\(0,1fr\)\)!important;[^}]*justify-content:center!important;' },
+	@{ Name = "wide frame"; Pattern = $arcaneFrame + '\{[^}]*width:min\(calc\(100% - 64px\),1100px\)!important;[^}]*height:auto!important;[^}]*overflow:visible!important;' },
+	@{ Name = "nine-column grid"; Pattern = $arcaneFrame + '>\.appNav\{[^}]*display:grid!important;[^}]*grid-template-columns:repeat\(18,minmax\(0,1fr\)\)!important;[^}]*justify-content:center!important;' },
 	@{ Name = "compact centered tiles"; Pattern = $arcaneButton + '\{[^}]*grid-column:span 2!important;[^}]*grid-template-rows:46px minmax\(0,1fr\)!important;[^}]*justify-items:center!important;[^}]*height:86px!important;' },
 	@{ Name = "centered icon above label"; Pattern = $arcaneButton + '>\.navIcon\{[^}]*grid-column:1!important;grid-row:1!important;[^}]*justify-self:center!important;[^}]*width:46px!important;height:46px!important;' },
 	@{ Name = "centered readable labels"; Pattern = $arcaneButton + '>\.navLabel\{[^}]*grid-column:1!important;grid-row:2!important;[^}]*align-items:center!important;justify-content:center!important;[^}]*text-align:center!important;' },
@@ -1900,10 +1900,8 @@ foreach ($breakpoint in @(@{ Width = 900; Columns = 12 }, @{ Width = 650; Column
 	}
 }
 if ($arcaneCss -match 'overflow-x:(?:auto|scroll)!important' -or
-	$arcaneCss -notmatch '(?s)@media\(max-width:900px\)\{.*?:nth-child\(13\)\{grid-column:3/span 2!important\}' -or
-	$arcaneCss -notmatch '(?s)@media\(max-width:650px\)\{.*?:nth-child\(13\)\{grid-column:span 2!important\}' -or
-	$arcaneCss -notmatch '(?s)@media\(max-width:480px\)\{.*?:nth-child\(16\)\{grid-column:3/span 2!important\}') {
-	throw "Arcane Glass navigation must center partial rows without horizontal scrolling."
+	$arcaneCss -match ':nth-child\((?:13|16)\)\{grid-column:') {
+	throw "Arcane Glass navigation must use responsive auto-placement without horizontal scrolling or stale partial-row offsets."
 }
 if ($css -notmatch '--boss-schedule-min-width' -or
 	$css -notmatch '#homeView \.bossScheduleWrap\{[^}]*overflow-x:auto!important' -or
@@ -2125,11 +2123,102 @@ if ($html -match '<option\s+value="365">\s*1 year\s*</option>') {
 	throw "Tracked market history is retained for 90 days, so the retired one-year history option must not be shown."
 }
 $preferenceModule = Get-Content -LiteralPath (Join-Path $sourceRoot 'Assets\AppBehavior\app-behavior-preferences.js') -Raw
+$layoutEditorSource = Get-Content -LiteralPath (Join-Path $sourceRoot 'Assets\LayoutEditor\app.js') -Raw
 $bridgeCommands = @(
 	[regex]::Matches(($script + [Environment]::NewLine + $preferenceModule + [Environment]::NewLine + $uiRefreshSource), 'bridgeCall\(\s*["'']([^"'']+)["'']') |
 		ForEach-Object { $_.Groups[1].Value }
 ) + @("initializeEvents", "refreshEvents")
-$hostCommands = [regex]::Matches($calculatorSource, 'case\s+"([^"]+)"\s*:') |
+$mainHostSection = [regex]::Match(
+	$calculatorSource,
+	'(?s)private async Task<object\?> ExecuteCommandAsync\(.*?(?=\s*internal static void ValidateHealthCheckPayload\()'
+).Value
+if (!$mainHostSection) {
+	throw "The main application bridge dispatcher could not be located."
+}
+$layoutEditorBridgeCommands = @(
+	[regex]::Matches($calculatorSource, "call\(\s*'([^']+)'") |
+		ForEach-Object { $_.Groups[1].Value }
+)
+$layoutEditorHostSection = [regex]::Match(
+	$calculatorSource,
+	'(?s)private async Task<object\?> ExecuteLayoutEditorCommandAsync\(.*?(?=\r?\n\tprivate static void RequireLayoutEditorArgumentCount)'
+).Value
+$layoutEditorHostCommands = @(
+	[regex]::Matches($layoutEditorHostSection, 'case\s+"([^"]+)"\s*:') |
+		ForEach-Object { $_.Groups[1].Value }
+)
+$layoutEditorClientMembers = @(
+	[regex]::Matches($layoutEditorSource, 'bdoDesktop(?:\?\.|\.)([A-Za-z][A-Za-z0-9_]*)') |
+		ForEach-Object { $_.Groups[1].Value }
+)
+if (!$layoutEditorHostSection -or !$layoutEditorBridgeCommands -or !$layoutEditorHostCommands) {
+	throw "The isolated UI Layouts bridge contract could not be located."
+}
+$unknownLayoutEditorClientMembers = $layoutEditorClientMembers |
+	Sort-Object -Unique |
+	Where-Object { $_ -notin $layoutEditorBridgeCommands -and $_ -ne "onApplyProgress" }
+if ($unknownLayoutEditorClientMembers) {
+	throw "UI Layouts JavaScript calls unsupported bridge members: $($unknownLayoutEditorClientMembers -join ', ')"
+}
+$missingLayoutEditorHostCommands = Compare-Object `
+	($layoutEditorBridgeCommands | Sort-Object -Unique) `
+	($layoutEditorHostCommands | Sort-Object -Unique) |
+	Where-Object SideIndicator -eq "<=" |
+	ForEach-Object InputObject
+$unusedLayoutEditorHostCommands = Compare-Object `
+	($layoutEditorBridgeCommands | Sort-Object -Unique) `
+	($layoutEditorHostCommands | Sort-Object -Unique) |
+	Where-Object SideIndicator -eq "=>" |
+	ForEach-Object InputObject
+if ($missingLayoutEditorHostCommands -or $unusedLayoutEditorHostCommands) {
+	throw "UI Layouts bridge and host handlers must match. Missing: $($missingLayoutEditorHostCommands -join ', '); unused: $($unusedLayoutEditorHostCommands -join ', ')"
+}
+$layoutEditorWhitelistSection = [regex]::Match(
+	$calculatorSource,
+	'(?s)private static string GetLayoutEditorMethod\(.*?(?=\s*private static JsonElement GetLayoutEditorArguments\()'
+).Value
+if (!$layoutEditorWhitelistSection) {
+	throw "The UI Layouts bridge whitelist could not be located."
+}
+$layoutEditorWhitelistCommands = @(
+	[regex]::Matches($layoutEditorWhitelistSection, '(?:is|or)\s+"([^"]+)"') |
+		ForEach-Object { $_.Groups[1].Value }
+)
+$missingLayoutEditorWhitelistCommands = @(
+	Compare-Object -ReferenceObject ($layoutEditorBridgeCommands | Sort-Object -Unique) -DifferenceObject ($layoutEditorWhitelistCommands | Sort-Object -Unique) |
+		Where-Object SideIndicator -eq "<=" |
+		ForEach-Object InputObject
+)
+$unusedLayoutEditorWhitelistCommands = @(
+	Compare-Object -ReferenceObject ($layoutEditorBridgeCommands | Sort-Object -Unique) -DifferenceObject ($layoutEditorWhitelistCommands | Sort-Object -Unique) |
+		Where-Object SideIndicator -eq "=>" |
+		ForEach-Object InputObject
+)
+if ($missingLayoutEditorWhitelistCommands -or $unusedLayoutEditorWhitelistCommands) {
+	throw "UI Layouts bridge and whitelist commands must match. Missing: $($missingLayoutEditorWhitelistCommands -join ', '); unused: $($unusedLayoutEditorWhitelistCommands -join ', ')"
+}
+$layoutEditorHostRequestCommands = @(
+	[regex]::Matches($calculatorSource, 'InvokeLayoutEditorHostAsync\(\s*"([^"]+)"') |
+		ForEach-Object { $_.Groups[1].Value }
+)
+$layoutEditorHostRequestHandlers = @(
+	[regex]::Matches($calculatorSource, "data\.method\s*===\s*'([^']+)'") |
+		ForEach-Object { $_.Groups[1].Value }
+)
+$missingLayoutEditorHostRequestHandlers = @(
+	Compare-Object -ReferenceObject ($layoutEditorHostRequestCommands | Sort-Object -Unique) -DifferenceObject ($layoutEditorHostRequestHandlers | Sort-Object -Unique) |
+		Where-Object SideIndicator -eq "<=" |
+		ForEach-Object InputObject
+)
+$unusedLayoutEditorHostRequestHandlers = @(
+	Compare-Object -ReferenceObject ($layoutEditorHostRequestCommands | Sort-Object -Unique) -DifferenceObject ($layoutEditorHostRequestHandlers | Sort-Object -Unique) |
+		Where-Object SideIndicator -eq "=>" |
+		ForEach-Object InputObject
+)
+if ($missingLayoutEditorHostRequestHandlers -or $unusedLayoutEditorHostRequestHandlers) {
+	throw "UI Layouts host-request methods and editor handlers must match. Missing: $($missingLayoutEditorHostRequestHandlers -join ', '); unused: $($unusedLayoutEditorHostRequestHandlers -join ', ')"
+}
+$hostCommands = [regex]::Matches($mainHostSection, 'case\s+"([^"]+)"\s*:') |
 	ForEach-Object { $_.Groups[1].Value }
 $missingHostCommands = Compare-Object `
 	($bridgeCommands | Sort-Object -Unique) `

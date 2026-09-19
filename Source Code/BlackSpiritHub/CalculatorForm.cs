@@ -25,6 +25,9 @@ internal sealed class CalculatorForm : Form
 	private const string LocalAppHost = "app.bdo.local";
 	private const string UiRevision = "weeklies-20260903a";
 	private const string RecipeBookHost = "recipebook.bdo.local";
+	private const string LayoutEditorHost = "layout-editor.bdo.local";
+	private const string LayoutEditorDocumentPath = "/index.html";
+	private const int LayoutEditorMessageOverheadBytes = 16 * 1024;
 	[ComImport]
 	[Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
 	private sealed class CTaskbarList
@@ -134,6 +137,7 @@ internal sealed class CalculatorForm : Form
 	private const uint FlashWindowTray = 0x00000002;
 
 	private const int WmNcHitTest = 132;
+	private const int HtClient = 1;
 
 	internal const int DefaultAlertVolumePercent = 50;
 
@@ -207,6 +211,10 @@ internal sealed class CalculatorForm : Form
 
 	private readonly DehkiaFuelService dehkiaFuelService;
 	private readonly RecipeBookScreenshotService recipeBookScreenshotService;
+	private readonly LayoutEditorStore layoutEditorStore;
+	private readonly LayoutEditorBackgroundStore layoutEditorBackgroundStore;
+	private readonly BdoDocumentsReader bdoDocumentsReader;
+	private readonly LayoutEditorBdoApplyService layoutEditorBdoApplyService;
 
 	private readonly UpdateCheckerService updateCheckerService;
 	private readonly MarketDatabase marketDatabase;
@@ -227,6 +235,26 @@ internal sealed class CalculatorForm : Form
 	private readonly CancellationTokenSource lifetimeCancellation = new();
 
 	private readonly ConcurrentDictionary<string, CancellationTokenSource> activeBridgeRequests = new(StringComparer.Ordinal);
+
+	private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> activeLayoutEditorHostRequests = new(StringComparer.Ordinal);
+
+	private readonly ConcurrentDictionary<string, CancellationTokenSource> activeLayoutEditorBridgeRequests = new(StringComparer.Ordinal);
+
+	private CoreWebView2Frame? layoutEditorFrame;
+	private int layoutEditorFrameGeneration = -1;
+	private int layoutEditorDocumentEpoch;
+	private int layoutEditorFrameEpoch = -1;
+
+	private bool layoutEditorCloseAllowed;
+
+	private bool layoutEditorCloseCheckActive;
+
+	private bool layoutEditorFullscreenActive;
+	private Rectangle layoutEditorFullscreenBounds;
+	private FormWindowState layoutEditorFullscreenWindowState;
+	private bool layoutEditorFullscreenTopMost;
+	private bool layoutEditorFullscreenRequested;
+	private int layoutEditorFullscreenRequestEpoch = -1;
 
 	private bool minimizeToTray = AppBehaviorSettings.Default.MinimizeToTray;
 	private AppBehaviorSettings appBehaviorSettings = AppBehaviorSettings.Default;
@@ -262,6 +290,11 @@ internal sealed class CalculatorForm : Form
 		PropertyNameCaseInsensitive = true
 	};
 
+	private static readonly JsonSerializerOptions LayoutEditorJsonOptions = new(JsonOptions)
+	{
+		Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+	};
+
 	public CalculatorForm(AppPaths paths, AppLogger logger)
 	{
 		this.paths = paths;
@@ -278,6 +311,14 @@ internal sealed class CalculatorForm : Form
 		playerGuildService = new BdoPlayerGuildService(paths, logger);
 		dehkiaFuelService = new DehkiaFuelService(paths, logger);
 		recipeBookScreenshotService = new RecipeBookScreenshotService(AppContext.BaseDirectory);
+		layoutEditorStore = new LayoutEditorStore(paths.Root);
+		layoutEditorBackgroundStore = new LayoutEditorBackgroundStore(paths.Root);
+		bdoDocumentsReader = new BdoDocumentsReader(paths.Root);
+		layoutEditorBdoApplyService = new LayoutEditorBdoApplyService(
+			paths,
+			layoutEditorStore,
+			bdoDocumentsReader);
+		layoutEditorBdoApplyService.ProgressChanged += OnLayoutEditorApplyProgressChanged;
 		updateCheckerService = new UpdateCheckerService(logger);
 		marketDatabase = new MarketDatabase(paths.DatabasePath);
 		appHealthService = new AppHealthService(marketDatabase, AppContext.BaseDirectory, logger);
@@ -1249,6 +1290,11 @@ internal sealed class CalculatorForm : Form
 
 	protected override void WndProc(ref Message m)
 	{
+		if (m.Msg == WmNcHitTest && layoutEditorFullscreenActive)
+		{
+			m.Result = (IntPtr)HtClient;
+			return;
+		}
 		if (m.Msg == WmNcHitTest && base.WindowState == FormWindowState.Normal)
 		{
 			Point point = PointToClient(new Point(
@@ -1301,9 +1347,25 @@ internal sealed class CalculatorForm : Form
 			MinimizeToSystemTray();
 			return;
 		}
+		if (!layoutEditorCloseAllowed
+			&& !layoutEditorCloseCheckActive
+			&& layoutEditorFrame is not null
+			&& e.CloseReason is not (CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing))
+		{
+			e.Cancel = true;
+			layoutEditorCloseCheckActive = true;
+			_ = ConfirmLayoutEditorCloseAsync();
+			return;
+		}
+		if (layoutEditorCloseCheckActive)
+		{
+			e.Cancel = true;
+			return;
+		}
 		webViewClosing = true;
 		webViewGeneration++;
 		CancelActiveBridgeRequests();
+		ClearLayoutEditorFrame();
 		lifetimeCancellation.Cancel();
 		startupSplash.Stop();
 		base.OnFormClosing(e);
@@ -1312,6 +1374,120 @@ internal sealed class CalculatorForm : Form
 	internal static bool ShouldMinimizeToTrayOnClose(bool forceClose, bool minimizeEnabled, CloseReason closeReason)
 	{
 		return !forceClose && minimizeEnabled && closeReason == CloseReason.UserClosing;
+	}
+
+	private async Task ConfirmLayoutEditorCloseAsync()
+	{
+		try
+		{
+			JsonElement dirtyResult = await InvokeLayoutEditorHostAsync(
+				"closeState",
+				lifetimeCancellation.Token);
+			bool dirty = dirtyResult.ValueKind == JsonValueKind.True;
+			if (dirty)
+			{
+				DialogResult choice = MessageBox.Show(
+					this,
+					"UI Layouts has unsaved changes or a pending BDO apply.\n\n"
+						+ "Yes saves and applies the current layouts. No closes without saving newer changes. Cancel keeps Black Spirit Hub open.",
+					"Save UI Layouts before closing?",
+					MessageBoxButtons.YesNoCancel,
+					MessageBoxIcon.Question,
+					MessageBoxDefaultButton.Button1);
+				if (choice == DialogResult.Cancel)
+				{
+					return;
+				}
+				if (choice == DialogResult.Yes)
+				{
+					JsonElement savedResult = await InvokeLayoutEditorHostAsync(
+						"apply",
+						lifetimeCancellation.Token);
+					if (savedResult.ValueKind != JsonValueKind.True)
+					{
+						throw new IOException("The layout editor could not confirm that the latest changes were saved.");
+					}
+				}
+			}
+
+			layoutEditorCloseAllowed = true;
+			if (!IsDisposed)
+			{
+				BeginInvoke((Action)Close);
+			}
+		}
+		catch (OperationCanceledException) when (lifetimeCancellation.IsCancellationRequested)
+		{
+		}
+		catch (Exception error)
+		{
+			if (IsDisposed)
+			{
+				return;
+			}
+			DialogResult choice = MessageBox.Show(
+				this,
+				"UI Layouts could not confirm or save its current changes.\n\n"
+					+ error.Message
+					+ "\n\nClose Black Spirit Hub without saving newer UI Layouts changes?",
+				"UI Layouts changes were not confirmed",
+				MessageBoxButtons.YesNo,
+				MessageBoxIcon.Warning,
+				MessageBoxDefaultButton.Button2);
+			if (choice == DialogResult.Yes)
+			{
+				layoutEditorCloseAllowed = true;
+				if (!IsDisposed)
+				{
+					BeginInvoke((Action)Close);
+				}
+			}
+		}
+		finally
+		{
+			layoutEditorCloseCheckActive = false;
+		}
+	}
+
+	private async Task<JsonElement> InvokeLayoutEditorHostAsync(
+		string method,
+		CancellationToken cancellationToken)
+	{
+		if (method is not ("closeState" or "apply"))
+		{
+			throw new ArgumentException("Unsupported UI Layouts host request.", nameof(method));
+		}
+		CoreWebView2Frame frame = layoutEditorFrame
+			?? throw new InvalidOperationException("UI Layouts is not available to confirm its current state.");
+		if (!IsCurrentLayoutEditorFrame(frame))
+		{
+			throw new InvalidOperationException("UI Layouts is being restored and cannot confirm its current state yet.");
+		}
+		int documentEpoch = layoutEditorFrameEpoch;
+		string id = "host-layout-" + Guid.NewGuid().ToString("N");
+		TaskCompletionSource<JsonElement> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		if (!activeLayoutEditorHostRequests.TryAdd(id, pending))
+		{
+			throw new InvalidOperationException("UI Layouts could not start a host request.");
+		}
+
+		try
+		{
+			if (!PostLayoutEditorMessage(frame, documentEpoch, new
+			{
+				type = "bsh:layout-host-request",
+				id,
+				method
+			}))
+			{
+				throw new InvalidOperationException("UI Layouts is no longer available to confirm its current state.");
+			}
+			return await pending.Task.WaitAsync(GetLayoutEditorHostCommandTimeout(method), cancellationToken);
+		}
+		finally
+		{
+			activeLayoutEditorHostRequests.TryRemove(id, out _);
+		}
 	}
 
 	protected override void OnFormClosed(FormClosedEventArgs e)
@@ -1327,7 +1503,16 @@ internal sealed class CalculatorForm : Form
 		try { playerGuildService.Dispose(); } catch { }
 		try { dehkiaFuelService.Dispose(); } catch { }
 		try { recipeBookScreenshotService.Dispose(); } catch { }
+		try { layoutEditorBdoApplyService.ProgressChanged -= OnLayoutEditorApplyProgressChanged; } catch { }
+		try { layoutEditorBdoApplyService.Dispose(); } catch { }
+		try { bdoDocumentsReader.Dispose(); } catch { }
+		try { layoutEditorBackgroundStore.Dispose(); } catch { }
+		try { layoutEditorStore.Dispose(); } catch { }
 		try { updateCheckerService.Dispose(); } catch { }
+		foreach (TaskCompletionSource<JsonElement> pending in activeLayoutEditorHostRequests.Values)
+		{
+			pending.TrySetCanceled();
+		}
 		TrySetTrayVisible(false);
 		try { trayIcon.Dispose(); } catch { }
 		try { taskbarBadgeIcon?.Dispose(); } catch { }
@@ -1406,7 +1591,7 @@ internal sealed class CalculatorForm : Form
 
 		CoreWebView2 core = target.CoreWebView2
 			?? throw new InvalidOperationException("The WebView2 controller did not initialize.");
-		ConfigureMainWebView(core);
+		await ConfigureMainWebViewAsync(core);
 		logger.Info($"WebView generation {generation}: controller ready.");
 
 		string url = $"https://{LocalAppHost}/{Path.GetFileName(paths.HtmlPath)}?v={Uri.EscapeDataString(AppVersion.Current + "-" + UiRevision)}";
@@ -1470,12 +1655,17 @@ internal sealed class CalculatorForm : Form
 		logger.Info($"WebView generation {generation}: interface ready.");
 	}
 
-	private void ConfigureMainWebView(CoreWebView2 core)
+	private async Task ConfigureMainWebViewAsync(CoreWebView2 core)
 	{
 		string recipeBookAssets = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
 		if (!Directory.Exists(recipeBookAssets))
 		{
 			throw new DirectoryNotFoundException("The offline Recipe Book assets are missing.");
+		}
+		string layoutEditorAssets = Path.Combine(AppContext.BaseDirectory, "Assets", "LayoutEditor");
+		if (!File.Exists(Path.Combine(layoutEditorAssets, "index.html")))
+		{
+			throw new DirectoryNotFoundException("The offline UI Layouts editor assets are missing.");
 		}
 		core.AddWebResourceRequestedFilter(
 			$"https://{LocalAppHost}/*",
@@ -1483,16 +1673,23 @@ internal sealed class CalculatorForm : Form
 		core.AddWebResourceRequestedFilter(
 			$"https://{RecipeBookHost}/*",
 			CoreWebView2WebResourceContext.All);
+		core.AddWebResourceRequestedFilter(
+			$"https://{LayoutEditorHost}/*",
+			CoreWebView2WebResourceContext.All);
 		core.WebResourceRequested += OnLocalWebResourceRequested;
 		core.Settings.AreDevToolsEnabled = false;
 		core.Settings.AreDefaultContextMenusEnabled = false;
 		core.Settings.IsStatusBarEnabled = false;
+		core.Settings.IsWebMessageEnabled = true;
 		core.NavigationStarting += OnMainNavigationStarting;
 		core.NewWindowRequested += OnMainNewWindowRequested;
 		core.PermissionRequested += OnMainPermissionRequested;
 		core.WebMessageReceived += OnWebMessageReceived;
+		core.FrameCreated += OnMainFrameCreated;
+		core.ContainsFullScreenElementChanged += OnMainContainsFullScreenElementChanged;
 		core.DocumentTitleChanged += OnMainDocumentTitleChanged;
 		core.ProcessFailed += OnMainProcessFailed;
+		await core.AddScriptToExecuteOnDocumentCreatedAsync(LayoutEditorBridgeScript);
 	}
 
 	private void DetachMainWebViewEvents(WebView2 target)
@@ -1507,6 +1704,8 @@ internal sealed class CalculatorForm : Form
 			core.NewWindowRequested -= OnMainNewWindowRequested;
 			core.PermissionRequested -= OnMainPermissionRequested;
 			core.WebMessageReceived -= OnWebMessageReceived;
+			core.FrameCreated -= OnMainFrameCreated;
+			core.ContainsFullScreenElementChanged -= OnMainContainsFullScreenElementChanged;
 			core.DocumentTitleChanged -= OnMainDocumentTitleChanged;
 			core.ProcessFailed -= OnMainProcessFailed;
 		}
@@ -1599,6 +1798,10 @@ internal sealed class CalculatorForm : Form
 			root = Path.Combine(AppContext.BaseDirectory, "Assets", "RecipeBook");
 			recipeBook = true;
 		}
+		else if (uri.Host.Equals(LayoutEditorHost, StringComparison.OrdinalIgnoreCase))
+		{
+			root = Path.Combine(AppContext.BaseDirectory, "Assets", "LayoutEditor");
+		}
 		else
 		{
 			return false;
@@ -1650,8 +1853,594 @@ internal sealed class CalculatorForm : Form
 
 	private void OnMainNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs args)
 	{
+		ClearLayoutEditorFrame();
 		if (!IsTrustedLocalUi(args.Uri))
 			args.Cancel = true;
+	}
+
+	private void OnMainContainsFullScreenElementChanged(object? sender, object? args)
+	{
+		if (sender is not CoreWebView2 core || !ReferenceEquals(core, webView.CoreWebView2))
+		{
+			return;
+		}
+
+		if (!core.ContainsFullScreenElement)
+		{
+			layoutEditorFullscreenRequested = false;
+			layoutEditorFullscreenRequestEpoch = -1;
+			ExitLayoutEditorFullscreen();
+			return;
+		}
+
+		if (layoutEditorFullscreenRequested
+			&& layoutEditorFrame is CoreWebView2Frame frame
+			&& layoutEditorFullscreenRequestEpoch == layoutEditorFrameEpoch
+			&& IsCurrentLayoutEditorFrame(frame, layoutEditorFullscreenRequestEpoch))
+		{
+			EnterLayoutEditorFullscreen();
+		}
+	}
+
+	private void OnMainFrameCreated(object? sender, CoreWebView2FrameCreatedEventArgs args)
+	{
+		if (webViewClosing
+			|| sender is not CoreWebView2 core
+			|| !ReferenceEquals(core, webView.CoreWebView2))
+		{
+			return;
+		}
+
+		int frameGeneration = webViewGeneration;
+		args.Frame.WebMessageReceived += (frameSender, messageArgs) =>
+			OnLayoutEditorFrameWebMessageReceived(frameSender, messageArgs, frameGeneration);
+		args.Frame.NavigationStarting += (frameSender, navigationArgs) =>
+			OnLayoutEditorFrameNavigationStarting(frameSender, navigationArgs, frameGeneration);
+		args.Frame.Destroyed += (frameSender, _) =>
+			OnLayoutEditorFrameDestroyed(frameSender, frameGeneration);
+	}
+
+	private void OnLayoutEditorFrameNavigationStarting(
+		object? sender,
+		CoreWebView2NavigationStartingEventArgs args,
+		int frameGeneration)
+	{
+		if (frameGeneration != webViewGeneration
+			|| sender is not CoreWebView2Frame frame
+			|| !ReferenceEquals(layoutEditorFrame, frame))
+		{
+			return;
+		}
+
+		// The editor can refresh its own exact document, but it must never retain
+		// the native bridge after navigating to another document or origin.
+		ClearLayoutEditorFrame(frame);
+		if (!IsLayoutEditorDocument(args.Uri))
+		{
+			args.Cancel = true;
+		}
+	}
+
+	private void OnLayoutEditorFrameDestroyed(object? sender, int frameGeneration)
+	{
+		if (frameGeneration != webViewGeneration || sender is not CoreWebView2Frame frame)
+		{
+			return;
+		}
+
+		ClearLayoutEditorFrame(frame);
+	}
+
+	private async void OnLayoutEditorFrameWebMessageReceived(
+		object? sender,
+		CoreWebView2WebMessageReceivedEventArgs e,
+		int frameGeneration)
+	{
+		if (webViewClosing
+			|| frameGeneration != webViewGeneration
+			|| sender is not CoreWebView2Frame frame
+			|| !IsLayoutEditorDocument(e.Source))
+		{
+			return;
+		}
+
+		if (!ReferenceEquals(layoutEditorFrame, frame)
+			|| layoutEditorFrameGeneration != frameGeneration
+			|| layoutEditorFrameEpoch < 0)
+		{
+			layoutEditorFrame = frame;
+			layoutEditorFrameGeneration = frameGeneration;
+			layoutEditorFrameEpoch = ++layoutEditorDocumentEpoch;
+		}
+		int documentEpoch = layoutEditorFrameEpoch;
+		string? requestId = null;
+		string? requestKey = null;
+		CancellationTokenSource? requestCancellation = null;
+		bool requestRegistered = false;
+		int requestGeneration = frameGeneration;
+		try
+		{
+			string requestJson = e.WebMessageAsJson;
+			int requestBytes = Encoding.UTF8.GetByteCount(requestJson);
+			if (requestBytes > LayoutEditorBackgroundStore.MaxDataUrlLength + LayoutEditorMessageOverheadBytes)
+			{
+				throw new InvalidDataException("The layout editor message exceeds its allowed size.");
+			}
+
+			using JsonDocument document = JsonDocument.Parse(
+				requestJson,
+				new JsonDocumentOptions { MaxDepth = 32 });
+			JsonElement message = document.RootElement;
+			if (message.ValueKind != JsonValueKind.Object
+				|| !message.TryGetProperty("type", out JsonElement typeValue)
+				|| typeValue.ValueKind != JsonValueKind.String)
+			{
+				return;
+			}
+
+			string type = typeValue.GetString() ?? string.Empty;
+			if (string.Equals(type, "bsh:layout-host-response", StringComparison.Ordinal))
+			{
+				HandleLayoutEditorHostResponse(message);
+				return;
+			}
+			if (string.Equals(type, "bsh:layout-fullscreen", StringComparison.Ordinal))
+			{
+				HandleLayoutEditorFullscreenChange(frame, documentEpoch, message);
+				return;
+			}
+			if (!string.Equals(type, "bsh:layout-request", StringComparison.Ordinal))
+			{
+				return;
+			}
+			if (!message.TryGetProperty("version", out JsonElement version)
+				|| version.ValueKind != JsonValueKind.Number
+				|| !version.TryGetInt32(out int protocolVersion)
+				|| protocolVersion != 1)
+			{
+				throw new InvalidDataException("The layout editor bridge protocol is not supported.");
+			}
+
+			requestId = GetLayoutEditorRequestId(message);
+			string method = GetLayoutEditorMethod(message);
+			JsonElement arguments = GetLayoutEditorArguments(message);
+			int maximumBytes = string.Equals(method, "saveBackground", StringComparison.Ordinal)
+				? LayoutEditorBackgroundStore.MaxDataUrlLength + LayoutEditorMessageOverheadBytes
+				: LayoutEditorStore.MaxStateBytes + LayoutEditorMessageOverheadBytes;
+			if (requestBytes > maximumBytes)
+			{
+				throw new InvalidDataException("The layout editor request exceeds its allowed size.");
+			}
+
+			requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetimeCancellation.Token);
+			requestCancellation.CancelAfter(GetLayoutEditorCommandTimeout(method));
+			requestKey = GetBridgeRequestKey(requestGeneration, "layout:" + documentEpoch + ":" + requestId);
+			if (!activeLayoutEditorBridgeRequests.TryAdd(requestKey, requestCancellation))
+			{
+				throw new InvalidOperationException("The layout editor request identifier is already active.");
+			}
+			requestRegistered = true;
+
+			object? result = await ExecuteLayoutEditorCommandAsync(
+				method,
+				arguments,
+				requestCancellation.Token);
+			PostLayoutEditorMessage(frame, documentEpoch, new
+			{
+				type = "bsh:layout-response",
+				id = requestId,
+				result
+			});
+		}
+		catch (OperationCanceledException)
+		{
+			PostLayoutEditorError(frame, documentEpoch, requestId, "The layout editor request timed out or was cancelled.");
+		}
+		catch (Exception error)
+		{
+			logger.Error("UI Layouts command failed.", error);
+			PostLayoutEditorError(frame, documentEpoch, requestId, error.Message);
+		}
+		finally
+		{
+			if (requestRegistered && !string.IsNullOrWhiteSpace(requestKey))
+			{
+				activeLayoutEditorBridgeRequests.TryRemove(requestKey, out _);
+			}
+			requestCancellation?.Dispose();
+		}
+	}
+
+	private static string GetLayoutEditorRequestId(JsonElement message)
+	{
+		if (!message.TryGetProperty("id", out JsonElement value)
+			|| value.ValueKind != JsonValueKind.String)
+		{
+			throw new InvalidDataException("The layout editor request is missing its identifier.");
+		}
+
+		string id = value.GetString() ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(id) || id.Length > 100)
+		{
+			throw new InvalidDataException("The layout editor request identifier is invalid.");
+		}
+		return id;
+	}
+
+	private static string GetLayoutEditorMethod(JsonElement message)
+	{
+		if (!message.TryGetProperty("method", out JsonElement value)
+			|| value.ValueKind != JsonValueKind.String)
+		{
+			throw new InvalidDataException("The layout editor request is missing its method.");
+		}
+
+		string method = value.GetString() ?? string.Empty;
+		return method is "load"
+			or "save"
+			or "loadBackground"
+			or "saveBackground"
+			or "discoverBdo"
+			or "readBdo"
+			or "getVersion"
+			or "saveAndApply"
+			or "getApplyStatus"
+			or "checkLastApply"
+			? method
+			: throw new InvalidDataException("The layout editor requested an unsupported method.");
+	}
+
+	private static JsonElement GetLayoutEditorArguments(JsonElement message)
+	{
+		if (!message.TryGetProperty("args", out JsonElement value)
+			|| value.ValueKind != JsonValueKind.Array
+			|| value.GetArrayLength() > 2)
+		{
+			throw new InvalidDataException("The layout editor request has invalid arguments.");
+		}
+		return value.Clone();
+	}
+
+	private async Task<object?> ExecuteLayoutEditorCommandAsync(
+		string method,
+		JsonElement arguments,
+		CancellationToken cancellationToken)
+	{
+		switch (method)
+		{
+		case "load":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return await layoutEditorStore.LoadAsync(cancellationToken);
+		case "save":
+		{
+			JsonElement state = GetLayoutEditorArgument(arguments, 0);
+			RequireLayoutEditorArgumentCount(arguments, 1);
+			await layoutEditorStore.SaveAsync(state, cancellationToken);
+			return new { saved = true };
+		}
+		case "loadBackground":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return await layoutEditorBackgroundStore.LoadAsync(cancellationToken);
+		case "saveBackground":
+		{
+			JsonElement value = GetLayoutEditorArgument(arguments, 0);
+			RequireLayoutEditorArgumentCount(arguments, 1);
+			string? background = value.ValueKind switch
+			{
+				JsonValueKind.Null => null,
+				JsonValueKind.String => value.GetString(),
+				_ => throw new InvalidDataException("The background must be a JPEG image or a reset request.")
+			};
+			await layoutEditorBackgroundStore.SaveAsync(background, cancellationToken);
+			return new { saved = true };
+		}
+		case "discoverBdo":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return await layoutEditorBdoApplyService.DiscoverAsync(cancellationToken);
+		case "readBdo":
+		{
+			JsonElement value = GetLayoutEditorArgument(arguments, 0);
+			RequireLayoutEditorArgumentCount(arguments, 1);
+			if (value.ValueKind != JsonValueKind.String)
+			{
+				throw new InvalidDataException("Choose a numeric BDO account from the discovered accounts.");
+			}
+			return await layoutEditorBdoApplyService.ReadAndRememberAsync(
+				value.GetString() ?? string.Empty,
+				cancellationToken);
+		}
+		case "getVersion":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return "1.4.9";
+		case "saveAndApply":
+		{
+			JsonElement state = GetLayoutEditorArgument(arguments, 0).Clone();
+			JsonElement source = GetLayoutEditorArgument(arguments, 1);
+			RequireLayoutEditorArgumentCount(arguments, 2);
+			(string? accountId, string? expectedHash, LayoutEditorApplyMode applyMode) =
+				ReadLayoutEditorApplySource(source);
+			return await layoutEditorBdoApplyService.SaveAndApplyAsync(
+				new BdoApplyRequest(state, accountId, expectedHash, applyMode),
+				cancellationToken);
+		}
+		case "getApplyStatus":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return await layoutEditorBdoApplyService.ReadStatusAsync(cancellationToken);
+		case "checkLastApply":
+			RequireLayoutEditorArgumentCount(arguments, 0);
+			return await layoutEditorBdoApplyService.CheckLastApplyAsync(cancellationToken);
+		default:
+			throw new InvalidDataException("The layout editor requested an unsupported method.");
+		}
+	}
+
+	private static void RequireLayoutEditorArgumentCount(JsonElement arguments, int expected)
+	{
+		if (arguments.GetArrayLength() != expected)
+		{
+			throw new InvalidDataException("The layout editor request has an unexpected number of arguments.");
+		}
+	}
+
+	private static JsonElement GetLayoutEditorArgument(JsonElement arguments, int index)
+	{
+		if (index < 0 || index >= arguments.GetArrayLength())
+		{
+			throw new InvalidDataException("The layout editor request is missing an argument.");
+		}
+		return arguments[index];
+	}
+
+	private static (string? AccountId, string? ExpectedHash, LayoutEditorApplyMode ApplyMode)
+		ReadLayoutEditorApplySource(JsonElement source)
+	{
+		if (source.ValueKind != JsonValueKind.Object)
+		{
+			throw new InvalidDataException("The BDO apply source is invalid.");
+		}
+
+		string? accountId = null;
+		string? expectedHash = null;
+		LayoutEditorApplyMode applyMode = LayoutEditorApplyMode.ClosedGame;
+		foreach (JsonProperty property in source.EnumerateObject())
+		{
+			switch (property.Name)
+			{
+			case "accountId" when property.Value.ValueKind == JsonValueKind.String:
+				accountId = property.Value.GetString();
+				break;
+			case "expectedHash" when property.Value.ValueKind == JsonValueKind.String:
+				expectedHash = property.Value.GetString();
+				break;
+			case "applyMode" when property.Value.ValueKind == JsonValueKind.String:
+				applyMode = (property.Value.GetString() ?? string.Empty) switch
+				{
+					"closed-game" => LayoutEditorApplyMode.ClosedGame,
+					"character-selection" => LayoutEditorApplyMode.CharacterSelection,
+					"game-open" => LayoutEditorApplyMode.GameOpen,
+					_ => throw new InvalidDataException("Choose a supported BDO apply mode.")
+				};
+				break;
+			default:
+				throw new InvalidDataException("The BDO apply source contains unsupported data.");
+			}
+		}
+
+		return (accountId, expectedHash, applyMode);
+	}
+
+	private static TimeSpan GetLayoutEditorCommandTimeout(string method) => method switch
+	{
+		"saveAndApply" => TimeSpan.FromMinutes(2),
+		"readBdo" => TimeSpan.FromSeconds(75),
+		_ => TimeSpan.FromSeconds(45)
+	};
+
+	private static TimeSpan GetLayoutEditorHostCommandTimeout(string method) => method switch
+	{
+		"apply" or "closeState" => TimeSpan.FromSeconds(140),
+		_ => TimeSpan.FromSeconds(60)
+	};
+
+	private void HandleLayoutEditorHostResponse(JsonElement message)
+	{
+		string id = GetLayoutEditorRequestId(message);
+		if (!activeLayoutEditorHostRequests.TryRemove(id, out TaskCompletionSource<JsonElement>? pending))
+		{
+			return;
+		}
+
+		if (message.TryGetProperty("error", out JsonElement error)
+			&& error.ValueKind == JsonValueKind.String)
+		{
+			pending.TrySetException(new InvalidOperationException(error.GetString()));
+			return;
+		}
+		if (!message.TryGetProperty("result", out JsonElement result))
+		{
+			pending.TrySetException(new InvalidDataException("The layout editor returned an invalid host response."));
+			return;
+		}
+		pending.TrySetResult(result.Clone());
+	}
+
+	private void HandleLayoutEditorFullscreenChange(
+		CoreWebView2Frame frame,
+		int documentEpoch,
+		JsonElement message)
+	{
+		if (!IsCurrentLayoutEditorFrame(frame, documentEpoch)
+			|| !message.TryGetProperty("active", out JsonElement active)
+			|| active.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+		{
+			return;
+		}
+
+		layoutEditorFullscreenRequested = active.GetBoolean();
+		layoutEditorFullscreenRequestEpoch = layoutEditorFullscreenRequested ? documentEpoch : -1;
+		if (!layoutEditorFullscreenRequested)
+		{
+			ExitLayoutEditorFullscreen();
+			return;
+		}
+
+		if (webView.CoreWebView2?.ContainsFullScreenElement == true)
+		{
+			EnterLayoutEditorFullscreen();
+		}
+	}
+
+	private void OnLayoutEditorApplyProgressChanged(object? sender, BdoApplyProgress progress)
+	{
+		CoreWebView2Frame? frame = layoutEditorFrame;
+		int documentEpoch = layoutEditorFrameEpoch;
+		if (frame is null || documentEpoch < 0)
+		{
+			return;
+		}
+		PostLayoutEditorMessage(frame, documentEpoch, new
+		{
+			type = "bsh:layout-event",
+			eventName = "apply-progress",
+			data = new { phase = progress.Phase, message = progress.Message }
+		});
+	}
+
+	private void PostLayoutEditorError(CoreWebView2Frame frame, int documentEpoch, string? id, string error)
+	{
+		if (string.IsNullOrWhiteSpace(id))
+		{
+			return;
+		}
+		PostLayoutEditorMessage(frame, documentEpoch, new
+		{
+			type = "bsh:layout-response",
+			id,
+			error
+		});
+	}
+
+	private bool PostLayoutEditorMessage(CoreWebView2Frame frame, int documentEpoch, object value)
+	{
+		bool posted = false;
+		void Post()
+		{
+			if (!IsCurrentLayoutEditorFrame(frame, documentEpoch))
+			{
+				return;
+			}
+			try
+			{
+				frame.PostWebMessageAsJson(JsonSerializer.Serialize(value, LayoutEditorJsonOptions));
+				posted = true;
+			}
+			catch (Exception error) when (error is InvalidOperationException or COMException)
+			{
+				logger.Warn("UI Layouts message was skipped: " + error.Message);
+			}
+		}
+
+		if (InvokeRequired)
+		{
+			try
+			{
+				BeginInvoke((Action)Post);
+				return true;
+			}
+			catch (InvalidOperationException)
+			{
+				return false;
+			}
+		}
+
+		Post();
+		return posted;
+	}
+
+	private bool IsCurrentLayoutEditorFrame(CoreWebView2Frame frame, int? documentEpoch = null)
+	{
+		return !webViewClosing
+			&& layoutEditorFrameGeneration == webViewGeneration
+			&& ReferenceEquals(layoutEditorFrame, frame)
+			&& (!documentEpoch.HasValue || layoutEditorFrameEpoch == documentEpoch.Value)
+			&& webView.CoreWebView2 is not null;
+	}
+
+	private void ClearLayoutEditorFrame(CoreWebView2Frame? expectedFrame = null)
+	{
+		if (expectedFrame is not null && !ReferenceEquals(layoutEditorFrame, expectedFrame))
+		{
+			return;
+		}
+
+		layoutEditorDocumentEpoch++;
+		layoutEditorFrame = null;
+		layoutEditorFrameGeneration = -1;
+		layoutEditorFrameEpoch = -1;
+		layoutEditorFullscreenRequested = false;
+		layoutEditorFullscreenRequestEpoch = -1;
+		CancelActiveLayoutEditorRequests();
+		ExitLayoutEditorFullscreen();
+	}
+
+	private void EnterLayoutEditorFullscreen()
+	{
+		if (layoutEditorFullscreenActive || IsDisposed || WindowState == FormWindowState.Minimized)
+		{
+			return;
+		}
+
+		layoutEditorFullscreenActive = true;
+		layoutEditorFullscreenBounds = Bounds;
+		layoutEditorFullscreenWindowState = WindowState;
+		layoutEditorFullscreenTopMost = TopMost;
+		try
+		{
+			WindowState = FormWindowState.Normal;
+			Bounds = Screen.FromHandle(Handle).Bounds;
+			TopMost = true;
+		}
+		catch (Exception error) when (error is InvalidOperationException or ObjectDisposedException)
+		{
+			try
+			{
+				WindowState = FormWindowState.Normal;
+				Bounds = layoutEditorFullscreenBounds;
+				WindowState = layoutEditorFullscreenWindowState;
+				TopMost = layoutEditorFullscreenTopMost;
+			}
+			catch
+			{
+			}
+			layoutEditorFullscreenActive = false;
+			logger.Warn("UI Layouts fullscreen could not resize the Hub window: " + error.Message);
+		}
+	}
+
+	private void ExitLayoutEditorFullscreen()
+	{
+		if (!layoutEditorFullscreenActive)
+		{
+			return;
+		}
+
+		layoutEditorFullscreenActive = false;
+		if (IsDisposed)
+		{
+			return;
+		}
+
+		try
+		{
+			WindowState = FormWindowState.Normal;
+			Bounds = layoutEditorFullscreenBounds;
+			WindowState = layoutEditorFullscreenWindowState;
+			TopMost = layoutEditorFullscreenTopMost;
+		}
+		catch (Exception error) when (error is InvalidOperationException or ObjectDisposedException)
+		{
+			logger.Warn("UI Layouts fullscreen could not restore the Hub window: " + error.Message);
+		}
 	}
 
 	private static void OnMainNewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs args)
@@ -1871,6 +2660,7 @@ internal sealed class CalculatorForm : Form
 			backgroundNotificationTimer?.Stop();
 			startupSplash.ShowRestoring("Restoring Black Spirit Hub...");
 			CancelActiveBridgeRequests();
+			ClearLayoutEditorFrame();
 
 			WebView2 oldWebView = webView;
 			DetachMainWebViewEvents(oldWebView);
@@ -1917,6 +2707,19 @@ internal sealed class CalculatorForm : Form
 		foreach (CancellationTokenSource request in activeBridgeRequests.Values)
 		{
 			try { request.Cancel(); } catch { }
+		}
+		CancelActiveLayoutEditorRequests();
+	}
+
+	private void CancelActiveLayoutEditorRequests()
+	{
+		foreach (CancellationTokenSource request in activeLayoutEditorBridgeRequests.Values)
+		{
+			try { request.Cancel(); } catch { }
+		}
+		foreach (TaskCompletionSource<JsonElement> request in activeLayoutEditorHostRequests.Values)
+		{
+			request.TrySetCanceled();
 		}
 	}
 
@@ -3408,6 +4211,109 @@ internal sealed class CalculatorForm : Form
 		string appRoot = Path.GetFullPath(paths.Root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 		return localPath.StartsWith(appRoot, StringComparison.OrdinalIgnoreCase);
 	}
+
+	private static bool IsLayoutEditorDocument(string value)
+	{
+		return Uri.TryCreate(value, UriKind.Absolute, out Uri? uri)
+			&& uri.Scheme == Uri.UriSchemeHttps
+			&& uri.IsDefaultPort
+			&& string.IsNullOrEmpty(uri.UserInfo)
+			&& uri.Host.Equals(LayoutEditorHost, StringComparison.OrdinalIgnoreCase)
+			&& uri.AbsolutePath.Equals(LayoutEditorDocumentPath, StringComparison.Ordinal);
+	}
+
+	// This is injected only into the isolated editor document. It intentionally
+	// exposes the fixed Electron-preload contract and no generic host command,
+	// file path, shell, or Hub application service.
+	private const string LayoutEditorBridgeScript = """
+	(() => {
+	  'use strict';
+	  if (location.origin !== 'https://layout-editor.bdo.local' || location.pathname !== '/index.html') return;
+	  const native = window.chrome && window.chrome.webview;
+	  if (!native || typeof native.postMessage !== 'function') return;
+	  const pending = new Map(), progressListeners = new Set();
+	  const documentNonce = typeof globalThis.crypto?.randomUUID === 'function'
+	    ? globalThis.crypto.randomUUID().replaceAll('-', '')
+	    : Math.random().toString(36).slice(2);
+	  let sequence = 0;
+	  const timeoutFor = method => method === 'saveAndApply' ? 135000 : method === 'readBdo' ? 90000 : 60000;
+	  function call(method, ...args) {
+	    return new Promise((resolve, reject) => {
+	      const id = 'hub-layout-' + documentNonce + '-' + (++sequence);
+	      const timeout = setTimeout(() => {
+	        pending.delete(id);
+	        reject(Error('Black Spirit Hub did not respond to the layout editor in time.'));
+	      }, timeoutFor(method));
+	      pending.set(id, { resolve, reject, timeout });
+	      native.postMessage({ type: 'bsh:layout-request', version: 1, id, method, args });
+	    });
+	  }
+	  const desktop = Object.freeze({
+	    load: () => call('load'),
+	    save: state => call('save', state),
+	    loadBackground: () => call('loadBackground'),
+	    saveBackground: value => call('saveBackground', value),
+	    discoverBdo: () => call('discoverBdo'),
+	    readBdo: id => call('readBdo', id),
+	    getVersion: () => call('getVersion'),
+	    saveAndApply: (state, source = {}) => call('saveAndApply', state, source),
+	    getApplyStatus: () => call('getApplyStatus'),
+	    checkLastApply: () => call('checkLastApply'),
+	    onApplyProgress: callback => {
+	      if (typeof callback !== 'function') throw new TypeError('An apply-progress callback is required.');
+	      progressListeners.add(callback);
+	      return () => progressListeners.delete(callback);
+	    }
+	  });
+	  Object.defineProperty(window, 'bdoDesktop', {
+	    value: desktop, writable: false, configurable: false
+	  });
+	  document.addEventListener('fullscreenchange', () => {
+	    native.postMessage({ type: 'bsh:layout-fullscreen', active: document.fullscreenElement !== null });
+	  });
+	  native.addEventListener('message', async ({ data }) => {
+	    if (!data || typeof data !== 'object') return;
+	    if (data.type === 'bsh:layout-response' && typeof data.id === 'string') {
+	      const request = pending.get(data.id);
+	      if (!request) return;
+	      clearTimeout(request.timeout);
+	      pending.delete(data.id);
+	      if (typeof data.error === 'string') request.reject(Error(data.error));
+	      else request.resolve(data.result);
+	      return;
+	    }
+	    if (data.type === 'bsh:layout-event' && data.eventName === 'apply-progress') {
+	      for (const callback of [...progressListeners]) {
+	        try { callback(data.data); } catch (error) { console.error('Layout apply-progress callback failed.', error); }
+	      }
+	      return;
+	    }
+	    if (data.type !== 'bsh:layout-host-request' || typeof data.id !== 'string') return;
+	    try {
+	      const editor = window.BDOEditor;
+	      if (!editor) throw Error('The layout editor has not started.');
+	      await editor.ready;
+	      let result;
+	      if (data.method === 'closeState') {
+	        await editor.whenIdle();
+	        result = editor.isDirty();
+	      } else if (data.method === 'apply') {
+	        await editor.apply();
+	        result = !editor.isDirty();
+	      } else {
+	        throw Error('Unsupported host request.');
+	      }
+	      native.postMessage({ type: 'bsh:layout-host-response', id: data.id, result });
+	    } catch (error) {
+	      native.postMessage({
+	        type: 'bsh:layout-host-response',
+	        id: data.id,
+	        error: error && error.message ? error.message : 'The layout editor could not complete the host request.'
+	      });
+	    }
+	  });
+	})();
+	""";
 }
 
 
