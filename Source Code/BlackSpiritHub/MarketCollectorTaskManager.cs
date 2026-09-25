@@ -54,9 +54,9 @@ internal static class MarketCollectorTaskManager
 			}
 
 			MarketTaskOperationResult cleanup = await RemoveKnownTasksAsync(cancellationToken, runner, name).ConfigureAwait(false);
-			return new(true, cleanup.Success
+			return new(cleanup.Success, cleanup.Success
 				? "Background market checks are registered with Windows."
-				: "Background market checks were registered, but an older registration could not be removed. " + cleanup.Details);
+				: "Windows registered a replacement, but an older registration could not be removed. Background updates remain off until cleanup succeeds. " + cleanup.Details);
 		}
 		return new(false, "Windows could not register background market checks. " + JoinDetails(errors));
 	}

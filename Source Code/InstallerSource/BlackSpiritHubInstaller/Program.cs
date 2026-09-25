@@ -12,7 +12,6 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -524,11 +523,11 @@ internal sealed class InstallerForm : Form
 				string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 				CreateShortcut(Path.Combine(desktop, InstallerConfig.ShortcutName + ".lnk"), exePath, exePath);
 			}
-			status.Text = "Scheduling market collector...";
-			bool marketCollectorScheduled = CreateMarketCollectorTask(exePath);
+			status.Text = "Removing automatic market collector...";
+			RetireAutomaticMarketCollectorTask(exePath);
 			progress.Value = 90;
 
-			status.Text = marketCollectorScheduled ? "Market collector scheduled." : "Market collector will refresh when the app opens.";
+			status.Text = "Market history will refresh while Black Spirit Hub is open.";
 			WriteUninstallHelper();
 			progress.Value = 100;
 			UseWaitCursor = false;
@@ -1079,108 +1078,40 @@ internal sealed class InstallerForm : Form
 		CreateShortcut(Path.Combine(startMenuFolder, "Uninstall " + InstallerConfig.ShortcutName + ".lnk"), uninstallPath);
 	}
 
-	private bool CreateMarketCollectorTask(string exePath)
+	private void RetireAutomaticMarketCollectorTask(string executablePath)
 	{
-		string details;
-		if (TryCreateMarketCollectorTask(MarketCollectorTaskName, exePath, out details))
-		{
-			return true;
-		}
-
-		string userTaskName = GetUserMarketCollectorTaskName(MarketCollectorTaskName);
-		if (!string.Equals(userTaskName, MarketCollectorTaskName, StringComparison.OrdinalIgnoreCase)
-			&& TryCreateMarketCollectorTask(userTaskName, exePath, out details))
-		{
-			return true;
-		}
-
 		try
 		{
-			File.AppendAllText(
-				Path.Combine(installPath, "install.log"),
-				DateTime.Now.ToString("s") + " Market collector task was not created. " + details + Environment.NewLine);
+			ProcessStartInfo startInfo = new(executablePath)
+			{
+				CreateNoWindow = true,
+				UseShellExecute = false,
+				WorkingDirectory = Path.GetDirectoryName(executablePath) ?? installPath
+			};
+			startInfo.ArgumentList.Add("--retire-market-task");
+			using Process process = Process.Start(startInfo)
+				?? throw new InvalidOperationException("The automatic market collector retirement helper could not be started.");
+			if (!process.WaitForExit(45000))
+			{
+				try { process.Kill(entireProcessTree: true); } catch { }
+				throw new TimeoutException("The automatic market collector retirement helper timed out.");
+			}
+			if (process.ExitCode != 0)
+			{
+				throw new InvalidOperationException("The automatic market collector retirement helper returned " + process.ExitCode + ".");
+			}
 		}
-		catch
+		catch (Exception exception)
 		{
-		}
-
-		return false;
-	}
-
-	private bool TryCreateMarketCollectorTask(string taskName, string exePath, out string details)
-	{
-		string xmlPath = Path.Combine(Path.GetTempPath(), "bdo-market-collector-task-" + Guid.NewGuid().ToString("N") + ".xml");
-		try
-		{
-			string startBoundary = DateTime.Now.AddMinutes(5).ToString("yyyy-MM-ddTHH:mm:ss");
-			string workingDirectory = Path.GetDirectoryName(exePath) ?? installPath;
-			string userId = WindowsIdentity.GetCurrent().Name;
-			RunSchtasks("/Delete /TN \"" + taskName + "\" /F", 5000, out _);
-			string xml = @"<?xml version=""1.0"" encoding=""UTF-16""?>
-<Task version=""1.4"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
-  <RegistrationInfo>
-    <Author>Black Spirit Hub</Author>
-    <Description>Keeps Black Spirit Hub EU market analytics samples fresh every six hours.</Description>
-  </RegistrationInfo>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-    </LogonTrigger>
-    <TimeTrigger>
-      <Repetition>
-        <Interval>PT6H</Interval>
-        <StopAtDurationEnd>false</StopAtDurationEnd>
-      </Repetition>
-      <StartBoundary>" + SecurityElement.Escape(startBoundary) + @"</StartBoundary>
-      <Enabled>true</Enabled>
-    </TimeTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id=""Author"">
-      <UserId>" + SecurityElement.Escape(userId) + @"</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>true</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT45M</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context=""Author"">
-    <Exec>
-      <Command>" + SecurityElement.Escape(exePath) + @"</Command>
-      <Arguments>--market-scheduled-update</Arguments>
-      <WorkingDirectory>" + SecurityElement.Escape(workingDirectory) + @"</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>";
-			File.WriteAllText(xmlPath, xml, System.Text.Encoding.Unicode);
-			int exitCode = RunSchtasks("/Create /TN \"" + taskName + "\" /XML \"" + xmlPath + "\" /F", 15000, out details);
-			return exitCode == 0;
-		}
-		catch (Exception ex)
-		{
-			details = ex.Message;
-			return false;
-		}
-		finally
-		{
-			try { if (File.Exists(xmlPath)) File.Delete(xmlPath); } catch { }
+			try
+			{
+				File.AppendAllText(
+					Path.Combine(installPath, "install.log"),
+					DateTime.Now.ToString("s") + " Automatic market collector retirement was not completed. " + exception.Message + Environment.NewLine);
+			}
+			catch
+			{
+			}
 		}
 	}
 

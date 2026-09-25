@@ -94,7 +94,11 @@ $uiRefreshScripts = foreach ($moduleName in @('core', 'navigation', 'grind-marke
 	Get-Content -LiteralPath $modulePath -Raw
 }
 $uiRefreshSource = $uiRefreshScripts -join [Environment]::NewLine
-& $dotnet run --project (Join-Path $repoRoot 'tests\BackgroundMarketControls\BackgroundMarketControls.csproj') --configuration Release
+$backgroundMarketControlsProject = Join-Path $repoRoot 'tests\BackgroundMarketControls\BackgroundMarketControls.csproj'
+$backgroundMarketControlsAssembly = Join-Path $repoRoot 'tests\BackgroundMarketControls\bin\Release\net8.0\BackgroundMarketControls.dll'
+& $dotnet build $backgroundMarketControlsProject --configuration Release --nologo
+if ($LASTEXITCODE -ne 0) { throw 'Background market-control regression test build failed.' }
+& $dotnet exec $backgroundMarketControlsAssembly
 if ($LASTEXITCODE -ne 0) { throw 'Background market-control regression tests failed.' }
 
 if (!$SkipBuild) {
@@ -1483,6 +1487,7 @@ if ($calculatorSource -match 'loadGrindSessions|saveGrindSessions|AppStateStore'
 	throw "The retired native Grind Tracker session store was reintroduced."
 }
 $marketCollectorTaskSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketCollectorTaskManager.cs") -Raw
+$appBehaviorSettingsSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\AppBehaviorSettings.cs") -Raw
 $marketAnalyticsServiceSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketAnalyticsService.cs") -Raw
 $marketSettingsSource = Get-Content -LiteralPath (Join-Path $sourceRoot "BlackSpiritHub\MarketSettings.cs") -Raw
 if ($calculatorSource -match 'Windows\.Media\.Ocr|OcrEngine|selectGrindLootImage|scanGrindLootImage|GrindLootImageMatch|MaxGrindImageBytes') {
@@ -2067,17 +2072,22 @@ if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
 	$installerSource -notmatch "'--source-pid'" -or
 	$calculatorSource -notmatch '"/DIR="\s*\+\s*currentInstallDirectory' -or
 	$calculatorSource -notmatch '"/SOURCEPID="\s*\+\s*Environment\.ProcessId' -or
-	$installerSource -notmatch '--install-market-task' -or
+	$installerSource -notmatch '--retire-market-task' -or
+	$installerSource -match '--install-market-task' -or
 	$installerSource -notmatch '--remove-market-task' -or
 	$programSource -notmatch 'SendShutdownRequestToExistingInstance' -or
 	$programSource -notmatch '--install-market-task' -or
+	$programSource -notmatch '--retire-market-task' -or
 	$programSource -notmatch '--remove-market-task' -or
+	$appBehaviorSettingsSource -notmatch 'BackgroundMarketUpdatesEnabled\s*=\s*false' -or
+	$appBehaviorSettingsSource -notmatch 'BackgroundMarketTaskAutoRegistrationRetired' -or
+	$appBehaviorSettingsSource -notmatch 'RetireAutomaticMarketTaskAsync' -or
 	$marketCollectorTaskSource -notmatch '"/SC",\s*"HOURLY",\s*"/MO",\s*"1",\s*"/RL",\s*"LIMITED"' -or
 	$marketCollectorTaskSource -notmatch '"/IT"' -or
 	$marketCollectorTaskSource -notmatch '"/F"' -or
 	$marketCollectorTaskSource -match '/XML' -or
 	$marketCollectorTaskSource -notmatch '--market-scheduled-update') {
-	throw "Native installer update compatibility, uninstall integration, or market collector scheduling is incomplete."
+	throw "Native installer update compatibility, automatic task retirement, uninstall integration, or manual market collector scheduling is incomplete."
 }
 if ($marketAnalyticsServiceSource -notmatch 'DefaultCollectorInterval\s*=\s*TimeSpan\.FromHours\(3\);' -or
 	$marketAnalyticsServiceSource -notmatch 'DefaultDetailCollectorInterval\s*=\s*TimeSpan\.FromHours\(24\);' -or

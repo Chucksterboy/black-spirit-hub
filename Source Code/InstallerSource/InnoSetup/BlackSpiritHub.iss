@@ -480,7 +480,7 @@ begin
     Result := InstallOrRepairWebView2;
 end;
 
-procedure InstallMarketCollectorTask;
+procedure RetireAutomaticMarketCollectorTask;
 var
   ResultCode: Integer;
   ExecutablePath: String;
@@ -488,20 +488,20 @@ begin
   ExecutablePath := ExpandConstant('{app}\{#AppExeName}');
   if not Exec(
     ExecutablePath,
-    '--install-market-task',
+    '--retire-market-task',
     ExpandConstant('{app}'),
     SW_HIDE,
     ewWaitUntilTerminated,
     ResultCode) then
   begin
-    Log('Market collector task helper could not be started.');
+    Log('Automatic market collector retirement helper could not be started.');
     Exit;
   end;
 
   if ResultCode <> 0 then
-    Log('Market collector task creation was nonfatal and returned ' + IntToStr(ResultCode) + '.')
+    Log('Automatic market collector retirement was nonfatal and returned ' + IntToStr(ResultCode) + '.')
   else
-    Log('Market collector task was created successfully.');
+    Log('Automatic market collector task was retired successfully.');
 end;
 
 procedure RemovePreviousDefaultInstall;
@@ -520,7 +520,7 @@ begin
 #ifndef SelfTestBuild
   if CurStep = ssPostInstall then
   begin
-    InstallMarketCollectorTask;
+    RetireAutomaticMarketCollectorTask;
     RemovePreviousDefaultInstall;
   end;
 #endif

@@ -1537,7 +1537,13 @@ internal sealed class CalculatorForm : Form
 		try
 		{
 			CancellationToken cancellationToken = lifetimeCancellation.Token;
-			appBehaviorSettings = await AppBehaviorSettings.LoadAsync(paths, cancellationToken);
+			BackgroundMarketTaskRetirement retirement = await AppBehaviorSettings
+				.RetireAutomaticMarketTaskAsync(paths, cancellationToken);
+			appBehaviorSettings = retirement.Settings;
+			if (retirement.Cleanup is { Success: false } cleanup)
+			{
+				logger.Warn("The automatic background market task could not be fully removed. " + cleanup.Details);
+			}
 			minimizeToTray = appBehaviorSettings.MinimizeToTray;
 			startupSplash.OpenImmediatelyWhenReady = appBehaviorSettings.OpenImmediatelyWhenReady;
 			BlackDesertMarketProvider provider = new BlackDesertMarketProvider(logger);
@@ -3084,13 +3090,21 @@ internal sealed class CalculatorForm : Form
 			await appBehaviorGate.WaitAsync(cancellationToken);
 			try
 			{
-				// Save OFF first: even a task Windows refuses to remove must not collect.
-				if (!enabled)
-					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { BackgroundMarketUpdatesEnabled = false }, cancellationToken);
+				// Fail closed before changing Windows tasks. If registration or cleanup
+				// fails, startup will keep collection off and retry retiring any stale task.
+				appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with
+				{
+					BackgroundMarketUpdatesEnabled = false,
+					BackgroundMarketTaskAutoRegistrationRetired = false
+				}, cancellationToken);
 				BackgroundMarketUpdateStatus status = await new BackgroundMarketUpdateService(paths)
 					.ApplyPreferenceAsync(enabled, Environment.ProcessPath ?? string.Empty, cancellationToken);
-				if (enabled && status.Success)
-					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with { BackgroundMarketUpdatesEnabled = true }, cancellationToken);
+				if (status.Success)
+					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with
+					{
+						BackgroundMarketUpdatesEnabled = enabled,
+						BackgroundMarketTaskAutoRegistrationRetired = true
+					}, cancellationToken);
 				return status with { Enabled = appBehaviorSettings.BackgroundMarketUpdatesEnabled };
 			}
 			finally { appBehaviorGate.Release(); }

@@ -2,6 +2,7 @@ using BlackSpiritHub;
 using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 // Every scheduler interaction below uses this in-memory fake. This test never
 // creates, queries, deletes, or changes a real Windows scheduled task.
@@ -12,6 +13,19 @@ void Check(bool condition, string label)
 {
 	assertions++;
 	if (!condition) throw new InvalidOperationException(label);
+}
+
+string FindRepositoryFile(params string[] relativePath)
+{
+	foreach (string start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+	{
+		for (DirectoryInfo? directory = new(start); directory != null; directory = directory.Parent)
+		{
+			string candidate = Path.Combine(new[] { directory.FullName }.Concat(relativePath).ToArray());
+			if (File.Exists(candidate)) return candidate;
+		}
+	}
+	throw new FileNotFoundException("Could not locate the repository source file.", Path.Combine(relativePath));
 }
 try
 {
@@ -50,6 +64,18 @@ try
 	Check(!failedInstall.Success && failedInstall.Details.Contains("Access is denied"), "Registration failures must retain details.");
 	Check(scheduler.Names.Contains(MarketCollectorTaskManager.TaskName) && scheduler.Calls.All(call => call[0] != "/Delete"),
 		"Failed registration must preserve an existing working collector.");
+	FakeScheduler incompleteReplacement = new() { FailDeletes = true };
+	const string previousCollectorTask = "BDO Multi-Tool Market Collector";
+	incompleteReplacement.Names.Add(previousCollectorTask);
+	MarketTaskOperationResult incompleteReplacementInstall = await MarketCollectorTaskManager.InstallAsync(
+		executable, CancellationToken.None, incompleteReplacement.RunAsync);
+	Check(!incompleteReplacementInstall.Success
+		&& incompleteReplacementInstall.Details.Contains("older registration could not be removed")
+		&& incompleteReplacement.Names.Contains(MarketCollectorTaskManager.TaskName)
+		&& incompleteReplacement.Names.Contains(previousCollectorTask)
+		&& incompleteReplacement.Calls.Any(call => call[0] == "/Create")
+		&& incompleteReplacement.Calls.Any(call => call[0] == "/Delete"),
+		"A newly created replacement with failed legacy-task cleanup must report failure and keep the UI fail-closed.");
 	scheduler.FailAllCreates = false;
 	scheduler.FailBaseCreate = true;
 	scheduler.Calls.Clear();
@@ -149,20 +175,126 @@ INSERT INTO outfit_snapshots VALUES('2026-09-07T22:00:00+00:00','na','bulk-sales
 		return paths;
 	}
 	AppPaths firstInstall = await SettingsCase("first-install");
-	Check(await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(firstInstall, CancellationToken.None),
-		"First installation with no saved preference retains established background behavior.");
-	Check((await AppBehaviorSettings.LoadAsync(firstInstall, CancellationToken.None)).BackgroundMarketUpdatesEnabled,
-		"First installation UI and collector defaults must agree.");
-	AppPaths legacySettings = await SettingsCase("legacy", "{\"minimizeToTray\":false}");
-	Check(await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(legacySettings, CancellationToken.None),
-		"A valid legacy preference document preserves established background behavior.");
-	AppPaths offSettings = await SettingsCase("off", "{\"minimizeToTray\":false,\"openImmediatelyWhenReady\":true,\"backgroundMarketUpdatesEnabled\":false}");
+	AppBehaviorSettings freshSettings = await AppBehaviorSettings.LoadAsync(firstInstall, CancellationToken.None);
+	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(firstInstall, CancellationToken.None),
+		"First installation must default scheduled background market updates to OFF.");
+	Check(!freshSettings.BackgroundMarketUpdatesEnabled && !freshSettings.BackgroundMarketTaskAutoRegistrationRetired,
+		"First-install UI defaults must keep background work OFF until the user explicitly opts in.");
+	AppPaths legacySettings = await SettingsCase("legacy", "{\"minimizeToTray\":false,\"backgroundMarketUpdatesEnabled\":true}");
+	AppBehaviorSettings legacyLoaded = await AppBehaviorSettings.LoadAsync(legacySettings, CancellationToken.None);
+	Check(legacyLoaded.BackgroundMarketUpdatesEnabled && !legacyLoaded.BackgroundMarketTaskAutoRegistrationRetired,
+		"An enabled legacy document must remain identifiable as awaiting automatic-task retirement.");
+	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(legacySettings, CancellationToken.None),
+		"A valid legacy document without the retirement marker must not authorize background collection.");
+	var retirement = await AppBehaviorSettings.RetireAutomaticMarketTaskAsync(
+		legacySettings, CancellationToken.None, scheduler.RunAsync);
+	Check(retirement.RetiredNow && retirement.Cleanup is { Success: true }
+		&& retirement.Settings.BackgroundMarketTaskAutoRegistrationRetired
+		&& !retirement.Settings.BackgroundMarketUpdatesEnabled,
+		"Retiring legacy automatic tasks must clean up with the supplied scheduler, persist the marker, and turn an enabled legacy preference OFF.");
+	AppBehaviorSettings retiredLegacy = await AppBehaviorSettings.LoadAsync(legacySettings, CancellationToken.None);
+	Check(retiredLegacy.BackgroundMarketTaskAutoRegistrationRetired && !retiredLegacy.BackgroundMarketUpdatesEnabled
+		&& !await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(legacySettings, CancellationToken.None),
+		"Retired legacy settings must stay disabled after they are read again.");
+	using (JsonDocument retirementDocument = JsonDocument.Parse(await File.ReadAllTextAsync(legacySettings.AppBehaviorSettingsPath)))
+	{
+		Check(retirementDocument.RootElement.GetProperty("backgroundMarketTaskAutoRegistrationRetired").GetBoolean()
+			&& !retirementDocument.RootElement.GetProperty("backgroundMarketUpdatesEnabled").GetBoolean(),
+			"Automatic-task retirement must be written to the primary settings document.");
+	}
+	AppBehaviorSettings explicitOptIn = await AppBehaviorSettings.SaveAsync(legacySettings,
+		retiredLegacy with { BackgroundMarketUpdatesEnabled = true }, CancellationToken.None);
+	Check(explicitOptIn.BackgroundMarketTaskAutoRegistrationRetired
+		&& await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(legacySettings, CancellationToken.None),
+		"A post-retirement explicit opt-in must authorize background collection.");
+	var repeatedRetirement = await AppBehaviorSettings.RetireAutomaticMarketTaskAsync(
+		legacySettings, CancellationToken.None, scheduler.RunAsync);
+	Check(!repeatedRetirement.RetiredNow && repeatedRetirement.Cleanup == null
+		&& repeatedRetirement.Settings.BackgroundMarketUpdatesEnabled
+		&& await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(legacySettings, CancellationToken.None),
+		"Later automatic-task retirement checks must not undo an explicit opt-in.");
+	FakeScheduler cleanupRetryScheduler = new() { FailDeletes = true };
+	cleanupRetryScheduler.Names.Add(MarketCollectorTaskManager.TaskName);
+	AppPaths cleanupRetrySettings = await SettingsCase("retirement-cleanup-retry",
+		"{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":true}");
+	var failedCleanupRetirement = await AppBehaviorSettings.RetireAutomaticMarketTaskAsync(
+		cleanupRetrySettings, CancellationToken.None, cleanupRetryScheduler.RunAsync);
+	Check(failedCleanupRetirement.Cleanup is { Success: false }
+		&& !failedCleanupRetirement.Settings.BackgroundMarketTaskAutoRegistrationRetired
+		&& !failedCleanupRetirement.Settings.BackgroundMarketUpdatesEnabled
+		&& cleanupRetryScheduler.Names.Contains(MarketCollectorTaskManager.TaskName),
+		"A failed cleanup must save OFF but leave the retirement marker clear so it can retry.");
+	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(cleanupRetrySettings, CancellationToken.None),
+		"A failed cleanup must not permit the still-registered collector to run.");
+	cleanupRetryScheduler.FailDeletes = false;
+	var retriedCleanupRetirement = await AppBehaviorSettings.RetireAutomaticMarketTaskAsync(
+		cleanupRetrySettings, CancellationToken.None, cleanupRetryScheduler.RunAsync);
+	Check(retriedCleanupRetirement.RetiredNow && retriedCleanupRetirement.Cleanup is { Success: true }
+		&& retriedCleanupRetirement.Settings.BackgroundMarketTaskAutoRegistrationRetired
+		&& !cleanupRetryScheduler.Names.Contains(MarketCollectorTaskManager.TaskName)
+		&& cleanupRetryScheduler.Calls.Count(call => call[0] == "/Delete") == 2,
+		"A later retirement attempt must retry and complete failed collector cleanup using the fake scheduler.");
+	// A user may have explicitly opted in after the automatic-task migration. If they
+	// later turn it off while Windows temporarily rejects task deletion, the durable
+	// marker must be cleared before the deletion attempt so startup will retry it.
+	string calculatorSource = await File.ReadAllTextAsync(FindRepositoryFile(
+		"Source Code", "BlackSpiritHub", "CalculatorForm.cs"));
+	int preferenceCase = calculatorSource.IndexOf("case \"setBackgroundMarketPreference\":", StringComparison.Ordinal);
+	int preferenceCaseEnd = calculatorSource.IndexOf("case \"saveAppBehaviorSettings\":", preferenceCase, StringComparison.Ordinal);
+	Check(preferenceCase >= 0 && preferenceCaseEnd > preferenceCase,
+		"The native background-preference command must remain available for durable task control.");
+	string preferenceCommand = calculatorSource[preferenceCase..preferenceCaseEnd];
+	int disableMarkerClear = preferenceCommand.IndexOf("BackgroundMarketTaskAutoRegistrationRetired = false", StringComparison.Ordinal);
+	int applyPreference = preferenceCommand.IndexOf(".ApplyPreferenceAsync(enabled", StringComparison.Ordinal);
+	int successfulOperation = preferenceCommand.IndexOf("status.Success", applyPreference, StringComparison.Ordinal);
+	int successfulMarkerRestore = preferenceCommand.IndexOf(
+		"BackgroundMarketTaskAutoRegistrationRetired = true", successfulOperation, StringComparison.Ordinal);
+	Check(disableMarkerClear >= 0 && disableMarkerClear < applyPreference
+		&& successfulOperation > applyPreference && successfulMarkerRestore > successfulOperation,
+		"Disabling must clear the retirement marker before scheduler work and restore it only after success.");
+
+	FakeScheduler manualDisableRetryScheduler = new() { FailDeletes = true };
+	manualDisableRetryScheduler.Names.Add(MarketCollectorTaskManager.TaskName);
+	AppPaths manualDisableRetrySettings = await SettingsCase("manual-disable-cleanup-retry",
+		"{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":true,\"backgroundMarketTaskAutoRegistrationRetired\":true}");
+	AppBehaviorSettings manualOptIn = await AppBehaviorSettings.LoadAsync(manualDisableRetrySettings, CancellationToken.None);
+	Check(manualOptIn.BackgroundMarketUpdatesEnabled && manualOptIn.BackgroundMarketTaskAutoRegistrationRetired,
+		"The manual-disable retry case starts from a completed migration and explicit opt-in.");
+	AppBehaviorSettings durableManualOff = await AppBehaviorSettings.SaveAsync(manualDisableRetrySettings, manualOptIn with
+	{
+		BackgroundMarketUpdatesEnabled = false,
+		BackgroundMarketTaskAutoRegistrationRetired = false
+	}, CancellationToken.None);
+	BackgroundMarketUpdateStatus failedManualDisable = await new BackgroundMarketUpdateService(
+		manualDisableRetrySettings.DatabasePath, manualDisableRetryScheduler.RunAsync)
+		.ApplyPreferenceAsync(false, executable, CancellationToken.None);
+	Check(!failedManualDisable.Success && failedManualDisable.TaskRegistered == true
+		&& !durableManualOff.BackgroundMarketUpdatesEnabled
+		&& !durableManualOff.BackgroundMarketTaskAutoRegistrationRetired,
+		"A failed manual disable must retain OFF and a clear marker while the old task remains registered.");
+	AppBehaviorSettings afterFailedManualDisable = await AppBehaviorSettings.LoadAsync(manualDisableRetrySettings, CancellationToken.None);
+	Check(!afterFailedManualDisable.BackgroundMarketUpdatesEnabled
+		&& !afterFailedManualDisable.BackgroundMarketTaskAutoRegistrationRetired
+		&& !await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(manualDisableRetrySettings, CancellationToken.None),
+		"The failed manual disable must persist a startup-retry state that cannot run collection.");
+	manualDisableRetryScheduler.FailDeletes = false;
+	int deletesBeforeManualRetry = manualDisableRetryScheduler.Calls.Count(call => call[0] == "/Delete");
+	var manualDisableRetry = await AppBehaviorSettings.RetireAutomaticMarketTaskAsync(
+		manualDisableRetrySettings, CancellationToken.None, manualDisableRetryScheduler.RunAsync);
+	Check(manualDisableRetry.RetiredNow && manualDisableRetry.Cleanup is { Success: true }
+		&& !manualDisableRetry.Settings.BackgroundMarketUpdatesEnabled
+		&& manualDisableRetry.Settings.BackgroundMarketTaskAutoRegistrationRetired
+		&& !manualDisableRetryScheduler.Names.Contains(MarketCollectorTaskManager.TaskName)
+		&& manualDisableRetryScheduler.Calls.Skip(deletesBeforeManualRetry).Any(call => call[0] == "/Delete"),
+		"The next startup must retry and remove a task left behind by a failed manual disable.");
+	AppPaths offSettings = await SettingsCase("off", "{\"minimizeToTray\":false,\"openImmediatelyWhenReady\":true,\"backgroundMarketUpdatesEnabled\":false,\"backgroundMarketTaskAutoRegistrationRetired\":true}");
 	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(offSettings, CancellationToken.None),
 		"Explicitly disabled background work must stay disabled across scheduled and installer checks.");
 	AppBehaviorSettings offLoaded = await AppBehaviorSettings.LoadAsync(offSettings, CancellationToken.None);
-	Check(!offLoaded.MinimizeToTray && offLoaded.OpenImmediatelyWhenReady && !offLoaded.BackgroundMarketUpdatesEnabled,
+	Check(!offLoaded.MinimizeToTray && offLoaded.OpenImmediatelyWhenReady && !offLoaded.BackgroundMarketUpdatesEnabled
+		&& offLoaded.BackgroundMarketTaskAutoRegistrationRetired,
 		"Loading background controls must preserve the user's other preferences.");
-	AppPaths restoredSettings = await SettingsCase("damaged-newer-off", "broken", "{\"minimizeToTray\":false,\"openImmediatelyWhenReady\":true,\"backgroundMarketUpdatesEnabled\":true}");
+	AppPaths restoredSettings = await SettingsCase("damaged-newer-off", "broken", "{\"minimizeToTray\":false,\"openImmediatelyWhenReady\":true,\"backgroundMarketUpdatesEnabled\":true,\"backgroundMarketTaskAutoRegistrationRetired\":true}");
 	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(restoredSettings, CancellationToken.None),
 		"An older enabled backup is not permission to collect when the primary is damaged.");
 	for (int restart = 0; restart < 3; restart++)
@@ -173,7 +305,7 @@ INSERT INTO outfit_snapshots VALUES('2026-09-07T22:00:00+00:00','na','bulk-sales
 	}
 	Check(await File.ReadAllTextAsync(restoredSettings.AppBehaviorSettingsPath) == "broken",
 		"Reading damaged preference state must not quarantine or rewrite the primary.");
-	AppPaths missingPrimary = await SettingsCase("missing-primary", backup: "{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":true}");
+	AppPaths missingPrimary = await SettingsCase("missing-primary", backup: "{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":true,\"backgroundMarketTaskAutoRegistrationRetired\":true}");
 	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(missingPrimary, CancellationToken.None)
 		&& !(await AppBehaviorSettings.LoadAsync(missingPrimary, CancellationToken.None)).BackgroundMarketUpdatesEnabled,
 		"A backup without its primary is not a fresh installation and must fail closed.");
@@ -184,7 +316,7 @@ INSERT INTO outfit_snapshots VALUES('2026-09-07T22:00:00+00:00','na','bulk-sales
 	Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(badNoBackup, CancellationToken.None)
 		&& !(await AppBehaviorSettings.LoadAsync(badNoBackup, CancellationToken.None)).BackgroundMarketUpdatesEnabled,
 		"Invalid preferences without a backup must fail closed rather than use enabled defaults.");
-	AppPaths lockedPrimary = await SettingsCase("locked-primary", "{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":false}");
+	AppPaths lockedPrimary = await SettingsCase("locked-primary", "{\"minimizeToTray\":true,\"backgroundMarketUpdatesEnabled\":false,\"backgroundMarketTaskAutoRegistrationRetired\":true}");
 	await using (FileStream held = new(lockedPrimary.AppBehaviorSettingsPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
 	{
 		Check(!await AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(lockedPrimary, CancellationToken.None)

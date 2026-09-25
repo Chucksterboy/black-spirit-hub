@@ -56,8 +56,10 @@ internal sealed class BackgroundMarketUpdateService
 		bool? registered = registration.QuerySucceeded ? registration.Tasks.Count > 0 : null;
 		DateTimeOffset? nextRun = registration.Tasks.Where(task => task.NextRunUtc.HasValue)
 			.Select(task => task.NextRunUtc).OrderBy(time => time).FirstOrDefault();
-		string message = !enabled
-			? "Background market updates are off. Market history is kept, and updates while the app is open are unaffected."
+		string message = !enabled && registered == true
+			? "Background updates are off, but a legacy Windows task is still registered. Black Spirit Hub will retry removing it the next time it starts."
+			: !enabled
+				? "Background market updates are off. Market history is kept, and updates while the app is open are unaffected."
 			: registered == true
 				? "Windows background market checks are registered. Your account must be signed in for checks to run."
 				: registered == false

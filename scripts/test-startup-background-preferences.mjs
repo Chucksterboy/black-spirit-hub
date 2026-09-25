@@ -216,18 +216,32 @@ await check('old in-flight status cannot overwrite a completed preference change
 
 await check('native saves serialize and preserve unrelated preference fields', () => {
   const native = fs.readFileSync(path.join(root, 'BlackSpiritHub/CalculatorForm.cs'), 'utf8');
-  for (const [command, field] of [['saveStartupPreference', 'OpenImmediatelyWhenReady'],
-    ['saveAppBehaviorSettings', 'MinimizeToTray'], ['setBackgroundMarketPreference', 'BackgroundMarketUpdatesEnabled']]) {
+	for (const [command, field] of [['saveStartupPreference', 'OpenImmediatelyWhenReady'],
+		['saveAppBehaviorSettings', 'MinimizeToTray']]) {
     const begin = native.indexOf(`case "${command}":`);
     const end = native.indexOf('\n\t\tcase ', begin + 1);
     const block = native.slice(begin, end < 0 ? native.length : end);
     assert.match(block, /await appBehaviorGate\.WaitAsync\(cancellationToken\)/, `${command} uses shared write lock.`);
     assert.match(block, /finally\s*\{ appBehaviorGate\.Release\(\); \}/, `${command} releases shared write lock.`);
-    assert.match(block, new RegExp(`appBehaviorSettings with \\{ ${field} =`), `${command} preserves other fields.`);
-  }
-  const initialize = native.indexOf('appBehaviorSettings = await AppBehaviorSettings.LoadAsync');
+		assert.match(block, new RegExp(`appBehaviorSettings with \\{ ${field} =`), `${command} preserves other fields.`);
+	}
+	const backgroundBegin = native.indexOf('case "setBackgroundMarketPreference":');
+	const backgroundEnd = native.indexOf('\n\t\tcase ', backgroundBegin + 1);
+	const backgroundBlock = native.slice(backgroundBegin, backgroundEnd < 0 ? native.length : backgroundEnd);
+	assert.match(backgroundBlock,
+		/appBehaviorSettings with\s*\{\s*BackgroundMarketUpdatesEnabled = false,\s*BackgroundMarketTaskAutoRegistrationRetired = false/,
+		'Background-task changes fail closed before Windows registration or removal.');
+	assert.match(backgroundBlock,
+		/if \(status\.Success\)[\s\S]*?appBehaviorSettings with\s*\{\s*BackgroundMarketUpdatesEnabled = enabled,\s*BackgroundMarketTaskAutoRegistrationRetired = true/,
+		'Background-task changes restore the retirement marker only after Windows confirms success.');
+  const initialize = native.indexOf('RetireAutomaticMarketTaskAsync(paths, cancellationToken)');
   assert.ok(native.indexOf('startupSplash.OpenImmediatelyWhenReady = appBehaviorSettings.OpenImmediatelyWhenReady;', initialize) > initialize,
     'Startup mode is read from persisted preferences before readiness.');
+  const preferences = fs.readFileSync(path.join(root, 'BlackSpiritHub/AppBehaviorSettings.cs'), 'utf8');
+  assert.match(preferences, /RemoveKnownTasksAsync\(cancellationToken, runner\)/,
+    'The first updated launch retires legacy automatic market tasks through the shared preference migration.');
+  assert.match(preferences, /BackgroundMarketTaskAutoRegistrationRetired = true/,
+    'The retirement marker is saved only after automatic task cleanup succeeds.');
 });
 
 if (failures) throw new Error(`${failures} startup/background preference regressions failed.`);

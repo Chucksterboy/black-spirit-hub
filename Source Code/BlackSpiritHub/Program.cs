@@ -235,24 +235,18 @@ internal static class Program
 			SendShutdownRequestToExistingInstance();
 			return;
 		}
-		if (args.Any(a => string.Equals(a, "--install-market-task", StringComparison.OrdinalIgnoreCase)))
+		if (args.Any(a => string.Equals(a, "--install-market-task", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(a, "--retire-market-task", StringComparison.OrdinalIgnoreCase)))
 		{
 			AppPaths installPaths = AppPaths.Create();
-			if (!AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(installPaths, CancellationToken.None).GetAwaiter().GetResult())
+			installPaths.EnsureDirectories();
+			BackgroundMarketTaskRetirement retirement = AppBehaviorSettings
+				.RetireAutomaticMarketTaskAsync(installPaths, CancellationToken.None).GetAwaiter().GetResult();
+			if (retirement.Cleanup is { Success: false } cleanup)
 			{
-				// Upgrades must not re-enable a collector the user explicitly disabled.
-				MarketCollectorTaskManager.RemoveKnownTasks();
-				return;
+				TryWriteInstallerDiagnostic("Automatic market collector task cleanup failed. " + cleanup.Details);
+				Environment.Exit(1);
 			}
-			string executablePath = Environment.ProcessPath
-				?? Path.Combine(AppContext.BaseDirectory, "Black Spirit Hub.exe");
-			bool installed = MarketCollectorTaskManager.Install(executablePath, out string details);
-			if (!installed)
-			{
-				TryWriteInstallerDiagnostic(
-					"Market collector task was not created. " + details);
-			}
-			Environment.Exit(installed ? 0 : 1);
 			return;
 		}
 		if (args.Any(a => string.Equals(a, "--remove-market-task", StringComparison.OrdinalIgnoreCase)))
@@ -574,7 +568,6 @@ internal static class Program
 		{
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();
-
 			WeeklyPlannerState defaults;
 			using (WeeklyPlannerStore store = new(paths))
 			{
@@ -758,27 +751,42 @@ internal static class Program
 		{
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();
+			MarketCollectorTaskManager.CommandRunner smokeTaskRunner = (_, _, _) =>
+				Task.FromResult(new MarketTaskCommandResult(0, string.Empty, string.Empty));
 
 			AppBehaviorSettings defaults = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
-			if (!defaults.MinimizeToTray || defaults.OpenImmediatelyWhenReady || !defaults.BackgroundMarketUpdatesEnabled)
+			if (!defaults.MinimizeToTray || defaults.OpenImmediatelyWhenReady
+				|| defaults.BackgroundMarketUpdatesEnabled || defaults.BackgroundMarketTaskAutoRegistrationRetired)
 			{
 				return 111;
 			}
-			// Existing preference documents must preserve the cinematic startup and
-			// established background behavior when the new fields are absent.
+			// Existing preference documents preserve the cinematic startup behavior,
+			// but cannot silently opt in to an hourly scheduled launch.
 			File.WriteAllText(paths.AppBehaviorSettingsPath, "{\"minimizeToTray\":false}");
 			AppBehaviorSettings legacy = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
-			if (legacy.MinimizeToTray || legacy.OpenImmediatelyWhenReady || !legacy.BackgroundMarketUpdatesEnabled)
+			if (legacy.MinimizeToTray || legacy.OpenImmediatelyWhenReady
+				|| legacy.BackgroundMarketUpdatesEnabled || legacy.BackgroundMarketTaskAutoRegistrationRetired)
 				return 287;
-			AppBehaviorSettings allPreferences = new(false, true, false);
+			AppBehaviorSettings allPreferences = new(false, true, false, true);
 			AppBehaviorSettings.SaveAsync(paths, allPreferences, CancellationToken.None).GetAwaiter().GetResult();
 			if (AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult() != allPreferences)
 				return 288;
 			// The subsequent atomic save retains the complete earlier preference set.
-			AppBehaviorSettings.Save(paths, new(true, false, true));
+			AppBehaviorSettings.Save(paths, new(true, false, true, true));
 			File.WriteAllText(paths.AppBehaviorSettingsPath, "broken json");
-			if (AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult() != allPreferences)
+			AppBehaviorSettings recovered = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
+			if (recovered != allPreferences with
+			{
+				BackgroundMarketUpdatesEnabled = false,
+				BackgroundMarketTaskAutoRegistrationRetired = false
+			})
 				return 289;
+			AppBehaviorSettings.Save(paths, new(true, false, true));
+			BackgroundMarketTaskRetirement retirement = AppBehaviorSettings
+				.RetireAutomaticMarketTaskAsync(paths, CancellationToken.None, smokeTaskRunner).GetAwaiter().GetResult();
+			if (!retirement.RetiredNow || retirement.Settings.BackgroundMarketUpdatesEnabled
+				|| !retirement.Settings.BackgroundMarketTaskAutoRegistrationRetired)
+				return 291;
 			if (StartupSplashWindow.ShouldBeginColdExit(0, false, true)
 				|| StartupSplashWindow.ShouldBeginColdExit(100_000, false, false)
 				|| StartupSplashWindow.ShouldBeginColdExit(2_699, true)
