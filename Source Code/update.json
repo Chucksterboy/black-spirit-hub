@@ -1,7 +1,7 @@
 {
-  "version": "v0.9.64",
+  "version": "v0.9.65",
   "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.64/Black-Spirit-Hub-Installer.exe",
-  "sha256": "51D3FC777566EAA0ABA6E2F0CED7FFC4EDBDFAB26DA491B2A54137B99381F4D0",
-  "notes": "Adds the BDO UI Layouts editor, expanded navigation, and a character-selection apply confirmation."
+  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.65/Black-Spirit-Hub-Installer.exe",
+  "sha256": "6E9F9D397A64483D7BB5B7D3476DCB89571734ED13959206A59F031C1ADA548B",
+  "notes": "Fixes periodic Windows block notifications by retiring automatic market collector tasks. Closed-app market updates are now off by default; normal updates while the app is open continue."
 }
