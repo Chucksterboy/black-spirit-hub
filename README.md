@@ -12,8 +12,12 @@ release notes; it no longer distributes routine installer downloads.
 
 ## Updates and the legacy migration
 
-Store-installed copies are updated by Microsoft Store. Black Spirit Hub never
-downloads or runs a GitHub installer from a Store installation.
+Store-installed copies are updated by Microsoft Store. At startup, the Store
+edition checks Microsoft Store for a package update that is available to that
+specific installation. When one is ready, it shows **New update available** in
+the bottom bar and opens Microsoft Store so the user can select **Update**.
+Black Spirit Hub never downloads or runs a GitHub installer from a Store
+installation.
 
 Existing GitHub-installed copies receive one final transition update because
 their already-published updater cannot be changed remotely to launch Microsoft Store.

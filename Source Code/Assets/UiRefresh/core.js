@@ -207,7 +207,7 @@
         const info = await bridgeCall("checkForUpdates");
         if (!info || info.error || info.checkFailed) throw new Error(info?.error || info?.message || "No update information was returned.");
         if (typeof applyUpdateStatus === "function") applyUpdateStatus(info);
-        updateText.textContent = info.storeManaged ? (info.message || "Updates are managed by the Microsoft Store.") : info.microsoftStoreMigration ? (info.message || "A new version is available in the Microsoft Store. Use New update available in the bottom bar.") : "Updates are available through Microsoft Store.";
+        updateText.textContent = info.storeManaged && info.updateAvailable ? (info.message || "A new version is available in the Microsoft Store. Use New update available in the bottom bar.") : info.storeManaged ? (info.message || "Updates are managed by the Microsoft Store.") : info.microsoftStoreMigration ? (info.message || "A new version is available in the Microsoft Store. Use New update available in the bottom bar.") : "Updates are available through Microsoft Store.";
       } catch (error) { updateText.textContent = `Could not check for updates. ${error.message || "Please try again."}`; }
       finally { check.disabled = false; }
     });

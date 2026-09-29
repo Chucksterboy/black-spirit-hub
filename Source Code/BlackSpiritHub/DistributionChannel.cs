@@ -31,6 +31,12 @@ internal static class DistributionChannel
 	internal const string MicrosoftStoreUpdateMessage =
 		"Updates are managed by the Microsoft Store.";
 
+	internal const string MicrosoftStoreUpdateAvailableMessage =
+		"A new version is available in the Microsoft Store. Select New update available in the bottom bar to install it.";
+
+	internal const string MicrosoftStoreUpdateCheckFailedMessage =
+		"Couldn't check Microsoft Store for updates. Please try again later.";
+
 	internal const string MicrosoftStoreMigrationMessage =
 		"A new version is available in the Microsoft Store. Select New update available in the bottom bar to continue receiving updates.";
 

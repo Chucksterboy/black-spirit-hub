@@ -15,6 +15,11 @@ internal static class MicrosoftStorePackagePaths
 {
 	private const int ErrorInsufficientBuffer = 122;
 
+	internal static bool HasPackageIdentity()
+	{
+		return !string.IsNullOrWhiteSpace(TryGetCurrentPackageFamilyName());
+	}
+
 	internal static string ResolveAppDataRoot(string localAppData, string appFolderName)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(localAppData);

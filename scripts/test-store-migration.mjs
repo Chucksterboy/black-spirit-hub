@@ -16,6 +16,8 @@ assert.match(appVersion, /ms-windows-store:\/\/pdp\/\?ProductId=/);
 assert.match(appVersion, /https:\/\/apps\.microsoft\.com\/detail\//);
 assert.match(updater, /StoreManaged: true/);
 assert.match(updater, /MicrosoftStoreMigration: true/);
+assert.match(updater, /GetAppAndOptionalStorePackageUpdatesAsync/);
+assert.match(updater, /MicrosoftStorePackagePaths\.HasPackageIdentity/);
 assert.match(form, /case "openMicrosoftStore":/);
 assert.match(form, /OpenMicrosoftStorePage\(\)/);
 assert.match(form, /saveMicrosoftStoreMigrationPreferences/);
@@ -99,8 +101,17 @@ context.applyUpdateStatus({updateAvailable: false, storeManaged: true, message: 
 assert.equal(classes.has("show"), false, "Store-installed builds must not show the legacy migration banner.");
 await context.installUpdateFromAlert();
 assert.deepEqual(calls, [], "A Store-managed update state must not launch an installer or migration action.");
-assert.match(notices.at(-1)?.message || "", /managed by the Microsoft Store/);
 
+context.applyUpdateStatus({updateAvailable: true, storeManaged: true, message: "A new version is available in the Microsoft Store."});
+assert.equal(alert.textContent, "New update available", "Store builds show the same update action when Microsoft Store reports an available package.");
+assert.equal(alert.title, "Open Microsoft Store to update");
+assert.equal(classes.has("show"), true);
+await context.installUpdateFromAlert();
+assert.deepEqual(calls.map(call => call.command), ["openMicrosoftStore"], "Store updates open Microsoft Store without exporting migration preferences.");
+assert.equal(notices.at(-1)?.kind, "info");
+assert.match(notices.at(-1)?.message || "", /Select Update/);
+
+calls.length = 0;
 let prevented = false;
 context.applyUpdateStatus({updateAvailable: true, microsoftStoreMigration: true});
 listeners.get("keydown")({key: "Enter", preventDefault: () => { prevented = true; }});
@@ -108,4 +119,4 @@ await new Promise(resolve => setImmediate(resolve));
 assert.equal(prevented, true, "The Store migration control must remain keyboard-accessible.");
 assert.deepEqual(calls.map(call => call.command), ["saveMicrosoftStoreMigrationPreferences", "openMicrosoftStore"]);
 
-console.log("Store migration: legacy direct builds open the Store product page; Store builds stay Store-managed; no GitHub installer command remains.");
+console.log("Store updates: legacy direct builds migrate through the Store; Store builds show a Store-managed update action only when a package update is available; no GitHub installer command remains.");

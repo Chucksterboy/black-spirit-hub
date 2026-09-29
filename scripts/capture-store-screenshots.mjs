@@ -116,7 +116,7 @@ function bridgeMockScript() {
         case "healthCheck":
           return { databaseReadable: true, contentIndexReadable: true, contentCount: 18472, stale: false, lastRefreshStatus: "completed", degradedReasons: [] };
         case "getAppVersion":
-          return { version: "v0.9.66" };
+          return { version: "v0.9.67" };
         case "checkForUpdates":
           return { updateAvailable: false, storeManaged: true, message: "Updates are managed by the Microsoft Store." };
         case "getEnglishTtsVoices":

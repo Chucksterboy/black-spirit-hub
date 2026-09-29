@@ -102,6 +102,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Background market-control regression test buil
 if ($LASTEXITCODE -ne 0) { throw 'Background market-control regression tests failed.' }
 
 if (!$SkipBuild) {
+	# Compile the Store-only WinRT update path before the normal direct build.
+	# Rebuilding direct afterward keeps the fixture path below deterministic.
+	& $dotnet build $project -c Release -p:BlackSpiritHubStore=true -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
+	if ($LASTEXITCODE -ne 0) { throw "Microsoft Store application build failed." }
+
 	& $dotnet build $project -c Release -p:EnableNETAnalyzers=true -p:AnalysisLevel=latest -p:WarningLevel=9999 --nologo
 	if ($LASTEXITCODE -ne 0) { throw "Application build failed." }
 }
@@ -2286,7 +2291,7 @@ if ($node) {
 	if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax validation failed." }
 }
 
-$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows\Black Spirit Hub.dll"
+$appDll = Join-Path $sourceRoot "bin\Release\net8.0-windows10.0.17763.0\Black Spirit Hub.dll"
 $appBuildRoot = Split-Path -Parent $appDll
 foreach ($relativePath in @(
 	"onnxruntime.dll",

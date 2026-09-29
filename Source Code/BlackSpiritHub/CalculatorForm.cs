@@ -3035,7 +3035,7 @@ internal sealed class CalculatorForm : Form
 		case "getAppVersion":
 			return new { version = AppVersion.Current };
 		case "checkForUpdates":
-			return await updateCheckerService.CheckAsync(cancellationToken);
+			return await updateCheckerService.CheckAsync(Handle, cancellationToken);
 		case "saveCouponSettings":
 		{
 			CouponSettings settings = JsonSerializer.Deserialize<CouponSettings>(payload.GetRawText(), JsonOptions)
