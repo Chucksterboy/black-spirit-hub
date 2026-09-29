@@ -1,7 +1,7 @@
 {
-  "version": "v0.9.65",
-  "releaseUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
-  "downloadUrl": "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.65/Black-Spirit-Hub-Installer.exe",
-  "sha256": "6E9F9D397A64483D7BB5B7D3476DCB89571734ED13959206A59F031C1ADA548B",
-  "notes": "Fixes periodic Windows block notifications by retiring automatic market collector tasks. Closed-app market updates are now off by default; normal updates while the app is open continue."
+    "version":  "v0.9.66",
+    "releaseUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/latest",
+    "downloadUrl":  "https://github.com/Chucksterboy/black-spirit-hub/releases/download/v0.9.66/Black-Spirit-Hub-Installer.exe",
+    "sha256":  "D99D6BA05AAA5E150748458C6765208C18D8F4C244B05F62E7065E8607314CC3",
+    "notes":  "One-time migration to Microsoft Store."
 }
