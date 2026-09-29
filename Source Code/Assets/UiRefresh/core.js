@@ -199,7 +199,7 @@
     moveRow("backgroundMarketUpdatesEnabled", "data", "Background market history", "collect collection update closed scheduler last successful");
     moveRow("refreshBackgroundMarketStatus", "data", "Background update status", "refresh last run task scheduler");
     const updates = entry("data", "Application updates", "version install release github");
-    const updateText = make("p", "", "Check for a new release. Downloads still use the existing verified updater."); updateText.setAttribute("role", "status");
+    const updateText = make("p", "", "Black Spirit Hub is now installed and updated through Microsoft Store."); updateText.setAttribute("role", "status");
     updates.append(updateText);
     const check = action(updates, "Check for updates", async () => {
       check.disabled = true; updateText.textContent = "Checking for updates…";
@@ -207,7 +207,7 @@
         const info = await bridgeCall("checkForUpdates");
         if (!info || info.error || info.checkFailed) throw new Error(info?.error || info?.message || "No update information was returned.");
         if (typeof applyUpdateStatus === "function") applyUpdateStatus(info);
-        updateText.textContent = info.updateAvailable ? `Version ${info.latestVersion || "new"} is available. Use Update now in the bottom bar to install it.` : "You are up to date.";
+        updateText.textContent = info.storeManaged ? (info.message || "Updates are managed by the Microsoft Store.") : info.microsoftStoreMigration ? (info.message || "A new version is available in the Microsoft Store. Use New update available in the bottom bar.") : "Updates are available through Microsoft Store.";
       } catch (error) { updateText.textContent = `Could not check for updates. ${error.message || "Please try again."}`; }
       finally { check.disabled = false; }
     });

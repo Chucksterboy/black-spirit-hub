@@ -2,49 +2,44 @@
 
 Desktop helper app for Black Desert Online.
 
-## Updates
+## Install
 
-The app checks `update.json` on startup. When `update.json` reports a version newer than the local app version, the app shows a clickable update badge in the bottom-right status bar. One click downloads the version-pinned installer, verifies its SHA-256 hash, launches it, and closes the running app so the update can proceed.
+[Get Black Spirit Hub from Microsoft Store](https://apps.microsoft.com/detail/9PNLW455K1GN)
 
-Current public manifest:
+Microsoft Store is the only supported public installation and update channel.
+This repository remains the home for source code, documentation, issues, and
+release notes; it no longer distributes routine installer downloads.
 
-```text
-https://raw.githubusercontent.com/Chucksterboy/black-spirit-hub/main/update.json
-```
+## Updates and the legacy migration
 
-## Release Flow
+Store-installed copies are updated by Microsoft Store. Black Spirit Hub never
+downloads or runs a GitHub installer from a Store installation.
 
-Run this from the repository root:
+Existing GitHub-installed copies receive one final transition update because
+their already-published updater cannot be changed remotely to launch Microsoft Store.
+After that update is installed, its bottom-right action reads **New update
+available** and opens the Black Spirit Hub Store page. The user chooses
+**Get** or **Install** there. On first Store launch, existing app data is copied
+into the Store package's local data folder without deleting the old copy. This
+includes saved app data and browser-stored interface preferences.
 
-```powershell
-.\scripts\release.ps1 -Version v0.9.21 -Notes "Short release notes here."
-```
+Keep the old direct copy until the Store version has opened successfully. It can
+then be uninstalled normally from Windows Settings.
 
-The script:
+## Microsoft Store release flow
 
-- updates the app version
-- updates `update.json`
-- publishes the app self-contained for Windows x64
-- builds a native Inno Setup installer around that single app payload
-- commits the release
-- tags the version
-- pushes to GitHub
-- creates a GitHub Release
-- uploads the installer
+1. Make and test the app change.
+2. Build a higher-version MSIX upload bundle with `scripts/build-store-msix.ps1`.
+3. Create an Update submission for Black Spirit Hub in Partner Center.
+4. Upload the `.msixupload`, complete the submission, and submit it for
+   certification.
+5. Once approved, Microsoft Store delivers the update to Store users.
 
-End users do not need to install .NET. The app carries its own .NET runtime; the
-installer is native and does not bundle a second copy. Release machines need the
-.NET 8 SDK, Node.js 24, and Inno Setup 6. Node generates the bundled UI asset
-manifest during builds; it is not required on end-user machines.
+The old `scripts/release.ps1` route is deliberately locked to that one final
+GitHub-to-Store transition update. It must be invoked with
+`-MigrationToMicrosoftStore`; it is not for routine releases.
 
-Maintenance references: [game-data review workflow](docs/game-data-maintenance.md)
-and [publisher signing / runtime migration plan](docs/release-security-and-runtime-plan.md).
-Use `scripts/verify.ps1` for the nonvisual regression suite. To require publisher
-signing for a release, configure the certificate as documented and use
-`scripts/release.ps1 -Version VERSION -RequireSigning`.
-
-GitHub CLI must be logged in before releasing:
-
-```powershell
-gh auth status
-```
+End users do not need to install .NET. The Store package includes the runtime it
+needs. See the [game-data review workflow](docs/game-data-maintenance.md) for
+maintenance guidance.
+Use `scripts/verify.ps1` for the nonvisual regression suite.

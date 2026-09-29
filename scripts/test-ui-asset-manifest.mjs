@@ -34,7 +34,7 @@ try {
 
 const source = path.resolve(process.argv[2] ?? 'Source Code');
 const program = fs.readFileSync(path.join(source, 'BlackSpiritHub/Program.cs'), 'utf8');
-const acquire = program.indexOf('using Mutex singleInstanceMutex');
+const acquire = program.indexOf('using Mutex? singleInstanceMutex');
 assert.ok(acquire > 0 && acquire < program.indexOf('AppPaths appPaths3 = AppPaths.Create()'),
   'Normal single-instance ownership is checked before migration/asset preparation.');
 assert.match(program, /if \(!runScheduledMarketUpdate\) PrepareUiFiles\(appPaths3\)/,

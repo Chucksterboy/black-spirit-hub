@@ -42,6 +42,11 @@ internal sealed record AppBehaviorSettings(
 
 	internal static async Task<bool> IsBackgroundCollectionAllowedAsync(AppPaths paths, CancellationToken cancellationToken)
 	{
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			return false;
+		}
+
 		(AppBehaviorSettings? settings, _) = await TryReadSettingsAsync(paths.AppBehaviorSettingsPath, cancellationToken);
 		if (settings != null)
 		{
@@ -60,6 +65,20 @@ internal sealed record AppBehaviorSettings(
 		AppPaths paths, CancellationToken cancellationToken, MarketCollectorTaskManager.CommandRunner? runner = null)
 	{
 		AppBehaviorSettings settings = await LoadAsync(paths, cancellationToken);
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			AppBehaviorSettings storeSettings = settings with
+			{
+				BackgroundMarketUpdatesEnabled = false,
+				BackgroundMarketTaskAutoRegistrationRetired = true
+			};
+			if (storeSettings != settings)
+			{
+				storeSettings = await SaveAsync(paths, storeSettings, cancellationToken);
+			}
+			return new(storeSettings, false, null);
+		}
+
 		if (settings.BackgroundMarketTaskAutoRegistrationRetired)
 		{
 			return new(settings, false, null);

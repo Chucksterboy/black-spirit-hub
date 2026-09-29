@@ -2,10 +2,11 @@ namespace BlackSpiritHub;
 
 internal static class AppVersion
 {
-	public const string Current = "v0.9.65";
+	public const string Current = "v0.9.66";
 	public const string RepositoryUrl = "https://github.com/Chucksterboy/black-spirit-hub";
-	public const string ReleasesUrl = "https://github.com/Chucksterboy/black-spirit-hub/releases/latest";
-	public const string ManifestUrl = "https://raw.githubusercontent.com/Chucksterboy/black-spirit-hub/main/update.json";
+	public const string MicrosoftStoreProductId = "9PNLW455K1GN";
+	public const string MicrosoftStoreProtocolUrl = "ms-windows-store://pdp/?ProductId=" + MicrosoftStoreProductId;
+	public const string MicrosoftStoreWebUrl = "https://apps.microsoft.com/detail/" + MicrosoftStoreProductId;
 }
 
 

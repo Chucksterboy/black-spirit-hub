@@ -16,6 +16,8 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	private static readonly string[] MigratedFiles =
 	[
 		"market-analytics.db",
+		"market-analytics.db-wal",
+		"market-analytics.db-shm",
 		"coupons_cache.json",
 		"coupon_item_icons.json",
 		"coupon_settings.json",
@@ -27,6 +29,7 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		"portrait-replacer-settings.json",
 		"font-changer-settings.json",
 		"app-behavior-settings.json",
+		MicrosoftStoreMigrationPreferences.FileName,
 		"bdo-player-guild-cache.json",
 		"dehkia-fuel-cache.json",
 		"grind-sessions.json",
@@ -59,9 +62,25 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	public static AppPaths Create()
 	{
 		string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-		string currentRoot = Path.Combine(localAppData, CurrentAppDataFolderName);
-		MigratePreviousProductData(Path.Combine(localAppData, PreviousAppDataFolderName), currentRoot);
-		MigrateLegacyData(Path.Combine(localAppData, LegacyAppDataFolderName), currentRoot);
+		string currentRoot;
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			// Store packages receive an isolated LocalState folder. Copy, never move or
+			// overwrite, data from the existing unpackaged install so the two editions
+			// can coexist safely during the transition.
+			currentRoot = MicrosoftStorePackagePaths.ResolveAppDataRoot(
+				localAppData,
+				CurrentAppDataFolderName);
+			MigrateLegacyData(Path.Combine(localAppData, CurrentAppDataFolderName), currentRoot);
+			MigrateLegacyData(Path.Combine(localAppData, PreviousAppDataFolderName), currentRoot);
+			MigrateLegacyData(Path.Combine(localAppData, LegacyAppDataFolderName), currentRoot);
+		}
+		else
+		{
+			currentRoot = Path.Combine(localAppData, CurrentAppDataFolderName);
+			MigratePreviousProductData(Path.Combine(localAppData, PreviousAppDataFolderName), currentRoot);
+			MigrateLegacyData(Path.Combine(localAppData, LegacyAppDataFolderName), currentRoot);
+		}
 		NormalizeMigratedNames(currentRoot);
 		return CreateAt(currentRoot);
 	}
@@ -97,12 +116,16 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 		foreach (string fileName in MigratedFiles)
 		{
 			CopyFileIfMissing(Path.Combine(legacyRoot, fileName), Path.Combine(currentRoot, fileName));
+			CopyFileIfMissing(
+				Path.Combine(legacyRoot, fileName + ".bak"),
+				Path.Combine(currentRoot, fileName + ".bak"));
 		}
 
 		CopyFileIfMissing(Path.Combine(legacyRoot, "logs", "market-analytics.log"), Path.Combine(currentRoot, "logs", "black-spirit-hub.log"));
 		CopyDirectoryIfMissing(Path.Combine(legacyRoot, "data"), Path.Combine(currentRoot, "data"));
 		CopyDirectoryIfMissing(Path.Combine(legacyRoot, "Assets"), Path.Combine(currentRoot, "Assets"));
 		CopyDirectoryIfMissing(Path.Combine(legacyRoot, "ThemeAssets"), Path.Combine(currentRoot, "ThemeAssets"));
+		CopyDirectoryIfMissing(Path.Combine(legacyRoot, "LayoutEditor"), Path.Combine(currentRoot, "LayoutEditor"));
 	}
 
 	private static void MigratePreviousProductData(string previousRoot, string currentRoot)
@@ -138,6 +161,12 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 	internal static void MigratePreviousProductDataForTest(string previousRoot, string currentRoot)
 	{
 		MigratePreviousProductData(previousRoot, currentRoot);
+		NormalizeMigratedNames(currentRoot);
+	}
+
+	internal static void MigrateLegacyDataForTest(string legacyRoot, string currentRoot)
+	{
+		MigrateLegacyData(legacyRoot, currentRoot);
 		NormalizeMigratedNames(currentRoot);
 	}
 
@@ -269,8 +298,18 @@ internal sealed record AppPaths(string Root, string HtmlPath, string DatabasePat
 			return;
 		}
 
-		foreach (string sourcePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+		EnumerationOptions options = new()
 		{
+			RecurseSubdirectories = true,
+			IgnoreInaccessible = true,
+			AttributesToSkip = FileAttributes.ReparsePoint
+		};
+		foreach (string sourcePath in Directory.EnumerateFiles(sourceDirectory, "*", options))
+		{
+			if (sourcePath.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+			{
+				continue;
+			}
 			string relativePath = Path.GetRelativePath(sourceDirectory, sourcePath);
 			CopyFileIfMissing(sourcePath, Path.Combine(targetDirectory, relativePath));
 		}

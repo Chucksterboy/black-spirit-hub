@@ -244,5 +244,17 @@ await check('native saves serialize and preserve unrelated preference fields', (
     'The retirement marker is saved only after automatic task cleanup succeeds.');
 });
 
+await check('Store builds keep closed-app collection controls unavailable without a scheduler query', async () => {
+  const h = harness();
+  h.render({ openImmediatelyWhenReady: false, backgroundMarketUpdatesEnabled: true, backgroundMarketUpdatesAvailable: false });
+  assert.equal(h.elements.backgroundMarketUpdatesEnabled.checked, false);
+  assert.equal(h.elements.backgroundMarketUpdatesEnabled.disabled, true);
+  assert.equal(h.elements.refreshBackgroundMarketStatus.disabled, true);
+  assert.match(h.elements.backgroundMarketStatus.textContent, /Microsoft Store edition/);
+  await h.refresh();
+  await h.change('backgroundMarketUpdatesEnabled', true);
+  assert.equal(h.calls.length, 0);
+});
+
 if (failures) throw new Error(`${failures} startup/background preference regressions failed.`);
 console.log('Startup/background preference workflow tests passed without Windows tasks, UI automation, or user data.');

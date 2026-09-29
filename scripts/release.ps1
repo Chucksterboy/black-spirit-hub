@@ -12,6 +12,10 @@ param(
 	# Allows the installed application to be updated before the public release.
 	[switch]$PrepareOnly,
 
+	# GitHub installers are retired. This explicit switch is reserved for the
+	# single transition update that directs legacy installs to Microsoft Store.
+	[switch]$MigrationToMicrosoftStore,
+
 	[switch]$RequireSigning,
 	[string]$SigningCertificateThumbprint = $env:BSH_SIGNING_CERT_THUMBPRINT,
 	[string]$SigningTimestampUrl = $env:BSH_SIGNING_TIMESTAMP_URL,
@@ -28,6 +32,9 @@ if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint) -and [string]::
 }
 if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
 	& (Join-Path $PSScriptRoot 'sign-release-file.ps1') -CertificateThumbprint $SigningCertificateThumbprint -TimestampUrl $SigningTimestampUrl -CertificateStore $SigningCertificateStore -ValidateOnly
+}
+if (!$MigrationToMicrosoftStore) {
+	throw 'GitHub installer releases are retired. Build and submit a Microsoft Store package with scripts\build-store-msix.ps1. Use -MigrationToMicrosoftStore only for the final legacy bridge.'
 }
 
 function Resolve-ToolPath {
@@ -381,7 +388,7 @@ if (Test-Path -LiteralPath $artifactRoot) {
 	throw "Release output already exists. Preserve or inspect it before retrying: $artifactRoot"
 }
 
-Write-Host "Preparing Black Spirit Hub $versionTag"
+Write-Host "Preparing final Microsoft Store transition update $versionTag"
 
 Replace-Text $appVersionFile 'public const string Current = "v[^"]+";' ('public const string Current = "' + $versionTag + '";')
 Replace-Text $assemblyInfoFile 'AssemblyFileVersion\("[^"]+"\)' ('AssemblyFileVersion("' + $assemblyVersion + '")')
@@ -406,7 +413,7 @@ $manifest = [ordered]@{
 	releaseUrl = "https://github.com/$Repository/releases/latest"
 	downloadUrl = "https://github.com/$Repository/releases/download/$versionTag/$installerAssetName"
 	sha256 = ""
-	notes = if ([string]::IsNullOrWhiteSpace($Notes)) { "Black Spirit Hub $versionTag release." } else { $Notes }
+	notes = if ([string]::IsNullOrWhiteSpace($Notes)) { "One-time Black Spirit Hub migration to Microsoft Store." } else { $Notes }
 }
 $manifestJson = $manifest | ConvertTo-Json
 [System.IO.File]::WriteAllText(
@@ -457,8 +464,6 @@ Assert-AppPublishFiles -PublishRoot $appOut
 $appExe = Join-Path $appOut "Black Spirit Hub.exe"
 if (![string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
 	& (Join-Path $PSScriptRoot 'sign-release-file.ps1') -FilePath $appExe -CertificateThumbprint $SigningCertificateThumbprint -TimestampUrl $SigningTimestampUrl -CertificateStore $SigningCertificateStore
-} else {
-	Write-Warning 'No publisher certificate is configured. This build is unsigned; checksum verification is still applied.'
 }
 Assert-RunsWithoutDotnetRuntime `
 	-FilePath $appExe `

@@ -12,9 +12,19 @@
     <LangVersion>12.0</LangVersion>
     <Nullable>annotations</Nullable>
   </PropertyGroup>
+  <!-- Store builds must never contain the shared BDO Alerts credential or the
+       unpackaged self-updater. The Store package is re-signed and updated by
+       Microsoft after certification. -->
+  <PropertyGroup Condition="'$(BlackSpiritHubStore)' == 'true'">
+    <DefineConstants>$(DefineConstants);BLACK_SPIRIT_HUB_STORE</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <RootNamespace />
+    <!-- Alternate Store build outputs live beneath bin/ and obj/. Keep every
+         generated C# file out of the default source glob regardless of which
+         intermediate path a release script selects. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="InstallerSource\**\*.cs" />
@@ -47,7 +57,7 @@
   <Target
     Name="GenerateBdoAlertsApiKeyMetadata"
     BeforeTargets="CoreCompile"
-    Condition="'$(BLACK_SPIRIT_HUB_BDOALERTS_API_KEY)' != ''">
+    Condition="'$(BLACK_SPIRIT_HUB_BDOALERTS_API_KEY)' != '' and '$(BlackSpiritHubStore)' != 'true'">
     <ItemGroup>
       <BdoAlertsAssemblyMetadata Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>BdoAlertsApiKey</_Parameter1>

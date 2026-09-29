@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -167,7 +166,6 @@ internal sealed class CalculatorForm : Form
 	private const int WsMaximizeBox = 0x00010000;
 	private const int ResizeBorder = 9;
 	private const int ResizeCorner = 18;
-	private const long MaxInstallerBytes = 250L * 1024 * 1024;
 
 	private readonly AppPaths paths;
 
@@ -319,7 +317,7 @@ internal sealed class CalculatorForm : Form
 			layoutEditorStore,
 			bdoDocumentsReader);
 		layoutEditorBdoApplyService.ProgressChanged += OnLayoutEditorApplyProgressChanged;
-		updateCheckerService = new UpdateCheckerService(logger);
+		updateCheckerService = new UpdateCheckerService();
 		marketDatabase = new MarketDatabase(paths.DatabasePath);
 		appHealthService = new AppHealthService(marketDatabase, AppContext.BaseDirectory, logger);
 		grindMarketPriceProvider = new GrindMarketPriceProvider(logger);
@@ -1508,7 +1506,6 @@ internal sealed class CalculatorForm : Form
 		try { bdoDocumentsReader.Dispose(); } catch { }
 		try { layoutEditorBackgroundStore.Dispose(); } catch { }
 		try { layoutEditorStore.Dispose(); } catch { }
-		try { updateCheckerService.Dispose(); } catch { }
 		foreach (TaskCompletionSource<JsonElement> pending in activeLayoutEditorHostRequests.Values)
 		{
 			pending.TrySetCanceled();
@@ -1695,6 +1692,16 @@ internal sealed class CalculatorForm : Form
 		core.ContainsFullScreenElementChanged += OnMainContainsFullScreenElementChanged;
 		core.DocumentTitleChanged += OnMainDocumentTitleChanged;
 		core.ProcessFailed += OnMainProcessFailed;
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			string? importScript = MicrosoftStoreMigrationPreferences.BuildDocumentCreatedScript(
+				paths.Root,
+				$"https://{LocalAppHost}");
+			if (!string.IsNullOrWhiteSpace(importScript))
+			{
+				await core.AddScriptToExecuteOnDocumentCreatedAsync(importScript);
+			}
+		}
 		await core.AddScriptToExecuteOnDocumentCreatedAsync(LayoutEditorBridgeScript);
 	}
 
@@ -2885,7 +2892,6 @@ internal sealed class CalculatorForm : Form
 	{
 		return command switch
 		{
-			"downloadAndInstallUpdate" => TimeSpan.FromMinutes(10),
 			"refreshEvents" or "initializeEvents" or "refreshCoupons" => TimeSpan.FromSeconds(105),
 			"refreshBossSchedule" => TimeSpan.FromSeconds(20),
 			"getBdoPlayerProfile" => TimeSpan.FromSeconds(70),
@@ -2962,6 +2968,18 @@ internal sealed class CalculatorForm : Form
 			});
 			return new { opened = true };
 		}
+		case "openMicrosoftStore":
+			return OpenMicrosoftStorePage();
+		case "saveMicrosoftStoreMigrationPreferences":
+		{
+			if (DistributionChannel.IsMicrosoftStore)
+			{
+				return new { saved = false, storeManaged = true, preferenceCount = 0 };
+			}
+
+			int preferenceCount = MicrosoftStoreMigrationPreferences.Save(paths.Root, payload);
+			return new { saved = true, preferenceCount };
+		}
 		case "openSpeechSettings":
 			Process.Start(new ProcessStartInfo("ms-settings:speech")
 			{
@@ -3018,8 +3036,6 @@ internal sealed class CalculatorForm : Form
 			return new { version = AppVersion.Current };
 		case "checkForUpdates":
 			return await updateCheckerService.CheckAsync(cancellationToken);
-		case "downloadAndInstallUpdate":
-			return await DownloadAndLaunchUpdateInstallerAsync(cancellationToken);
 		case "saveCouponSettings":
 		{
 			CouponSettings settings = JsonSerializer.Deserialize<CouponSettings>(payload.GetRawText(), JsonOptions)
@@ -3078,7 +3094,16 @@ internal sealed class CalculatorForm : Form
 			FlashTaskbarAttention();
 			return new { flashed = true };
 		case "getAppBehaviorSettings":
-			return appBehaviorSettings;
+			return new
+			{
+				appBehaviorSettings.MinimizeToTray,
+				appBehaviorSettings.OpenImmediatelyWhenReady,
+				BackgroundMarketUpdatesEnabled = DistributionChannel.IsMicrosoftStore
+					? false
+					: appBehaviorSettings.BackgroundMarketUpdatesEnabled,
+				appBehaviorSettings.BackgroundMarketTaskAutoRegistrationRetired,
+				BackgroundMarketUpdatesAvailable = !DistributionChannel.IsMicrosoftStore
+			};
 		case "getBackgroundMarketStatus":
 			return await new BackgroundMarketUpdateService(paths).GetStatusAsync(appBehaviorSettings.BackgroundMarketUpdatesEnabled, cancellationToken);
 		case "setBackgroundMarketPreference":
@@ -3090,6 +3115,16 @@ internal sealed class CalculatorForm : Form
 			await appBehaviorGate.WaitAsync(cancellationToken);
 			try
 			{
+				if (DistributionChannel.IsMicrosoftStore)
+				{
+					appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with
+					{
+						BackgroundMarketUpdatesEnabled = false,
+						BackgroundMarketTaskAutoRegistrationRetired = true
+					}, cancellationToken);
+					return BackgroundMarketUpdateService.CreateMicrosoftStoreDisabledStatus();
+				}
+
 				// Fail closed before changing Windows tasks. If registration or cleanup
 				// fails, startup will keep collection off and retry retiring any stale task.
 				appBehaviorSettings = await AppBehaviorSettings.SaveAsync(paths, appBehaviorSettings with
@@ -3807,142 +3842,52 @@ internal sealed class CalculatorForm : Form
 			&& eventList.Groups["list"].Value.Contains("groupContentNo=", StringComparison.OrdinalIgnoreCase);
 	}
 
-	private async Task<object> DownloadAndLaunchUpdateInstallerAsync(CancellationToken cancellationToken)
+	private object OpenMicrosoftStorePage()
 	{
-		UpdateCheckResult update = await updateCheckerService.CheckAsync(cancellationToken);
-		if (!update.UpdateAvailable)
-		{
-			return new
-			{
-				started = false,
-				latestVersion = update.LatestVersion,
-				message = "You are on the latest version."
-			};
-		}
-
-		if (!Uri.TryCreate(update.Url, UriKind.Absolute, out Uri? uri)
-			|| uri.Scheme != Uri.UriSchemeHttps
-			|| !IsAllowedUpdateDownloadHost(uri.Host))
-		{
-			throw new InvalidOperationException("The update download link is not allowed.");
-		}
-
-		if (!uri.AbsolutePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-		{
-			throw new InvalidOperationException("The latest release does not include a direct Windows installer download yet.");
-		}
-		if (string.IsNullOrWhiteSpace(update.Sha256))
-		{
-			throw new InvalidOperationException("The update is missing its required SHA-256 integrity value. Open the release page instead.");
-		}
-
-		string safeVersion = new string(update.LatestVersion.Where(ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '_').ToArray());
-		if (string.IsNullOrWhiteSpace(safeVersion))
-			safeVersion = "latest";
-
-		string directory = Path.Combine(Path.GetTempPath(), "Black-Spirit-Hub-Updates");
-		Directory.CreateDirectory(directory);
-		string installerPath = Path.Combine(directory, $"Black-Spirit-Hub-Installer-{safeVersion}.exe");
-		string partialInstallerPath = installerPath + ".download";
-
 		try
 		{
-			File.Delete(partialInstallerPath);
-			using HttpClient client = new()
+			Process.Start(new ProcessStartInfo(AppVersion.MicrosoftStoreProtocolUrl)
 			{
-				Timeout = TimeSpan.FromMinutes(2)
+				UseShellExecute = true
+			});
+			ScheduleMicrosoftStoreHandoffClose();
+			return new
+			{
+				opened = true,
+				url = AppVersion.MicrosoftStoreWebUrl
 			};
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("Black-Spirit-Hub/" + AppVersion.Current);
-			using HttpResponseMessage response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-			response.EnsureSuccessStatusCode();
-			long? expectedLength = response.Content.Headers.ContentLength;
-			if (expectedLength > MaxInstallerBytes)
-				throw new InvalidOperationException("The update installer is unexpectedly large.");
-
-			await using (Stream input = await response.Content.ReadAsStreamAsync(cancellationToken))
-			await using (FileStream output = new FileStream(
-				partialInstallerPath,
-				FileMode.Create,
-				FileAccess.Write,
-				FileShare.None,
-				81920,
-				FileOptions.Asynchronous | FileOptions.SequentialScan))
-			{
-				await CopyWithLimitAsync(input, output, MaxInstallerBytes, cancellationToken);
-			}
-
-			FileInfo downloaded = new FileInfo(partialInstallerPath);
-			if (!downloaded.Exists || downloaded.Length < 128 * 1024)
-				throw new InvalidOperationException("Downloaded installer was incomplete.");
-			if (expectedLength.HasValue && downloaded.Length != expectedLength.Value)
-				throw new InvalidOperationException("Downloaded installer size did not match the release asset.");
-
-			await using (FileStream verificationStream = new FileStream(
-				partialInstallerPath,
-				FileMode.Open,
-				FileAccess.Read,
-				FileShare.Read,
-				81920,
-				FileOptions.Asynchronous | FileOptions.SequentialScan))
-			{
-				string actualSha256 = Convert.ToHexString(await SHA256.HashDataAsync(verificationStream, cancellationToken));
-				if (!string.Equals(actualSha256, update.Sha256, StringComparison.OrdinalIgnoreCase))
-					throw new InvalidOperationException("Downloaded installer failed its SHA-256 integrity check.");
-			}
-
-			File.Move(partialInstallerPath, installerPath, overwrite: true);
 		}
-		catch
+		catch (System.ComponentModel.Win32Exception)
 		{
-			File.Delete(partialInstallerPath);
-			throw;
+			Process.Start(new ProcessStartInfo(AppVersion.MicrosoftStoreWebUrl)
+			{
+				UseShellExecute = true
+			});
+			ScheduleMicrosoftStoreHandoffClose();
+			return new
+			{
+				opened = true,
+				fallback = true,
+				url = AppVersion.MicrosoftStoreWebUrl
+			};
 		}
-
-		ProcessStartInfo installerStart = new ProcessStartInfo(installerPath)
-		{
-			UseShellExecute = true,
-			WorkingDirectory = directory
-		};
-		string currentInstallDirectory = AppContext.BaseDirectory.TrimEnd(
-			Path.DirectorySeparatorChar,
-			Path.AltDirectorySeparatorChar);
-		installerStart.ArgumentList.Add("/DIR=" + currentInstallDirectory);
-		installerStart.ArgumentList.Add("/SOURCEPID=" + Environment.ProcessId);
-		installerStart.ArgumentList.Add("/CLOSEAPPLICATIONS");
-		installerStart.ArgumentList.Add("/NORESTART");
-		Process.Start(installerStart);
-		BeginInvoke(new Action(() =>
-		{
-			ExitForUpdate();
-		}));
-
-		return new
-		{
-			started = true,
-			latestVersion = update.LatestVersion,
-			installerPath,
-			integrityVerified = true
-		};
 	}
 
-	private static async Task CopyWithLimitAsync(
-		Stream input,
-		Stream output,
-		long maximumBytes,
-		CancellationToken cancellationToken)
+	private void ScheduleMicrosoftStoreHandoffClose()
 	{
-		byte[] buffer = new byte[81920];
-		long total = 0;
-		while (true)
+		if (DistributionChannel.IsMicrosoftStore || IsDisposed)
 		{
-			int read = await input.ReadAsync(buffer, cancellationToken);
-			if (read == 0)
-				break;
-			total += read;
-			if (total > maximumBytes)
-				throw new InvalidDataException("The downloaded file exceeded the allowed size.");
-			await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+			return;
 		}
+
+		System.Windows.Forms.Timer closeTimer = new() { Interval = 700 };
+		closeTimer.Tick += (_, _) =>
+		{
+			closeTimer.Stop();
+			closeTimer.Dispose();
+			ExitForUpdate();
+		};
+		closeTimer.Start();
 	}
 
 	private static bool IsAllowedExternalHost(string host)
@@ -3959,18 +3904,6 @@ internal sealed class CalculatorForm : Form
 			"github.com"
 		];
 		return allowedHosts.Any(x => x.Equals(host, StringComparison.OrdinalIgnoreCase));
-	}
-
-	private static bool IsAllowedUpdateDownloadHost(string host)
-	{
-		string[] allowedHosts =
-		[
-			"github.com",
-			"objects.githubusercontent.com",
-			"github-releases.githubusercontent.com"
-		];
-		return allowedHosts.Any(x => x.Equals(host, StringComparison.OrdinalIgnoreCase))
-			|| host.EndsWith(".github.com", StringComparison.OrdinalIgnoreCase);
 	}
 
 	[DllImport("user32.dll")]

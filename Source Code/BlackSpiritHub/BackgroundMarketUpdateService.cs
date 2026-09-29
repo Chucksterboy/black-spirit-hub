@@ -31,6 +31,11 @@ internal sealed class BackgroundMarketUpdateService
 
 	internal async Task<BackgroundMarketUpdateStatus> GetStatusAsync(bool enabled, CancellationToken cancellationToken)
 	{
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			return CreateMicrosoftStoreDisabledStatus();
+		}
+
 		MarketTaskRegistrationStatus registration = await MarketCollectorTaskManager.QueryAsync(cancellationToken, runner).ConfigureAwait(false);
 		DateTimeOffset? lastSample = null;
 		DateTimeOffset? lastRun = null;
@@ -101,6 +106,11 @@ internal sealed class BackgroundMarketUpdateService
 	internal async Task<BackgroundMarketUpdateStatus> ApplyPreferenceAsync(
 		bool enabled, string executablePath, CancellationToken cancellationToken)
 	{
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			return CreateMicrosoftStoreDisabledStatus();
+		}
+
 		using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		deadline.CancelAfter(TimeSpan.FromSeconds(12));
 		try
@@ -122,6 +132,16 @@ internal sealed class BackgroundMarketUpdateService
 			return new(enabled, null, null, null, null, message, message, false);
 		}
 	}
+
+	internal static BackgroundMarketUpdateStatus CreateMicrosoftStoreDisabledStatus() => new(
+		Enabled: false,
+		TaskRegistered: null,
+		LastSuccessfulSampleUtc: null,
+		LastCompletedCheckUtc: null,
+		NextRunUtc: null,
+		Error: null,
+		Message: DistributionChannel.MicrosoftStoreBackgroundMarketMessage,
+		Success: true);
 
 	internal async Task<DateTimeOffset?> ReadLatestSuccessfulSampleUtcAsync(CancellationToken cancellationToken)
 	{

@@ -82,7 +82,7 @@ $foundationNode = Get-Command node -ErrorAction SilentlyContinue
 if (!$foundationNode) { throw 'Node.js is required for the asset and game-data integrity checks.' }
 & $foundationNode.Source (Join-Path $PSScriptRoot 'build-game-data-manifest.mjs') --check
 if ($LASTEXITCODE -ne 0) { throw 'Bundled game-data provenance or dependency review checks failed.' }
-foreach ($testName in @('test-game-data-manifest.mjs', 'test-ui-asset-manifest.mjs', 'test-workflow-journeys.mjs', 'test-startup-background-preferences.mjs', 'test-release-safeguards.mjs', 'test-ui-refresh-core.mjs', 'test-ui-navigation.mjs', 'test-ui-grind-market.mjs', 'test-ui-weeklies-recipes.mjs')) {
+foreach ($testName in @('test-game-data-manifest.mjs', 'test-ui-asset-manifest.mjs', 'test-workflow-journeys.mjs', 'test-startup-background-preferences.mjs', 'test-store-migration.mjs', 'test-release-safeguards.mjs', 'test-ui-refresh-core.mjs', 'test-ui-navigation.mjs', 'test-ui-grind-market.mjs', 'test-ui-weeklies-recipes.mjs')) {
 	$testRoot = if ($testName -eq 'test-release-safeguards.mjs') { $repoRoot } else { $sourceRoot }
 	& $foundationNode.Source (Join-Path $PSScriptRoot $testName) $testRoot
 	if ($LASTEXITCODE -ne 0) { throw "Foundation regression failed: $testName" }
@@ -2064,14 +2064,22 @@ if ($installerSource -notmatch 'F3017226-FE2A-4295-8BDF-00C3A9A7E4C5' -or
 	$nativeInstallerBuildScript -notmatch 'Microsoft Corporation') {
 	throw "Native installer WebView2 detection, verified one-time repair, or graceful-close safety is missing."
 }
+$usesLegacyInstallerHandoff =
+	$calculatorSource -match '"/DIR="\s*\+\s*currentInstallDirectory' -and
+	$calculatorSource -match '"/SOURCEPID="\s*\+\s*Environment\.ProcessId'
+$usesStoreMigrationHandoff =
+	$calculatorSource -match 'case "openMicrosoftStore":' -and
+	$calculatorSource -match 'OpenMicrosoftStorePage\(\)' -and
+	$calculatorSource -match 'AppVersion\.MicrosoftStoreProtocolUrl' -and
+	$releaseScript -match 'MigrationToMicrosoftStore' -and
+	$releaseScript -match 'RequireSigning'
 if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
 	$installerSource -notmatch 'DefaultDirName=\{code:GetDefaultInstallDir\}' -or
 	$installerSource -notmatch 'CloseApplications=yes' -or
 	$installerSource -notmatch 'Uninstallable=yes' -or
 	$installerSource -notmatch "'--install-path'" -or
 	$installerSource -notmatch "'--source-pid'" -or
-	$calculatorSource -notmatch '"/DIR="\s*\+\s*currentInstallDirectory' -or
-	$calculatorSource -notmatch '"/SOURCEPID="\s*\+\s*Environment\.ProcessId' -or
+	(!$usesLegacyInstallerHandoff -and !$usesStoreMigrationHandoff) -or
 	$installerSource -notmatch '--retire-market-task' -or
 	$installerSource -match '--install-market-task' -or
 	$installerSource -notmatch '--remove-market-task' -or
@@ -2087,7 +2095,7 @@ if ($installerSource -notmatch 'PrivilegesRequired=lowest' -or
 	$marketCollectorTaskSource -notmatch '"/F"' -or
 	$marketCollectorTaskSource -match '/XML' -or
 	$marketCollectorTaskSource -notmatch '--market-scheduled-update') {
-	throw "Native installer update compatibility, automatic task retirement, uninstall integration, or manual market collector scheduling is incomplete."
+	throw "Native installer migration compatibility, automatic task retirement, uninstall integration, or manual market collector scheduling is incomplete."
 }
 if ($marketAnalyticsServiceSource -notmatch 'DefaultCollectorInterval\s*=\s*TimeSpan\.FromHours\(3\);' -or
 	$marketAnalyticsServiceSource -notmatch 'DefaultDetailCollectorInterval\s*=\s*TimeSpan\.FromHours\(24\);' -or

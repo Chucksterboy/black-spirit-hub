@@ -2,21 +2,39 @@ let startupPreferenceBusy=false;
 let backgroundPreferenceBusy=false;
 let backgroundStatusPromise=null;
 let backgroundStatusGeneration=0;
+let backgroundMarketUpdatesAvailable=true;
 function renderStartupAndBackgroundPreferences(settings){
+  backgroundMarketUpdatesAvailable=settings?.backgroundMarketUpdatesAvailable!==false;
   for(const [id,key,busy] of [
     ["openImmediatelyWhenReady","openImmediatelyWhenReady",startupPreferenceBusy],
     ["backgroundMarketUpdatesEnabled","backgroundMarketUpdatesEnabled",backgroundPreferenceBusy]
   ]){
     const toggle=document.getElementById(id);
     if(!toggle)continue;
-    toggle.disabled=busy||typeof settings?.[key]!=="boolean";
+    const unavailable=id==="backgroundMarketUpdatesEnabled"&&!backgroundMarketUpdatesAvailable;
+    toggle.disabled=unavailable||busy||typeof settings?.[key]!=="boolean";
     if(!busy&&typeof settings?.[key]==="boolean")toggle.checked=settings[key];
+    if(unavailable)toggle.checked=false;
+  }
+  const refresh=document.getElementById("refreshBackgroundMarketStatus");
+  if(refresh)refresh.disabled=!backgroundMarketUpdatesAvailable;
+  if(!backgroundMarketUpdatesAvailable){
+    const text=document.getElementById("backgroundMarketStatus");
+    const run=document.getElementById("backgroundMarketLastRun");
+    if(text)text.textContent="Background market collection while the app is closed is unavailable in the Microsoft Store edition. Market updates continue while Black Spirit Hub is open.";
+    if(run)run.textContent="";
   }
 }
 function renderBackgroundMarketStatus(status){
   const text=document.getElementById("backgroundMarketStatus");
   const run=document.getElementById("backgroundMarketLastRun");
   const toggle=document.getElementById("backgroundMarketUpdatesEnabled");
+  if(!backgroundMarketUpdatesAvailable){
+    if(toggle)toggle.checked=false;
+    if(text)text.textContent="Background market collection while the app is closed is unavailable in the Microsoft Store edition. Market updates continue while Black Spirit Hub is open.";
+    if(run)run.textContent="";
+    return;
+  }
   if(toggle&&typeof status?.enabled==="boolean")toggle.checked=status.enabled;
   if(text)text.textContent=status?.error||status?.message||"Background update status is unavailable.";
   const format=value=>{const date=new Date(value);return value&&Number.isFinite(date.getTime())?date.toLocaleString():null;};
@@ -26,6 +44,10 @@ function renderBackgroundMarketStatus(status){
   if(run)run.textContent=[success?`Last completed background check: ${success}.`:"No completed background check recorded yet.",sample?`Latest saved EU market sample: ${sample}.`:"",next?`Next check: ${next}.`:""].filter(Boolean).join(" ");
 }
 async function refreshBackgroundMarketStatus({force=false}={}){
+  if(!backgroundMarketUpdatesAvailable){
+    renderBackgroundMarketStatus(null);
+    return;
+  }
   if(backgroundStatusPromise&&!force)return backgroundStatusPromise;
   const generation=++backgroundStatusGeneration;
   const button=document.getElementById("refreshBackgroundMarketStatus");
@@ -33,7 +55,7 @@ async function refreshBackgroundMarketStatus({force=false}={}){
   const request=(async()=>{
     try{const status=await bridgeCall("getBackgroundMarketStatus");if(generation===backgroundStatusGeneration)renderBackgroundMarketStatus(status);}
     catch(error){const text=document.getElementById("backgroundMarketStatus");if(text&&generation===backgroundStatusGeneration)text.textContent=error.message||"Could not read background update status. Try Refresh status.";}
-    finally{if(button&&generation===backgroundStatusGeneration)button.disabled=false;}
+    finally{if(button&&generation===backgroundStatusGeneration)button.disabled=!backgroundMarketUpdatesAvailable;}
   })().finally(()=>{if(backgroundStatusPromise===request)backgroundStatusPromise=null;});
   backgroundStatusPromise=request;
   return request;
@@ -59,7 +81,7 @@ document.getElementById("openImmediatelyWhenReady")?.addEventListener("change",a
   finally{startupPreferenceBusy=false;toggle.disabled=false;}
 });
 document.getElementById("backgroundMarketUpdatesEnabled")?.addEventListener("change",async event=>{
-  if(backgroundPreferenceBusy)return;
+  if(backgroundPreferenceBusy||!backgroundMarketUpdatesAvailable){event.currentTarget.checked=false;return;}
   const toggle=event.currentTarget;
   const requested=toggle.checked;
   ++backgroundStatusGeneration;
@@ -77,5 +99,5 @@ document.getElementById("backgroundMarketUpdatesEnabled")?.addEventListener("cha
       toggle.checked=typeof settings?.backgroundMarketUpdatesEnabled==="boolean"?settings.backgroundMarketUpdatesEnabled:!requested;
     }catch{toggle.checked=!requested;}
     NotificationService.ShowError(error.message||"Could not change background updates.","Background updates");
-  }finally{backgroundPreferenceBusy=false;toggle.disabled=false;await refreshBackgroundMarketStatus({force:true});}
+  }finally{backgroundPreferenceBusy=false;toggle.disabled=!backgroundMarketUpdatesAvailable;await refreshBackgroundMarketStatus({force:true});}
 });

@@ -19,9 +19,9 @@ namespace BlackSpiritHub;
 
 internal static class Program
 {
-	private const string SingleInstanceMutexName = "Local\\BlackSpiritHub.SingleInstance";
+	private static string SingleInstanceMutexName => DistributionChannel.InstanceMutexName;
 
-	private const string SingleInstancePipeName = "BlackSpiritHub.SingleInstance.Restore";
+	private static string SingleInstancePipeName => DistributionChannel.InstancePipeName;
 
 	private static readonly string PreviousSingleInstanceMutexName = string.Concat("Local\\BDO", "Multi", "Tool.SingleInstance");
 
@@ -251,21 +251,31 @@ internal static class Program
 		}
 		if (args.Any(a => string.Equals(a, "--remove-market-task", StringComparison.OrdinalIgnoreCase)))
 		{
-			MarketCollectorTaskManager.RemoveKnownTasks();
+			if (!DistributionChannel.IsMicrosoftStore)
+			{
+				MarketCollectorTaskManager.RemoveKnownTasks();
+			}
 			return;
 		}
 		bool runScheduledMarketUpdate = args.Any(a => string.Equals(a, "--market-scheduled-update", StringComparison.OrdinalIgnoreCase));
 		// A second normal launch only restores the existing window. It must not
 		// migrate or inspect assets before discovering that another instance owns UI.
 		// Headless collector and smoke/installer commands retain independent lifetimes.
-		using Mutex singleInstanceMutex = runScheduledMarketUpdate ? null
+		using Mutex? singleInstanceMutex = runScheduledMarketUpdate ? null
 			: new Mutex(initiallyOwned: false, SingleInstanceMutexName);
-		using Mutex previousSingleInstanceMutex = runScheduledMarketUpdate ? null
+		using Mutex? previousSingleInstanceMutex = runScheduledMarketUpdate
+			|| !DistributionChannel.UsesPreviousProductInstanceEndpoint ? null
 			: new Mutex(initiallyOwned: false, PreviousSingleInstanceMutexName);
-		if (!runScheduledMarketUpdate && (!TryOwnMutex(singleInstanceMutex) || !TryOwnMutex(previousSingleInstanceMutex)))
+		if (!runScheduledMarketUpdate
+			&& (!TryOwnMutex(singleInstanceMutex!)
+				|| (previousSingleInstanceMutex is not null && !TryOwnMutex(previousSingleInstanceMutex))))
 		{
 			SendRestoreRequestToExistingInstance();
 			return;
+		}
+		if (DistributionChannel.IsMicrosoftStore && !runScheduledMarketUpdate)
+		{
+			WaitForDirectInstanceToReleaseForStoreMigration();
 		}
 		AppPaths appPaths3 = AppPaths.Create();
 		appPaths3.EnsureDirectories();
@@ -417,6 +427,12 @@ internal static class Program
 
 	private static async Task<int> RunScheduledMarketUpdateAsync(AppPaths paths, AppLogger logger)
 	{
+		if (DistributionChannel.IsMicrosoftStore)
+		{
+			logger.Info("Scheduled market collector skipped: unavailable in the Microsoft Store edition.");
+			return 0;
+		}
+
 		using CancellationTokenSource collectorCancellation = new();
 		Task preferenceWatch = Task.CompletedTask;
 		try
@@ -479,6 +495,18 @@ internal static class Program
 		{
 			string previousRoot = Path.Combine(root, "previous");
 			string currentRoot = Path.Combine(root, "current");
+			if (MicrosoftStorePackagePaths.BuildLocalStateRoot(
+				root,
+				"BlackSpiritHub_testpublisher",
+				"Black Spirit Hub") != Path.Combine(
+					root,
+					"Packages",
+					"BlackSpiritHub_testpublisher",
+					"LocalState",
+					"Black Spirit Hub"))
+			{
+				return 74;
+			}
 			Directory.CreateDirectory(Path.Combine(previousRoot, "logs"));
 			File.WriteAllText(Path.Combine(previousRoot, "grind-sessions.json"), "[{\"spotId\":\"test\"}]");
 			File.WriteAllText(Path.Combine(previousRoot, "coupon_redemptions.json"), "{\"schemaVersion\":1,\"redeemedCodes\":[\"KEEPME\"]}");
@@ -534,6 +562,73 @@ internal static class Program
 				return 72;
 			}
 
+			string expectedMutex = DistributionChannel.IsMicrosoftStore
+				? DistributionChannel.StoreInstanceMutexName
+				: DistributionChannel.DirectInstanceMutexName;
+			string expectedPipe = DistributionChannel.IsMicrosoftStore
+				? DistributionChannel.StoreInstancePipeName
+				: DistributionChannel.DirectInstancePipeName;
+			if (DistributionChannel.InstanceMutexName != expectedMutex
+				|| DistributionChannel.InstancePipeName != expectedPipe
+				|| DistributionChannel.UsesPreviousProductInstanceEndpoint == DistributionChannel.IsMicrosoftStore)
+			{
+				return 75;
+			}
+
+			string storeLegacyRoot = Path.Combine(root, "store-legacy");
+			string storeCurrentRoot = Path.Combine(root, "store-current");
+			Directory.CreateDirectory(Path.Combine(storeLegacyRoot, "LayoutEditor", "bdo-backups", "12345"));
+			Directory.CreateDirectory(Path.Combine(storeCurrentRoot, "LayoutEditor"));
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "market-analytics.db"), "market-main");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "market-analytics.db-wal"), "market-wal");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "market-analytics.db-shm"), "market-shm");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "app-behavior-settings.json"), "legacy-settings");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "app-behavior-settings.json.bak"), "legacy-settings-backup");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "layouts.json"), "legacy-layouts");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "layouts.json.bak"), "legacy-layouts-backup");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "background.json"), "legacy-background");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "bdo-preferences.json"), "legacy-preferences");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "bdo-apply-status.json"), "legacy-apply-status");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "bdo-backups", "12345", "gamevariable.1.xml.bak"), "legacy-backup");
+			File.WriteAllText(Path.Combine(storeLegacyRoot, "LayoutEditor", "transient.tmp"), "do-not-copy");
+			File.WriteAllText(Path.Combine(storeCurrentRoot, "LayoutEditor", "layouts.json"), "store-layouts");
+			using (JsonDocument preferences = JsonDocument.Parse("""
+			{
+				"blackSpiritHub.appearance":"{\"theme\":\"gold\"}",
+				"bdoFontFavorites":"[\"font-1\"]",
+				"bsh.uiRefresh.navigation.v1":"{\"favorites\":[\"homeView\"]}"
+			}
+			"""))
+			{
+				if (MicrosoftStoreMigrationPreferences.Save(storeLegacyRoot, preferences.RootElement) != 3)
+				{
+					return 76;
+				}
+			}
+
+			AppPaths.MigrateLegacyDataForTest(storeLegacyRoot, storeCurrentRoot);
+			string? preferenceScript = MicrosoftStoreMigrationPreferences.BuildDocumentCreatedScript(
+				storeCurrentRoot,
+				"https://app.bdo.local");
+			if (!File.Exists(Path.Combine(storeLegacyRoot, "market-analytics.db"))
+				|| File.ReadAllText(Path.Combine(storeCurrentRoot, "market-analytics.db")) != "market-main"
+				|| File.ReadAllText(Path.Combine(storeCurrentRoot, "market-analytics.db-wal")) != "market-wal"
+				|| File.ReadAllText(Path.Combine(storeCurrentRoot, "market-analytics.db-shm")) != "market-shm"
+				|| File.ReadAllText(Path.Combine(storeCurrentRoot, "app-behavior-settings.json.bak")) != "legacy-settings-backup"
+				|| File.ReadAllText(Path.Combine(storeCurrentRoot, "LayoutEditor", "layouts.json")) != "store-layouts"
+				|| !File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "layouts.json.bak"))
+				|| !File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "background.json"))
+				|| !File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "bdo-preferences.json"))
+				|| !File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "bdo-apply-status.json"))
+				|| !File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "bdo-backups", "12345", "gamevariable.1.xml.bak"))
+				|| File.Exists(Path.Combine(storeCurrentRoot, "LayoutEditor", "transient.tmp"))
+				|| string.IsNullOrWhiteSpace(preferenceScript)
+				|| !preferenceScript.Contains("blackSpiritHub.appearance", StringComparison.Ordinal)
+				|| !preferenceScript.Contains("https://app.bdo.local", StringComparison.Ordinal))
+			{
+				return 77;
+			}
+
 			return 0;
 		}
 		catch
@@ -559,6 +654,38 @@ internal static class Program
 	{
 		try { return mutex.WaitOne(0); }
 		catch (AbandonedMutexException) { return true; }
+	}
+
+	// A transition started from the legacy app closes that app after it opens the
+	// Store page. Wait briefly for its files and SQLite WAL to be released before
+	// the Store edition copies the data into its isolated LocalState folder.
+	private static void WaitForDirectInstanceToReleaseForStoreMigration()
+	{
+		bool ownsLegacyMutex = false;
+		try
+		{
+			using Mutex legacyMutex = new(initiallyOwned: false, DistributionChannel.DirectInstanceMutexName);
+			try
+			{
+				ownsLegacyMutex = legacyMutex.WaitOne(TimeSpan.FromSeconds(5));
+			}
+			catch (AbandonedMutexException)
+			{
+				ownsLegacyMutex = true;
+			}
+			finally
+			{
+				if (ownsLegacyMutex)
+				{
+					legacyMutex.ReleaseMutex();
+				}
+			}
+		}
+		catch (Exception)
+		{
+			// A failed wait must not prevent Microsoft Store from launching. Missing
+			// source files remain eligible for the non-overwriting copy on next launch.
+		}
 	}
 
 	private static async Task<int> RunWeeklyPlannerSmokeTestAsync()
@@ -751,8 +878,12 @@ internal static class Program
 		{
 			AppPaths paths = AppPaths.CreateAt(root);
 			paths.EnsureDirectories();
+			int schedulerCalls = 0;
 			MarketCollectorTaskManager.CommandRunner smokeTaskRunner = (_, _, _) =>
-				Task.FromResult(new MarketTaskCommandResult(0, string.Empty, string.Empty));
+			{
+				schedulerCalls++;
+				return Task.FromResult(new MarketTaskCommandResult(0, string.Empty, string.Empty));
+			};
 
 			AppBehaviorSettings defaults = AppBehaviorSettings.LoadAsync(paths, CancellationToken.None).GetAwaiter().GetResult();
 			if (!defaults.MinimizeToTray || defaults.OpenImmediatelyWhenReady
@@ -784,9 +915,52 @@ internal static class Program
 			AppBehaviorSettings.Save(paths, new(true, false, true));
 			BackgroundMarketTaskRetirement retirement = AppBehaviorSettings
 				.RetireAutomaticMarketTaskAsync(paths, CancellationToken.None, smokeTaskRunner).GetAwaiter().GetResult();
-			if (!retirement.RetiredNow || retirement.Settings.BackgroundMarketUpdatesEnabled
-				|| !retirement.Settings.BackgroundMarketTaskAutoRegistrationRetired)
-				return 291;
+			if (DistributionChannel.IsMicrosoftStore)
+			{
+				if (retirement.RetiredNow || retirement.Settings.BackgroundMarketUpdatesEnabled
+					|| !retirement.Settings.BackgroundMarketTaskAutoRegistrationRetired
+					|| schedulerCalls != 0
+					|| AppBehaviorSettings.IsBackgroundCollectionAllowedAsync(paths, CancellationToken.None)
+						.GetAwaiter().GetResult())
+				{
+					return 291;
+				}
+				BackgroundMarketUpdateStatus storeStatus = new BackgroundMarketUpdateService(paths)
+					.GetStatusAsync(enabled: true, CancellationToken.None).GetAwaiter().GetResult();
+				if (storeStatus.Enabled || storeStatus.TaskRegistered.HasValue || !storeStatus.Success
+					|| storeStatus.Message != DistributionChannel.MicrosoftStoreBackgroundMarketMessage)
+				{
+					return 292;
+				}
+				UpdateCheckerService storeUpdates = new();
+				UpdateCheckResult storeUpdate = storeUpdates.CheckAsync(CancellationToken.None)
+					.GetAwaiter().GetResult();
+				if (!storeUpdate.StoreManaged || storeUpdate.UpdateAvailable || storeUpdate.CheckFailed
+					|| storeUpdate.MicrosoftStoreMigration
+					|| storeUpdate.Message != DistributionChannel.MicrosoftStoreUpdateMessage)
+				{
+					return 293;
+				}
+			}
+			else
+			{
+				if (!retirement.RetiredNow || retirement.Settings.BackgroundMarketUpdatesEnabled
+					|| !retirement.Settings.BackgroundMarketTaskAutoRegistrationRetired)
+				{
+					return 291;
+				}
+
+				UpdateCheckerService migrationUpdates = new();
+				UpdateCheckResult migrationUpdate = migrationUpdates.CheckAsync(CancellationToken.None)
+					.GetAwaiter().GetResult();
+				if (migrationUpdate.StoreManaged || !migrationUpdate.UpdateAvailable || migrationUpdate.CheckFailed
+					|| !migrationUpdate.MicrosoftStoreMigration
+					|| migrationUpdate.Url != AppVersion.MicrosoftStoreWebUrl
+					|| migrationUpdate.Message != DistributionChannel.MicrosoftStoreMigrationMessage)
+				{
+					return 294;
+				}
+			}
 			if (StartupSplashWindow.ShouldBeginColdExit(0, false, true)
 				|| StartupSplashWindow.ShouldBeginColdExit(100_000, false, false)
 				|| StartupSplashWindow.ShouldBeginColdExit(2_699, true)
@@ -867,13 +1041,19 @@ internal static class Program
 		{
 			return;
 		}
-		TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "restore");
+		if (DistributionChannel.UsesPreviousProductInstanceEndpoint)
+		{
+			TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "restore");
+		}
 	}
 
 	private static void SendShutdownRequestToExistingInstance()
 	{
 		TrySendSingleInstanceRequest(SingleInstancePipeName, "shutdown-for-update");
-		TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "shutdown-for-update");
+		if (DistributionChannel.UsesPreviousProductInstanceEndpoint)
+		{
+			TrySendSingleInstanceRequest(PreviousSingleInstancePipeName, "shutdown-for-update");
+		}
 	}
 
 	private static void TryWriteInstallerDiagnostic(string message)

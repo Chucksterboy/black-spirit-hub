@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="../../Source Code/BlackSpiritHub/MarketCollectorTaskManager.cs" Link="MarketCollectorTaskManager.cs" />
     <Compile Include="../../Source Code/BlackSpiritHub/BackgroundMarketUpdateService.cs" Link="BackgroundMarketUpdateService.cs" />
+    <Compile Include="../../Source Code/BlackSpiritHub/DistributionChannel.cs" Link="DistributionChannel.cs" />
     <Compile Include="../../Source Code/BlackSpiritHub/AtomicFile.cs" Link="AtomicFile.cs" />
     <Compile Include="../../Source Code/BlackSpiritHub/AppBehaviorSettings.cs" Link="AppBehaviorSettings.cs" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleId": "fc39a31a62fb11a85092a769ec73e945775c9b5589cc82d3f262f467409af04b",
+  "bundleId": "0b25dba657f15b848e725e1024ed52f188a68caaf20069ad8a1bbfef6a85bef4",
   "files": [
     {
       "path": "Assets/Alarm.mp3",
@@ -9,8 +9,13 @@
     },
     {
       "path": "Assets/AppBehavior/app-behavior-preferences.js",
-      "length": 5251,
-      "sha256": "44273782ccff115d71bc122d8e4371bafa7514bc1cf7290d355e45b5baf4f24c"
+      "length": 6575,
+      "sha256": "cd1e1edc80bad1632dcff45e5b22a9fabb663079ec258c36aeb5af9e28922c09"
+    },
+    {
+      "path": "Assets/AppBehavior/store-migration-preferences.js",
+      "length": 752,
+      "sha256": "f75e61e04fa30950f1ac2fed9bf3d2a87db3be2a3018f12de98c7aa974172ef9"
     },
     {
       "path": "Assets/AppIcon/app-icon-ui.png",
@@ -2854,8 +2859,8 @@
     },
     {
       "path": "Assets/UiRefresh/core.js",
-      "length": 14940,
-      "sha256": "d18eadf24dd326027d3a12ae8c3bcdd5cacbf674e7ecb1e08d0ae02f790e56df"
+      "length": 15066,
+      "sha256": "4c7ae3cb1ddd2aa18eba7861b7b8a597ee03e9a8e0dd2d8e88b151a0f979c88b"
     },
     {
       "path": "Assets/UiRefresh/grind-market.css",
