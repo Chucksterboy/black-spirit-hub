@@ -156,6 +156,50 @@ foreach ($requiredValidationFile in @(
 	}
 }
 
+# Target-size icon assets are what Windows selects for the taskbar, Task View,
+# and Start. Verify the completed package carries every transparent variant,
+# rather than only the dark 44px tile fallback.
+Add-Type -AssemblyName System.Drawing
+$taskbarTargetSizes = @(16, 20, 24, 30, 32, 36, 40, 44, 48, 60, 64, 72, 80, 96, 256)
+$taskbarThemeSuffixes = @("", "_altform-unplated", "_altform-lightunplated")
+$requiredTaskbarAssets = @("Square44x44Logo.png")
+foreach ($size in $taskbarTargetSizes) {
+	foreach ($suffix in $taskbarThemeSuffixes) {
+		$requiredTaskbarAssets += "Square44x44Logo.targetsize-$size$suffix.png"
+	}
+}
+foreach ($scale in @("100", "125", "150", "200", "400")) {
+	$requiredTaskbarAssets += "Square44x44Logo.scale-$scale.png"
+}
+foreach ($assetName in $requiredTaskbarAssets) {
+	$assetPath = Join-Path $validationRoot (Join-Path "Assets\Store" $assetName)
+	if (!(Test-Path -LiteralPath $assetPath -PathType Leaf)) {
+		throw "MSIX validation is missing the Store taskbar icon asset: $assetName"
+	}
+	if ($assetName -match 'targetsize-(\d+)') {
+		$expectedSize = [int]$Matches[1]
+		$asset = [System.Drawing.Bitmap]::new($assetPath)
+		try {
+			if ($asset.Width -ne $expectedSize -or $asset.Height -ne $expectedSize) {
+				throw "MSIX taskbar asset has incorrect dimensions: $assetName"
+			}
+			foreach ($corner in @(
+				[System.Drawing.Point]::new(0, 0),
+				[System.Drawing.Point]::new($expectedSize - 1, 0),
+				[System.Drawing.Point]::new(0, $expectedSize - 1),
+				[System.Drawing.Point]::new($expectedSize - 1, $expectedSize - 1)
+			)) {
+				if ($asset.GetPixel($corner.X, $corner.Y).A -ne 0) {
+					throw "MSIX taskbar asset is not transparent at its canvas edge: $assetName"
+				}
+			}
+		}
+		finally {
+			$asset.Dispose()
+		}
+	}
+}
+
 Copy-Item -LiteralPath $packagePath -Destination $uploadDirectory
 Compress-Archive -LiteralPath (Join-Path $uploadDirectory (Split-Path -Leaf $packagePath)) -DestinationPath ($uploadPath + ".zip")
 Move-Item -LiteralPath ($uploadPath + ".zip") -Destination $uploadPath
