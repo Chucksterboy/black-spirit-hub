@@ -3875,11 +3875,15 @@ internal sealed class CalculatorForm : Form
 
 	private void ScheduleMicrosoftStoreHandoffClose()
 	{
-		if (DistributionChannel.IsMicrosoftStore || IsDisposed)
+		if (IsDisposed)
 		{
 			return;
 		}
 
+		// The Microsoft Store cannot replace an MSIX package while this process is
+		// still using it. This handoff starts only after the user explicitly asks
+		// to update, so close both Store and direct editions after the Store page
+		// has opened. ExitForUpdate bypasses the normal minimize-to-tray behavior.
 		System.Windows.Forms.Timer closeTimer = new() { Interval = 700 };
 		closeTimer.Tick += (_, _) =>
 		{

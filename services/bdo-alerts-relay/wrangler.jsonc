@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bshub-bdo-alerts-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-02",
+  "workers_dev": true,
+  "ratelimits": [
+    {
+      "name": "BDO_ALERTS_REQUEST_LIMIT",
+      "namespace_id": "9667301",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    },
+    {
+      "name": "BDO_ALERTS_REFRESH_LIMIT",
+      "namespace_id": "9667302",
+      "simple": {
+        "limit": 2,
+        "period": 60
+      }
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "BSHUB_UPDATE_MANIFEST",
+      "id": "e1a65a2f2e4246b5a87dc36288c6f629"
+    }
+  ]
+}

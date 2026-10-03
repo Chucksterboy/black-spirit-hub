@@ -187,6 +187,7 @@ internal sealed class BdoPlayerGuildService : IDisposable
 	private readonly AppLogger logger;
 	private readonly HttpClient http;
 	private readonly string? apiKeyOverride;
+	private readonly Func<Uri, BdoPlayerGuildRequestRoute> requestRouteResolver;
 	private readonly Func<DateTimeOffset> utcNow;
 	private readonly SemaphoreSlim operationGate = new(1, 1);
 	private BdoPlayerGuildCache? cache;
@@ -212,11 +213,22 @@ internal sealed class BdoPlayerGuildService : IDisposable
 		AppLogger logger,
 		HttpMessageHandler handler,
 		string? apiKey,
-		Func<DateTimeOffset>? utcNow)
+		Func<DateTimeOffset>? utcNow,
+		Func<Uri, BdoPlayerGuildRequestRoute>? requestRouteResolver = null)
 	{
 		this.paths = paths;
 		this.logger = logger;
 		apiKeyOverride = apiKey;
+		// The internal constructor is used by the offline suite with an explicit
+		// test-only credential and stubbed api.bdoalerts.net handler. Preserve
+		// that isolated transport even when the suite is compiled as a Store
+		// build; production calls use the public constructor and the gateway.
+		this.requestRouteResolver = requestRouteResolver
+			?? (apiKey is null
+				? BdoPlayerGuildGateway.Resolve
+				: endpoint => new BdoPlayerGuildRequestRoute(
+					endpoint,
+					RequiresBdoAlertsCredential: true));
 		this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
 		http = new HttpClient(handler)
 		{
@@ -852,12 +864,16 @@ internal sealed class BdoPlayerGuildService : IDisposable
 		string operation,
 		CancellationToken cancellationToken)
 	{
-		using HttpRequestMessage request = new(HttpMethod.Get, endpoint);
-		string? apiKey = apiKeyOverride ?? BdoAlertsApiCredentials.Resolve();
-		if (!BdoAlertsApiCredentials.TryApply(request, endpoint, apiKey))
+		BdoPlayerGuildRequestRoute route = requestRouteResolver(endpoint);
+		using HttpRequestMessage request = new(HttpMethod.Get, route.RequestUri);
+		if (route.RequiresBdoAlertsCredential)
 		{
-			throw new UnauthorizedAccessException(
-				"Player and guild lookup is not configured for this request.");
+			string? apiKey = apiKeyOverride ?? BdoAlertsApiCredentials.Resolve();
+			if (!BdoAlertsApiCredentials.TryApply(request, endpoint, apiKey))
+			{
+				throw new UnauthorizedAccessException(
+					"Player and guild lookup is not configured for this request.");
+			}
 		}
 
 		using HttpResponseMessage response = await http.SendAsync(

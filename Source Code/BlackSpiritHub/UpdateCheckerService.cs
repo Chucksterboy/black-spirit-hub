@@ -61,13 +61,17 @@ internal sealed class UpdateCheckerService
 			return CreateMicrosoftStoreResult(updateAvailable: false);
 		}
 
+		MicrosoftStoreUpdateAnnouncement? announcement = await MicrosoftStoreUpdateManifest
+			.GetLiveAnnouncementAsync(cancellationToken);
+		cancellationToken.ThrowIfCancellationRequested();
+
 		await microsoftStoreCheckGate.WaitAsync(cancellationToken);
 		try
 		{
 			if (cachedMicrosoftStoreCheck is not null
 				&& DateTimeOffset.UtcNow < nextMicrosoftStoreCheckUtc)
 			{
-				return cachedMicrosoftStoreCheck;
+				return ApplyStoreAnnouncement(cachedMicrosoftStoreCheck, announcement);
 			}
 
 			StoreContext storeContext = StoreContext.GetDefault();
@@ -80,8 +84,10 @@ internal sealed class UpdateCheckerService
 			// rollout available to this device. A non-empty result is authoritative.
 			var updates = await storeContext.GetAppAndOptionalStorePackageUpdatesAsync();
 			cancellationToken.ThrowIfCancellationRequested();
-			return CacheMicrosoftStoreCheck(CreateMicrosoftStoreResult(
-				updateAvailable: updates.Count > 0));
+			return ApplyStoreAnnouncement(
+				CacheMicrosoftStoreCheck(CreateMicrosoftStoreResult(
+					updateAvailable: updates.Count > 0)),
+				announcement);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
@@ -107,6 +113,31 @@ internal sealed class UpdateCheckerService
 		cachedMicrosoftStoreCheck = result;
 		nextMicrosoftStoreCheckUtc = DateTimeOffset.UtcNow + MicrosoftStoreCheckInterval;
 		return result;
+	}
+
+	private static UpdateCheckResult ApplyStoreAnnouncement(
+		UpdateCheckResult storeResult,
+		MicrosoftStoreUpdateAnnouncement? announcement)
+	{
+		if (announcement is null)
+		{
+			return storeResult;
+		}
+
+		Version? installedVersion = MicrosoftStoreUpdateManifest.TryGetInstalledPackageVersion();
+		if (installedVersion is null || announcement.PackageVersion <= installedVersion)
+		{
+			return storeResult;
+		}
+
+		return storeResult with
+		{
+			LatestVersion = announcement.PackageVersionText,
+			StoreUpdateAnnounced = !storeResult.UpdateAvailable,
+			AnnouncedVersion = storeResult.UpdateAvailable
+				? null
+				: announcement.PackageVersionText
+		};
 	}
 
 	private static UpdateCheckResult CreateMicrosoftStoreResult(
@@ -141,5 +172,7 @@ internal sealed record UpdateCheckResult(
 	bool CheckFailed,
 	string? Sha256,
 	bool StoreManaged = false,
-	bool MicrosoftStoreMigration = false);
+	bool MicrosoftStoreMigration = false,
+	bool StoreUpdateAnnounced = false,
+	string? AnnouncedVersion = null);
 

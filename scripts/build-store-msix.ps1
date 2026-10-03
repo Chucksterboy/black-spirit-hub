@@ -4,6 +4,8 @@ param(
 	[Parameter(Mandatory = $true)][string]$PublisherDisplayName,
 	[Parameter(Mandatory = $true)][string]$DisplayName,
 	[Parameter(Mandatory = $true)][string]$Version,
+	[Parameter(Mandatory = $true)][string]$PlayerGuildGatewayUrl,
+	[Parameter(Mandatory = $true)][string]$UpdateManifestUrl,
 	[string]$OutputDirectory = ""
 )
 
@@ -34,6 +36,40 @@ function ConvertTo-XmlValue {
 	return [System.Security.SecurityElement]::Escape($Value.Trim())
 }
 
+function Normalize-PlayerGuildGatewayUrl {
+	param([Parameter(Mandatory = $true)][string]$Value)
+	$gatewayUri = $null
+	if (
+		-not [Uri]::TryCreate($Value.Trim(), [UriKind]::Absolute, [ref]$gatewayUri) -or
+		$gatewayUri.Scheme -ne [Uri]::UriSchemeHttps -or
+		-not $gatewayUri.IsDefaultPort -or
+		[string]::IsNullOrEmpty($gatewayUri.Host) -or
+		-not [string]::IsNullOrEmpty($gatewayUri.UserInfo) -or
+		-not [string]::IsNullOrEmpty($gatewayUri.Query) -or
+		-not [string]::IsNullOrEmpty($gatewayUri.Fragment) -or
+		$gatewayUri.AbsolutePath -ne "/") {
+		throw "PlayerGuildGatewayUrl must be an HTTPS root URL without credentials, query text, or a fragment."
+	}
+	return $gatewayUri.AbsoluteUri
+}
+
+function Normalize-UpdateManifestUrl {
+	param([Parameter(Mandatory = $true)][string]$Value)
+	$manifestUri = $null
+	if (
+		-not [Uri]::TryCreate($Value.Trim(), [UriKind]::Absolute, [ref]$manifestUri) -or
+		$manifestUri.Scheme -ne [Uri]::UriSchemeHttps -or
+		-not $manifestUri.IsDefaultPort -or
+		-not $manifestUri.Host.EndsWith(".workers.dev", [StringComparison]::OrdinalIgnoreCase) -or
+		-not [string]::IsNullOrEmpty($manifestUri.UserInfo) -or
+		-not [string]::IsNullOrEmpty($manifestUri.Query) -or
+		-not [string]::IsNullOrEmpty($manifestUri.Fragment) -or
+		$manifestUri.AbsolutePath -ne "/status/update") {
+		throw "UpdateManifestUrl must be the HTTPS /status/update endpoint on a workers.dev host without credentials, query text, or a fragment."
+	}
+	return $manifestUri.AbsoluteUri
+}
+
 if ($Version -notmatch '^\d{1,5}\.\d{1,5}\.\d{1,5}\.\d{1,5}$') {
 	throw "Version must use four numeric components, for example 0.9.66.0."
 }
@@ -42,10 +78,14 @@ foreach ($component in $Version.Split('.')) {
 		throw "Each MSIX version component must be between 0 and 65535."
 	}
 }
+$normalizedPlayerGuildGatewayUrl = Normalize-PlayerGuildGatewayUrl $PlayerGuildGatewayUrl
+$normalizedUpdateManifestUrl = Normalize-UpdateManifestUrl $UpdateManifestUrl
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $sourceRoot = Join-Path $repoRoot "Source Code"
 $projectFile = Join-Path $sourceRoot "Black Spirit Hub.csproj"
+$appVersionSource = Join-Path $sourceRoot "BlackSpiritHub\AppVersion.cs"
+$assemblyInfoSource = Join-Path $sourceRoot "Properties\AssemblyInfo.cs"
 $manifestTemplate = Join-Path $sourceRoot "StorePackage\AppxManifest.xml.template"
 $storeAssets = Join-Path $sourceRoot "StorePackage\Assets"
 $assetBuildScript = Join-Path $PSScriptRoot "build-store-assets.ps1"
@@ -65,10 +105,20 @@ $dotnet = Resolve-Tool -Name "dotnet" -Candidates @(
 $makeAppx = Resolve-Tool -Name "makeappx" -Candidates $makeAppxCandidates
 $makePri = Resolve-Tool -Name "makepri" -Candidates $makePriCandidates
 
-foreach ($path in @($projectFile, $manifestTemplate, $assetBuildScript)) {
+foreach ($path in @($projectFile, $appVersionSource, $assemblyInfoSource, $manifestTemplate, $assetBuildScript)) {
 	if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
 		throw "Required Store build input is missing: $path"
 	}
+}
+
+$expectedAppVersion = "v" + (($Version.Split(".")[0..2]) -join ".")
+$appVersionText = Get-Content -LiteralPath $appVersionSource -Raw
+$assemblyInfoText = Get-Content -LiteralPath $assemblyInfoSource -Raw
+if (
+	$appVersionText -notmatch ('Current\s*=\s*"' + [regex]::Escape($expectedAppVersion) + '"') -or
+	$assemblyInfoText -notmatch ('AssemblyFileVersion\("' + [regex]::Escape($Version) + '"\)') -or
+	$assemblyInfoText -notmatch ('AssemblyVersion\("' + [regex]::Escape($Version) + '"\)')) {
+	throw "Source version metadata must match the Store package version $Version before packaging."
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
@@ -103,6 +153,8 @@ try {
 	if ($LASTEXITCODE -ne 0) { throw "Store visual asset generation failed." }
 	& $dotnet publish $projectFile -c Release -r win-x64 --self-contained true `
 		-p:BlackSpiritHubStore=true `
+		("-p:BdoPlayerGuildGatewayUrl=" + $normalizedPlayerGuildGatewayUrl) `
+		("-p:MicrosoftStoreUpdateManifestUrl=" + $normalizedUpdateManifestUrl) `
 		-p:PublishSingleFile=true `
 		-p:IncludeNativeLibrariesForSelfExtract=false `
 		-p:PublishReadyToRun=false `

@@ -1,0 +1,19 @@
+{
+  "name": "black-spirit-hub-bdo-alerts-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/relay.js && node --check src/update-manifest.js",
+    "test": "node --test test/*.test.mjs",
+    "verify": "npm run check && npm run test",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.102.0"
+  }
+}

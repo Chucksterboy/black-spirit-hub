@@ -27,7 +27,10 @@ internal static class BdoPlayerGuildOfflineTests
 			logger,
 			handler,
 			fakeApiKey,
-			() => now))
+			() => now,
+			endpoint => new BdoPlayerGuildRequestRoute(
+				endpoint,
+				RequiresBdoAlertsCredential: true)))
 		{
 			BdoPlayerGuildSearchResponse playerSearch = await service.SearchAsync(
 				"player",
@@ -193,9 +196,97 @@ internal static class BdoPlayerGuildOfflineTests
 			|| persistedDetails.ValueKind != JsonValueKind.Array
 			|| persistedDetails.GetArrayLength() != 0
 			|| !handler.ExactAuthenticationObserved
+			|| !handler.ExpectedDestinationObserved
 			|| !handler.SecretStayedInApprovedHeader)
 		{
 			return 198;
+		}
+
+		Uri gatewayBaseUri = new("https://bshub-player-guild-gateway.invalid/");
+		Uri gatewaySearchUpstream = BdoPlayerGuildService.BuildSearchEndpointForTest(
+			"guild",
+			"eu",
+			"Luminous");
+		BdoPlayerGuildRequestRoute gatewaySearchRoute =
+			BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+				gatewaySearchUpstream,
+				gatewayBaseUri);
+		Uri gatewayProfileUpstream = BdoPlayerGuildService.BuildProfileEndpointForTest(
+			"player",
+			"eu",
+			"MixedCase",
+			"Opaque+/Target==",
+			forceRefresh: true);
+		BdoPlayerGuildRequestRoute gatewayProfileRoute =
+			BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+				gatewayProfileUpstream,
+				gatewayBaseUri);
+		if (gatewaySearchRoute.RequiresBdoAlertsCredential
+			|| gatewaySearchRoute.RequestUri.AbsoluteUri
+				!= "https://bshub-player-guild-gateway.invalid/api/guild/search/eu?query=Luminous"
+			|| gatewayProfileRoute.RequiresBdoAlertsCredential
+			|| gatewayProfileRoute.RequestUri.AbsoluteUri
+				!= "https://bshub-player-guild-gateway.invalid/api/player/eu/MixedCase?profile_target=Opaque%2B%2FTarget%3D%3D&force_refresh=true"
+			|| !ThrowsInvalidOperation(() =>
+				BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+					new Uri("https://api.bdoalerts.net/api/coupons"),
+					gatewayBaseUri))
+			|| !ThrowsInvalidOperation(() =>
+				BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+					gatewaySearchUpstream,
+					new Uri("http://bshub-player-guild-gateway.invalid/")))
+			|| !ThrowsInvalidOperation(() =>
+				BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+					gatewaySearchUpstream,
+					new Uri("https://bshub-player-guild-gateway.invalid/not-root/"))))
+		{
+			return 217;
+		}
+
+		AppPaths gatewayPaths = AppPaths.CreateAt(
+			Path.Combine(stateRoot, "player-guild-gateway-test"));
+		gatewayPaths.EnsureDirectories();
+		using PlayerGuildStubHandler gatewayHandler = new(
+			fakeApiKey,
+			gatewayBaseUri.Host,
+			requireApiKey: false);
+		using (BdoPlayerGuildService gatewayService = new(
+			gatewayPaths,
+			logger,
+			gatewayHandler,
+			fakeApiKey,
+			() => now,
+			endpoint => BdoPlayerGuildGateway.RouteThroughGatewayForTest(
+				endpoint,
+				gatewayBaseUri)))
+		{
+			BdoPlayerGuildSearchResponse gatewaySearch = await gatewayService.SearchAsync(
+				"player",
+				"eu",
+				"Psyko",
+				CancellationToken.None);
+			BdoGuildProfileResponse gatewayGuild = await gatewayService.GetGuildProfileAsync(
+				"eu",
+				"Luminous",
+				CancellationToken.None);
+			BdoPlayerProfileResponse gatewayPlayer = await gatewayService.GetPlayerProfileAsync(
+				"eu",
+				"PsykoQT",
+				CancellationToken.None,
+				forceRefresh: true);
+			if (gatewaySearch.Players.Single().FamilyName != "PsykoQT"
+				|| gatewayGuild.GuildName != "Luminous"
+				|| gatewayPlayer.MaxGearScore != 809
+				|| !gatewayHandler.ExactAuthenticationObserved
+				|| !gatewayHandler.ExpectedDestinationObserved
+				|| !gatewayHandler.SecretStayedInApprovedHeader
+				|| !gatewayHandler.ForceRefreshQueryObserved
+				|| gatewayHandler.PlayerSearchRequests != 1
+				|| gatewayHandler.GuildProfileRequests != 1
+				|| gatewayHandler.PlayerProfileRequests != 1)
+			{
+				return 218;
+			}
 		}
 
 		AppPaths legacyPaths = AppPaths.CreateAt(
@@ -773,13 +864,38 @@ internal static class BdoPlayerGuildOfflineTests
 		}
 	}
 
+	private static bool ThrowsInvalidOperation(Action action)
+	{
+		try
+		{
+			action();
+			return false;
+		}
+		catch (InvalidOperationException)
+		{
+			return true;
+		}
+	}
+
 	private sealed class PlayerGuildStubHandler : HttpMessageHandler
 	{
 		private readonly string expectedApiKey;
+		private readonly string expectedHost;
+		private readonly bool requireApiKey;
 
 		public PlayerGuildStubHandler(string expectedApiKey)
+			: this(expectedApiKey, "api.bdoalerts.net", requireApiKey: true)
+		{
+		}
+
+		public PlayerGuildStubHandler(
+			string expectedApiKey,
+			string expectedHost,
+			bool requireApiKey)
 		{
 			this.expectedApiKey = expectedApiKey;
+			this.expectedHost = expectedHost;
+			this.requireApiKey = requireApiKey;
 		}
 
 		public int PlayerSearchRequests { get; private set; }
@@ -787,6 +903,7 @@ internal static class BdoPlayerGuildOfflineTests
 		public int GuildProfileRequests { get; private set; }
 		public int PlayerProfileRequests { get; private set; }
 		public bool ExactAuthenticationObserved { get; private set; } = true;
+		public bool ExpectedDestinationObserved { get; private set; } = true;
 		public bool SecretStayedInApprovedHeader { get; private set; } = true;
 		public bool ForceRefreshQueryObserved { get; private set; }
 
@@ -799,8 +916,13 @@ internal static class BdoPlayerGuildOfflineTests
 				out IEnumerable<string>? values)
 					? values.ToArray()
 					: [];
-			ExactAuthenticationObserved &= keyValues.SequenceEqual([expectedApiKey]);
+			ExactAuthenticationObserved &= requireApiKey
+				? keyValues.SequenceEqual([expectedApiKey])
+				: keyValues.Length == 0;
 			string uri = request.RequestUri?.AbsoluteUri ?? string.Empty;
+			ExpectedDestinationObserved &= request.RequestUri?.Host.Equals(
+				expectedHost,
+				StringComparison.OrdinalIgnoreCase) == true;
 			SecretStayedInApprovedHeader &= !uri.Contains(expectedApiKey, StringComparison.Ordinal)
 				&& request.Content is null
 				&& request.Headers.Authorization is null;

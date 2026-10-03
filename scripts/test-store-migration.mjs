@@ -22,6 +22,16 @@ assert.match(form, /case "openMicrosoftStore":/);
 assert.match(form, /OpenMicrosoftStorePage\(\)/);
 assert.match(form, /saveMicrosoftStoreMigrationPreferences/);
 assert.match(form, /ScheduleMicrosoftStoreHandoffClose/);
+assert.match(
+  form,
+  /private void ScheduleMicrosoftStoreHandoffClose\(\)\s*\{\s*if \(IsDisposed\)/,
+  "The Store update handoff must close a running app after opening Microsoft Store."
+);
+assert.doesNotMatch(
+  form,
+  /private void ScheduleMicrosoftStoreHandoffClose\(\)\s*\{\s*if \(DistributionChannel\.IsMicrosoftStore \|\| IsDisposed\)/,
+  "Store builds must not stay open and block their own MSIX update."
+);
 assert.doesNotMatch(form, /DownloadAndLaunchUpdateInstallerAsync/);
 assert.doesNotMatch(ui, /downloadAndInstallUpdate/);
 assert.match(preferences, /blackSpiritHub\./);
@@ -39,11 +49,14 @@ const listeners = new Map();
 const alert = {
   textContent: "",
   title: "",
+  tabIndex: 0,
+  attributes: new Map(),
   classList: {
     add: value => classes.add(value),
     remove: value => classes.delete(value),
     toggle: (value, enabled) => enabled ? classes.add(value) : classes.delete(value)
   },
+  setAttribute: (name, value) => alert.attributes.set(name, String(value)),
   addEventListener: (type, handler) => listeners.set(type, handler)
 };
 const calls = [];
@@ -102,14 +115,26 @@ assert.equal(classes.has("show"), false, "Store-installed builds must not show t
 await context.installUpdateFromAlert();
 assert.deepEqual(calls, [], "A Store-managed update state must not launch an installer or migration action.");
 
+context.applyUpdateStatus({updateAvailable: false, storeManaged: true, storeUpdateAnnounced: true, announcedVersion: "0.9.69.0"});
+assert.equal(alert.textContent, "Version 0.9.69.0 is rolling out in Microsoft Store");
+assert.equal(alert.title, "Microsoft Store is preparing this update for your device.");
+assert.equal(alert.tabIndex, -1, "A Worker announcement must be passive until Microsoft Store confirms a package update.");
+assert.equal(alert.attributes.get("role"), "status");
+assert.equal(classes.has("passive"), true);
+await context.installUpdateFromAlert();
+assert.deepEqual(calls, [], "A Worker announcement alone must not open Store or close the running app.");
+
 context.applyUpdateStatus({updateAvailable: true, storeManaged: true, message: "A new version is available in the Microsoft Store."});
 assert.equal(alert.textContent, "New update available", "Store builds show the same update action when Microsoft Store reports an available package.");
-assert.equal(alert.title, "Open Microsoft Store to update");
+assert.equal(alert.title, "Open Microsoft Store and close Black Spirit Hub to update");
+assert.equal(alert.tabIndex, 0);
+assert.equal(alert.attributes.get("role"), "button");
+assert.equal(classes.has("passive"), false);
 assert.equal(classes.has("show"), true);
 await context.installUpdateFromAlert();
 assert.deepEqual(calls.map(call => call.command), ["openMicrosoftStore"], "Store updates open Microsoft Store without exporting migration preferences.");
 assert.equal(notices.at(-1)?.kind, "info");
-assert.match(notices.at(-1)?.message || "", /Select Update/);
+assert.match(notices.at(-1)?.message || "", /is closing/);
 
 calls.length = 0;
 let prevented = false;

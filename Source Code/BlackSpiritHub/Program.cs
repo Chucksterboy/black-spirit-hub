@@ -961,6 +961,17 @@ internal static class Program
 					return 294;
 				}
 			}
+			if (!MicrosoftStoreUpdateManifest.TryParseLiveAnnouncement(
+				"{\"schemaVersion\":1,\"channel\":\"microsoft-store\",\"availability\":\"live\",\"version\":\"0.9.69.0\"}",
+				out MicrosoftStoreUpdateAnnouncement? liveAnnouncement)
+				|| liveAnnouncement is null
+				|| liveAnnouncement.PackageVersionText != "0.9.69.0"
+				|| MicrosoftStoreUpdateManifest.TryParseLiveAnnouncement(
+					"{\"schemaVersion\":1,\"channel\":\"microsoft-store\",\"availability\":\"live\",\"version\":\"0.9.69\"}",
+					out _))
+			{
+				return 295;
+			}
 			if (StartupSplashWindow.ShouldBeginColdExit(0, false, true)
 				|| StartupSplashWindow.ShouldBeginColdExit(100_000, false, false)
 				|| StartupSplashWindow.ShouldBeginColdExit(2_699, true)

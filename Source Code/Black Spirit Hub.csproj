@@ -71,4 +71,38 @@
       <Output TaskParameter="OutputFile" ItemName="Compile" />
     </WriteCodeFragment>
   </Target>
+  <Target
+    Name="GenerateBdoPlayerGuildGatewayMetadata"
+    BeforeTargets="CoreCompile"
+    Condition="'$(BlackSpiritHubStore)' == 'true' and '$(BdoPlayerGuildGatewayUrl)' != ''">
+    <ItemGroup>
+      <BdoPlayerGuildGatewayAssemblyMetadata Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BdoPlayerGuildGatewayUrl</_Parameter1>
+        <_Parameter2>$(BdoPlayerGuildGatewayUrl)</_Parameter2>
+      </BdoPlayerGuildGatewayAssemblyMetadata>
+    </ItemGroup>
+    <WriteCodeFragment
+      Language="C#"
+      OutputFile="$(IntermediateOutputPath)BlackSpiritHub.BdoPlayerGuildGateway.g.cs"
+      AssemblyAttributes="@(BdoPlayerGuildGatewayAssemblyMetadata)">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+    </WriteCodeFragment>
+  </Target>
+  <Target
+    Name="GenerateMicrosoftStoreUpdateManifestMetadata"
+    BeforeTargets="CoreCompile"
+    Condition="'$(BlackSpiritHubStore)' == 'true' and '$(MicrosoftStoreUpdateManifestUrl)' != ''">
+    <ItemGroup>
+      <MicrosoftStoreUpdateManifestAssemblyMetadata Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>MicrosoftStoreUpdateManifestUrl</_Parameter1>
+        <_Parameter2>$(MicrosoftStoreUpdateManifestUrl)</_Parameter2>
+      </MicrosoftStoreUpdateManifestAssemblyMetadata>
+    </ItemGroup>
+    <WriteCodeFragment
+      Language="C#"
+      OutputFile="$(IntermediateOutputPath)BlackSpiritHub.MicrosoftStoreUpdateManifest.g.cs"
+      AssemblyAttributes="@(MicrosoftStoreUpdateManifestAssemblyMetadata)">
+      <Output TaskParameter="OutputFile" ItemName="Compile" />
+    </WriteCodeFragment>
+  </Target>
 </Project>

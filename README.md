@@ -15,9 +15,15 @@ release notes; it no longer distributes routine installer downloads.
 Store-installed copies are updated by Microsoft Store. At startup, the Store
 edition checks Microsoft Store for a package update that is available to that
 specific installation. When one is ready, it shows **New update available** in
-the bottom bar and opens Microsoft Store so the user can select **Update**.
+the bottom bar. Selecting it opens Microsoft Store and closes Black Spirit Hub
+so the package is not locked when the user selects **Update**.
 Black Spirit Hub never downloads or runs a GitHub installer from a Store
 installation.
+
+The Store edition also reads a small public Worker announcement for the latest
+published Store version. This can show a passive rollout notice promptly, but
+the actionable update control still waits for Microsoft Store to confirm that
+the package is available for that device.
 
 Existing GitHub-installed copies receive one final transition update because
 their already-published updater cannot be changed remotely to launch Microsoft Store.
